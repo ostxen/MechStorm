@@ -28,6 +28,11 @@ namespace MechStorm.Battle.Rules
                 return false;
             }
 
+            if (!source.PilotRuntime.TrySpendActionPoint(ability.ActionPointCost))
+            {
+                throw new InvalidOperationException("Validated ability cost could not be committed.");
+            }
+
             // 3. 前置条件全部通过后才进入结算，所有状态修改都集中在这个阶段。
             ApplyAbility(ability, target);
             return true;
@@ -80,7 +85,9 @@ namespace MechStorm.Battle.Rules
             }
 
             var distance = _squareGrid.GetManhattanDistance(source.Position, target.Position);
-            return distance >= ability.MinRange && distance <= ability.MaxRange;
+            return distance >= ability.MinRange &&
+                   distance <= ability.MaxRange &&
+                   source.PilotRuntime.HasEnoughActionPoint(ability.ActionPointCost);
         }
 
         private static void ApplyAbility(AbilityDefinition ability, CombatUnit target)

@@ -76,6 +76,7 @@ namespace MechStorm.Battle.Tests.Rules
             var resolved = resolver.TryResolveAbility(CreateAbility(damage: 25), source, target);
 
             Assert.IsTrue(resolved);
+            Assert.AreEqual(8, source.PilotRuntime.CurrentActionPoint);
             Assert.AreEqual(75, target.MechRuntime.CurrentDurability);
         }
 
@@ -93,6 +94,7 @@ namespace MechStorm.Battle.Tests.Rules
                 CreateAbility(minRange: 2, maxRange: 3, damage: 25), source, target);
 
             Assert.AreEqual(expectedSuccess, resolved);
+            Assert.AreEqual(expectedSuccess ? 8 : 10, source.PilotRuntime.CurrentActionPoint);
             Assert.AreEqual(expectedSuccess ? 75 : 100, target.MechRuntime.CurrentDurability);
         }
 
@@ -108,6 +110,7 @@ namespace MechStorm.Battle.Tests.Rules
             var resolved = resolver.TryResolveAbility(CreateAbility(), source, target);
 
             Assert.IsFalse(resolved);
+            Assert.AreEqual(10, source.PilotRuntime.CurrentActionPoint);
             Assert.AreEqual(100, target.MechRuntime.CurrentDurability);
         }
 
@@ -121,6 +124,7 @@ namespace MechStorm.Battle.Tests.Rules
             var resolved = resolver.TryResolveAbility(CreateAbility(), source, target);
 
             Assert.IsFalse(resolved);
+            Assert.AreEqual(10, source.PilotRuntime.CurrentActionPoint);
             Assert.AreEqual(100, target.MechRuntime.CurrentDurability);
         }
 
@@ -134,6 +138,7 @@ namespace MechStorm.Battle.Tests.Rules
             var resolved = resolver.TryResolveAbility(CreateAbility(), source, target);
 
             Assert.IsFalse(resolved);
+            Assert.AreEqual(10, source.PilotRuntime.CurrentActionPoint);
             Assert.AreEqual(0, target.MechRuntime.CurrentDurability);
         }
 
@@ -150,6 +155,7 @@ namespace MechStorm.Battle.Tests.Rules
                 CreateAbility(maxRange: 10, damage: 25), source, target);
 
             Assert.IsFalse(resolved);
+            Assert.AreEqual(10, source.PilotRuntime.CurrentActionPoint);
             Assert.AreEqual(100, target.MechRuntime.CurrentDurability);
         }
 
@@ -163,6 +169,7 @@ namespace MechStorm.Battle.Tests.Rules
             var resolved = resolver.TryResolveAbility(CreateAbility(damage: 25), source, target);
 
             Assert.IsTrue(resolved);
+            Assert.AreEqual(8, source.PilotRuntime.CurrentActionPoint);
             Assert.AreEqual(0, target.MechRuntime.CurrentDurability);
         }
 
@@ -176,12 +183,76 @@ namespace MechStorm.Battle.Tests.Rules
             var resolved = resolver.TryResolveAbility(CreateAbility(damage: 0), source, target);
 
             Assert.IsTrue(resolved);
+            Assert.AreEqual(8, source.PilotRuntime.CurrentActionPoint);
             Assert.AreEqual(100, target.MechRuntime.CurrentDurability);
         }
 
-        private static AbilityDefinition CreateAbility(int minRange = 1, int maxRange = 3, int damage = 25)
+        [Test]
+        public void TryResolveAbility_WithInsufficientActionPoint_ReturnsFalseWithoutChangingState()
         {
-            return new AbilityDefinition(101, "Test Ability", minRange, maxRange, damage, TargetRule.EnemyUnit);
+            var source = CreateCombatUnit(1, new Vector2Int(0, 0), currentActionPoint: 1);
+            var target = CreateCombatUnit(2, new Vector2Int(1, 0));
+            var resolver = CreateResolver(source, target);
+
+            var resolved = resolver.TryResolveAbility(CreateAbility(actionPointCost: 2), source, target);
+
+            Assert.IsFalse(resolved);
+            Assert.AreEqual(1, source.PilotRuntime.CurrentActionPoint);
+            Assert.AreEqual(100, target.MechRuntime.CurrentDurability);
+        }
+
+        [Test]
+        public void TryResolveAbility_WithExactActionPoint_SpendsToZeroAndAppliesDamage()
+        {
+            var source = CreateCombatUnit(1, new Vector2Int(0, 0), currentActionPoint: 2);
+            var target = CreateCombatUnit(2, new Vector2Int(1, 0));
+            var resolver = CreateResolver(source, target);
+
+            var resolved = resolver.TryResolveAbility(CreateAbility(actionPointCost: 2), source, target);
+
+            Assert.IsTrue(resolved);
+            Assert.AreEqual(0, source.PilotRuntime.CurrentActionPoint);
+            Assert.AreEqual(75, target.MechRuntime.CurrentDurability);
+        }
+
+        [Test]
+        public void TryResolveAbility_ContinuesUntilRemainingActionPointIsInsufficient()
+        {
+            var source = CreateCombatUnit(1, new Vector2Int(0, 0), currentActionPoint: 5);
+            var target = CreateCombatUnit(2, new Vector2Int(1, 0));
+            var resolver = CreateResolver(source, target);
+            var ability = CreateAbility(actionPointCost: 2, damage: 10);
+
+            var firstResolved = resolver.TryResolveAbility(ability, source, target);
+            var secondResolved = resolver.TryResolveAbility(ability, source, target);
+            var thirdResolved = resolver.TryResolveAbility(ability, source, target);
+
+            Assert.IsTrue(firstResolved);
+            Assert.IsTrue(secondResolved);
+            Assert.IsFalse(thirdResolved);
+            Assert.AreEqual(1, source.PilotRuntime.CurrentActionPoint);
+            Assert.AreEqual(80, target.MechRuntime.CurrentDurability);
+        }
+
+        [Test]
+        public void TryResolveAbility_WithZeroActionPointCost_DoesNotChangeActionPoint()
+        {
+            var source = CreateCombatUnit(1, new Vector2Int(0, 0), currentActionPoint: 3);
+            var target = CreateCombatUnit(2, new Vector2Int(1, 0));
+            var resolver = CreateResolver(source, target);
+
+            var resolved = resolver.TryResolveAbility(CreateAbility(actionPointCost: 0), source, target);
+
+            Assert.IsTrue(resolved);
+            Assert.AreEqual(3, source.PilotRuntime.CurrentActionPoint);
+            Assert.AreEqual(75, target.MechRuntime.CurrentDurability);
+        }
+
+        private static AbilityDefinition CreateAbility(
+            int minRange = 1, int maxRange = 3, int damage = 25, int actionPointCost = 2)
+        {
+            return new AbilityDefinition(
+                101, "Test Ability", minRange, maxRange, damage, actionPointCost, TargetRule.EnemyUnit);
         }
 
         private static AbilityResolver CreateResolver(
@@ -196,10 +267,10 @@ namespace MechStorm.Battle.Tests.Rules
         }
 
         private static CombatUnit CreateCombatUnit(
-            int unitId, Vector2Int position, int currentDurability = 100)
+            int unitId, Vector2Int position, int currentDurability = 100, int currentActionPoint = 10)
         {
             var pilot = new PilotData(unitId, $"Pilot {unitId}", 10);
-            var pilotRuntime = new PilotRuntime(10);
+            var pilotRuntime = new PilotRuntime(currentActionPoint);
             var mech = new MechData(unitId, $"Mech {unitId}", new BasicAttackData(10, 1, 1), 100, 3);
             var mechRuntime = new MechRuntime(currentDurability);
 

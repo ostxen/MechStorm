@@ -47,11 +47,13 @@ namespace MechStorm.Battle.Turns
             if (nextActionUnitIndex != InvalidFactionUnitIndex)
             {
                 _currentFactionUnitIndex = nextActionUnitIndex;
+                RestoreCurrentCombatUnitActionPoint();
                 return;
             }
 
             AdvanceFaction();
             _currentFactionUnitIndex = FindNextAliveUnitIndex(GetCurrentFactionUnits(), InvalidFactionUnitIndex);
+            RestoreCurrentCombatUnitActionPoint();
         }
 
         private IReadOnlyList<CombatUnit> GetCurrentFactionUnits()
@@ -82,6 +84,17 @@ namespace MechStorm.Battle.Turns
             }
 
             return InvalidFactionUnitIndex;
+        }
+
+        private void RestoreCurrentCombatUnitActionPoint()
+        {
+            if (_currentFactionUnitIndex == InvalidFactionUnitIndex)
+            {
+                return;
+            }
+
+            var currentCombatUnit = CurrentCombatUnit;
+            currentCombatUnit.PilotRuntime.ResetActionPointToMax(currentCombatUnit.Pilot.MaxActionPoint);
         }
     }
 }

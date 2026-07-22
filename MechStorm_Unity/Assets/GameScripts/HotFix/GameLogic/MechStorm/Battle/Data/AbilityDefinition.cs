@@ -17,9 +17,11 @@ namespace MechStorm.Battle.Data
 
         public int Damage { get; }
 
+        public int ActionPointCost { get; }
+
         public TargetRule TargetRule { get; }
 
-        public AbilityDefinition(int abilityId, string name, int minRange, int maxRange, int damage, TargetRule targetRule)
+        public AbilityDefinition(int abilityId, string name, int minRange, int maxRange, int damage, int actionPointCost, TargetRule targetRule)
         {
             if (abilityId <= 0)
             {
@@ -55,6 +57,12 @@ namespace MechStorm.Battle.Data
                     "Damage must be non-negative.");
             }
 
+            if (actionPointCost < 0)
+            {
+                throw new ArgumentOutOfRangeException(nameof(actionPointCost), actionPointCost,
+                    "Action point cost must be non-negative.");
+            }
+
             if (!Enum.IsDefined(typeof(TargetRule), targetRule))
             {
                 throw new ArgumentOutOfRangeException(nameof(targetRule), targetRule,
@@ -66,6 +74,7 @@ namespace MechStorm.Battle.Data
             MinRange = minRange;
             MaxRange = maxRange;
             Damage = damage;
+            ActionPointCost = actionPointCost;
             TargetRule = targetRule;
         }
     }
