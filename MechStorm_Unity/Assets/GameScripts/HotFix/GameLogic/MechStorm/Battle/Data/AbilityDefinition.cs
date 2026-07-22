@@ -15,9 +15,11 @@ namespace MechStorm.Battle.Data
 
         public int MaxRange { get; }
 
+        public int Damage { get; }
+
         public TargetRule TargetRule { get; }
 
-        public AbilityDefinition(int abilityId, string name, int minRange, int maxRange, TargetRule targetRule)
+        public AbilityDefinition(int abilityId, string name, int minRange, int maxRange, int damage, TargetRule targetRule)
         {
             if (abilityId <= 0)
             {
@@ -47,6 +49,12 @@ namespace MechStorm.Battle.Data
                     "Maximum range must be greater than or equal to minimum range.");
             }
 
+            if (damage < 0)
+            {
+                throw new ArgumentOutOfRangeException(nameof(damage), damage,
+                    "Damage must be non-negative.");
+            }
+
             if (!Enum.IsDefined(typeof(TargetRule), targetRule))
             {
                 throw new ArgumentOutOfRangeException(nameof(targetRule), targetRule,
@@ -57,6 +65,7 @@ namespace MechStorm.Battle.Data
             Name = name;
             MinRange = minRange;
             MaxRange = maxRange;
+            Damage = damage;
             TargetRule = targetRule;
         }
     }
