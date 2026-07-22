@@ -3,9 +3,9 @@
 ## 当前阶段
 
 - 当前里程碑：P1 / Sprint 4
-- 当前任务：Task 4.1 最小 `AbilityDefinition` 与 `TargetRule`
-- 当前状态：Sprint 3 已完成；Sprint 4 待开始
-- 最后更新：2026-07-19
+- 当前任务：Task 4.4 技能 Result、ActionLog、Snapshot 与 JSON 诊断
+- 当前状态：Sprint 4 进行中；Task 4.1～4.3 已完成
+- 最后更新：2026-07-22
 
 ## 状态约定
 
@@ -205,16 +205,25 @@
   - 验证方式：`BattleRangeHighlightMapperTests` 覆盖移动、攻击、范围重叠、合法目标优先级、重复位置、空输入、非法输入和查询集合不变；纯 C# NUnit 隔离运行 123 / 123 通过；Battle、Battle.Tests、Presentation、Presentation.Tests、GameLogic 与 Editor 项目编译通过；开发者已在 Unity Play Mode 验证范围、颜色、坐标、持续选中和手动结束行动流程
   - 备注：Presentation 通过 `BattleSession` 权威查询生成高亮映射，`BattleRangeHighlighter` 缓存场景模板实例并使用 `MaterialPropertyBlock` 刷新颜色；移动或攻击后保持当前单位选中并刷新范围，结束行动或单位切换后恢复默认网格颜色；Test 场景与材质已随提交 `e8a8de6` 保存，不接正式 TEngine `BattleMainUI`
 
-- [ ] Sprint 4：最小主动技能闭环
-  - 状态：未开始
+- [~] Sprint 4：最小主动技能闭环
+  - 状态：进行中
   - 总目标：在 Sprint 3 的范围和目标规则上增加第一个可操作、可测试、可记录的单体主动技能
   - 完成标准：技能具备定义、目标规则、固定 AP 消耗和直接伤害；AP 不足或目标非法时不消耗资源；成功结果能驱动表现并进入 ActionLog / Snapshot / JSON 调试导出
-  - 计划任务：
-    1. Task 4.1 最小 `AbilityDefinition` 与 `TargetRule`
-    2. Task 4.2 `AbilityResolver` 与单体直接伤害技能
-    3. Task 4.3 仅服务首个主动技能的固定 AP 消耗与回合恢复
-    4. Task 4.4 技能 Result、ActionLog、Snapshot 与 JSON 诊断
-    5. Task 4.5 临时技能按钮、目标选择和技能范围高亮
+  - 任务进度：
+    1. [x] Task 4.1 最小 `AbilityDefinition` 与 `TargetRule`
+    2. [x] Task 4.2 `AbilityResolver` 与单体直接伤害技能
+    3. [x] Task 4.3 仅服务首个主动技能的固定 AP 消耗与行动开始恢复
+    4. [~] Task 4.4 技能 Result、ActionLog、Snapshot 与 JSON 诊断
+    5. [ ] Task 4.5 临时技能按钮、目标选择和技能范围高亮
+  - 当前验证：Task 4.2 已随提交 `63639d6` 完成；Task 4.3 的 Data、Runtime、Resolver 与 Turn 相关纯 C# NUnit 测试 75 / 75 通过，Battle、Battle.Tests、Presentation、Presentation.Tests、GameLogic 与 Editor 项目编译通过
+  - Task 4.3 完成规则：
+    - AP 归属 `Pilot`；移动继续不消耗 AP，本任务也不改变普通攻击规则
+    - `Pilot.MaxActionPoint`、局内当前 AP 与技能消耗均为非负整数；每个技能只配置一个 `ActionPointCost`，首个实际技能使用正消耗，数据模型允许后续出现 0 AP 技能
+    - 单位可在自己的行动中重复释放技能，只要剩余 AP 足够；AP 恰好等于消耗时允许释放并降为 0
+    - 空参数和未注册单位仍属于调用错误；死亡、同阵营、棋盘外、射程非法和 AP 不足属于正常玩法失败
+    - 所有目标与 AP 校验必须先无副作用完成；成功时先原子支付 AP，再结算伤害，任一失败都不能扣 AP 或修改目标耐久
+    - 当下一个存活单位成为 `CurrentCombatUnit`、开始自己的行动时，将其 AP 恢复到 `Pilot.MaxActionPoint`；首个行动单位由 `CombatUnitFactory` 以满 AP 初始化
+  - Task 4.3 完成内容：扩展 `AbilityDefinition` 固定 AP 消耗；为 `PilotData` / `PilotRuntime` 建立 AP 非负不变量，并为 Runtime 增加查询、原子支付和恢复方法；由 `AbilityResolver` 编排“校验目标与余额 → 提交消耗 → 伤害”；由 `TurnCoordinator` 在单位行动开始边界恢复 AP；补齐 Data、Runtime、Resolver 和 Turn 测试
   - 备注：首个技能不附带 Buff，不实现 Effect 列表、Modifier、Trigger、完整 GAS 或正式技能栏；Task 4.3 不建立通用 `BattleResource` / `SkillCost[]`，Sprint 7 再将固定 AP 规则迁移为通用资源管线；仅当首个真实技能明确需要召唤时，才在本 Sprint 验收后追加动态召唤垂直切片
 
 - [ ] Sprint 5：地形 Cost 与路径查询
@@ -340,6 +349,7 @@
 | 2026-07-16 | Battle 与 Presentation 按职责目录和命名空间归类，保持现有 asmdef 边界 | 原 `MechStorm.Battle.Combat` 已同时容纳单位、回合、规则、行动结果和调试数据，无法继续表达职责；Sprint 3 会增加空间和范围脚本，后续 Sprint 还会增加技能脚本 | Battle 使用 `Actions / Diagnostics / Foundation / Numeric / Rules / Snapshots / Spatial / Turns / Units`，`BattleSession` 保留在根命名空间；Presentation 使用 `Board / Controllers / Input / Units`，测试目录同步镜像，不拆分程序集 |
 | 2026-07-18 | P1 执行顺序调整为“范围 → 技能 → 地形”，并补回旧规划遗漏 | 实际 Sprint 2 已完成战斗流程、Result、Snapshot 与日志，与主计划旧 Sprint 2 的属性、部位、资源和武器任务不同；把范围、技能、地形和复杂机甲机制塞入同一 Sprint 会扩大返工风险 | Sprint 3 做占格与范围，Sprint 4 做最小技能，Sprint 5 做 Terrain Cost / Dijkstra / A*，Sprint 6～8 补机甲深度、资源命中和高级空间规则；原 P2 工程化顺延到 Sprint 9～12，主计划保持历史蓝图，当前执行以本文件为准 |
 | 2026-07-18 | Sprint 3 继续瞬移，A* 放到地形阶段 | 当前没有路径预览、逐格移动动画或 AI 路径消费方，等代价格子的范围查询由 BFS 即可正确完成；A* 需要先有稳定通行和 Cost 规则 | Sprint 3 不实现 A*；Sprint 5 使用 Dijkstra 计算带权可达范围，A* 只负责单目标最低 Cost 路径 |
+| 2026-07-22 | 玩法任务先以可观察需求卡描述，再映射为开发任务 | 仅列类名、模块名和架构目标无法让开发者还原具体玩法、成功失败规则与状态时序，容易在编码阶段猜测策划意图 | 后续玩法任务默认说明玩法目的、数值示例、成功失败边界、状态流程、开发职责、验收测试与非目标；通用模板记录在 `ENGINEERING_COLLABORATION_GUIDELINES.md` |
 
 ## Git 版本管理约定
 
