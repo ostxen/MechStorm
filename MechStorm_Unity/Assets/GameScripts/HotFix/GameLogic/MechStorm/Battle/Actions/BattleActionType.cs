@@ -8,5 +8,6 @@ namespace MechStorm.Battle.Actions
         Move,
         Attack,
         EndUnitAction,
+        UseAbility,
     }
 }

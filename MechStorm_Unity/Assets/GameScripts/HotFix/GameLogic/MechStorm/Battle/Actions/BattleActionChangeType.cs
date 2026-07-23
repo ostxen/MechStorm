@@ -12,6 +12,8 @@ namespace MechStorm.Battle.Actions
         RoundStarted,
         FactionTurnStarted,
         FactionTurnEnded,
-        CurrentUnitChanged
+        CurrentUnitChanged,
+        ActionPointSpent,
+        ActionPointRestored,
     }
 }

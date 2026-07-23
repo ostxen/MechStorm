@@ -7,6 +7,7 @@ namespace MechStorm.Battle.Actions
         TargetOutOfRange,
         SameFactionTarget,
         TargetAlreadyDead,
-        ActorCannotAct
+        ActorCannotAct,
+        InsufficientActionPoint,
     }
 }

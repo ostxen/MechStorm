@@ -22,6 +22,8 @@ namespace MechStorm.Battle.Actions
 
         public int? TargetUnitId { get; }
 
+        public int? AbilityId { get; }
+
         public int? NextUnitId { get; }
 
         public IReadOnlyList<BattleActionChangeType> ChangeTypes { get; }
@@ -33,6 +35,10 @@ namespace MechStorm.Battle.Actions
         public int? DurabilityBefore { get; }
 
         public int? DurabilityAfter { get; }
+
+        public int? ActionPointBefore { get; }
+
+        public int? ActionPointAfter { get; }
 
         public int? RoundNumberBefore { get; }
 
@@ -57,11 +63,14 @@ namespace MechStorm.Battle.Actions
             ActorUnitId = actorUnitId;
             TargetUnitId = targetUnitId;
             NextUnitId = nextUnitId;
+            AbilityId = result.AbilityId;
             ChangeTypes = CopyChangeTypes(result.ChangeTypes);
             PositionBefore = result.PositionBefore;
             PositionAfter = result.PositionAfter;
             DurabilityBefore = result.DurabilityBefore;
             DurabilityAfter = result.DurabilityAfter;
+            ActionPointBefore = result.ActionPointBefore;
+            ActionPointAfter = result.ActionPointAfter;
             RoundNumberBefore = result.RoundNumberBefore;
             RoundNumberAfter = result.RoundNumberAfter;
             FactionBefore = result.FactionBefore;
@@ -90,14 +99,34 @@ namespace MechStorm.Battle.Actions
                 throw new ArgumentOutOfRangeException(nameof(nextUnitId), nextUnitId, "Next unit ID must be greater than zero.");
             }
 
-            if (result.ActionType == BattleActionType.Attack && targetUnitId == null)
+            if (result.AbilityId.HasValue && result.AbilityId.Value <= 0)
             {
-                throw new ArgumentException("Attack log must provide a target unit ID.", nameof(targetUnitId));
+                throw new ArgumentOutOfRangeException(nameof(result), result.AbilityId,
+                    "Ability ID must be greater than zero.");
             }
 
-            if (result.ActionType != BattleActionType.Attack && targetUnitId != null)
+            var requiresTargetUnit = result.ActionType == BattleActionType.Attack ||
+                                     result.ActionType == BattleActionType.UseAbility;
+            if (requiresTargetUnit && targetUnitId == null)
             {
-                throw new ArgumentException("Only attack log can provide a target unit ID.", nameof(targetUnitId));
+                throw new ArgumentException("Attack and ability logs must provide a target unit ID.",
+                    nameof(targetUnitId));
+            }
+
+            if (!requiresTargetUnit && targetUnitId != null)
+            {
+                throw new ArgumentException("Only attack and ability logs can provide a target unit ID.",
+                    nameof(targetUnitId));
+            }
+
+            if (result.ActionType == BattleActionType.UseAbility && result.AbilityId == null)
+            {
+                throw new ArgumentException("Ability log must provide an ability ID.", nameof(result));
+            }
+
+            if (result.ActionType != BattleActionType.UseAbility && result.AbilityId != null)
+            {
+                throw new ArgumentException("Only ability log can provide an ability ID.", nameof(result));
             }
 
             if (result.ActionType == BattleActionType.EndUnitAction && nextUnitId == null)

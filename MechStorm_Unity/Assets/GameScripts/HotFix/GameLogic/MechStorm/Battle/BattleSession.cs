@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using MechStorm.Battle.Actions;
+using MechStorm.Battle.Data;
 using MechStorm.Battle.Foundation;
 using MechStorm.Battle.Rules;
 using MechStorm.Battle.Snapshots;
@@ -15,6 +16,7 @@ namespace MechStorm.Battle
         private readonly SquareGrid _squareGrid;
         private readonly MovementResolver _movementResolver;
         private readonly AttackResolver _attackResolver;
+        private readonly AbilityResolver _abilityResolver;
         private readonly CombatUnitRegistry _unitRegistry;
         private readonly TurnCoordinator _turnCoordinator;
         private readonly List<BattleActionLog> _actionLogs;
@@ -30,6 +32,7 @@ namespace MechStorm.Battle
             _unitRegistry = new CombatUnitRegistry(teamAUnits, teamBUnits, neutralUnits);
             _movementResolver = new MovementResolver(_squareGrid, IsPositionOccupied);
             _attackResolver = new AttackResolver(_squareGrid);
+            _abilityResolver = new AbilityResolver(_squareGrid, _unitRegistry);
             ValidateUnitPositions(_unitRegistry.GetFactionUnits(CombatFaction.TeamA), nameof(teamAUnits));
             ValidateUnitPositions(_unitRegistry.GetFactionUnits(CombatFaction.TeamB), nameof(teamBUnits));
             ValidateUnitPositions(_unitRegistry.GetFactionUnits(CombatFaction.Neutral), nameof(neutralUnits));
@@ -55,7 +58,8 @@ namespace MechStorm.Battle
             foreach (var unit in CombatUnits)
             {
                 unitSnapshots.Add(new BattleUnitSnapshot(unit.UnitId, _unitRegistry.GetFaction(unit), unit.Position,
-                    unit.MechRuntime.CurrentDurability, unit.Mech.MaxDurability));
+                    unit.MechRuntime.CurrentDurability, unit.Mech.MaxDurability,
+                    unit.PilotRuntime.CurrentActionPoint, unit.Pilot.MaxActionPoint));
             }
 
             return new BattleSnapshot(Grid.Width, Grid.Height, CurrentRoundNumber, CurrentFaction,
@@ -107,18 +111,66 @@ namespace MechStorm.Battle
             return RecordAction(successResult, targetUnitId: targetUnit.UnitId);
         }
 
+        public BattleActionResult TryUseAbility(AbilityDefinition ability, CombatUnit targetUnit)
+        {
+            if (ability == null)
+            {
+                throw new ArgumentNullException(nameof(ability));
+            }
+
+            if (targetUnit == null)
+            {
+                throw new ArgumentNullException(nameof(targetUnit));
+            }
+
+            if (!_unitRegistry.Contains(targetUnit))
+            {
+                throw new ArgumentException("Target unit does not belong to this battle session.",
+                    nameof(targetUnit));
+            }
+
+            var actorUnit = CurrentCombatUnit;
+            var sequence = ++_actionSequence;
+            var failureReason = GetAbilityFailureReason(ability, actorUnit, targetUnit);
+            if (failureReason != BattleActionFailureReason.None)
+            {
+                var failedResult = BattleActionResult.AbilityFailed(sequence, actorUnit, targetUnit, ability.AbilityId, failureReason);
+                return RecordAction(failedResult, targetUnitId: targetUnit.UnitId);
+            }
+
+            var actionPointBefore = actorUnit.PilotRuntime.CurrentActionPoint;
+            var durabilityBefore = targetUnit.MechRuntime.CurrentDurability;
+            if (!_abilityResolver.TryResolveAbility(ability, actorUnit, targetUnit))
+            {
+                throw new InvalidOperationException("Validated ability could not be executed.");
+            }
+
+            var successResult = BattleActionResult.AbilitySucceeded(sequence, actorUnit, targetUnit,
+                ability.AbilityId, actionPointBefore, actorUnit.PilotRuntime.CurrentActionPoint,
+                durabilityBefore, targetUnit.MechRuntime.CurrentDurability);
+            return RecordAction(successResult, targetUnitId: targetUnit.UnitId);
+        }
+
         public BattleActionResult EndCurrentUnitAction()
         {
             var actorUnit = CurrentCombatUnit;
             var roundNumberBefore = CurrentRoundNumber;
             var factionBefore = CurrentFaction;
             var sequence = ++_actionSequence;
+            var actionPointsBefore = new Dictionary<int, int>(CombatUnits.Count);
+            foreach (var combatUnit in CombatUnits)
+            {
+                actionPointsBefore.Add(combatUnit.UnitId,
+                    combatUnit.PilotRuntime.CurrentActionPoint);
+            }
 
             _turnCoordinator.EndCurrentUnitAction();
 
-            var result = BattleActionResult.ActionEnded(sequence, actorUnit, CurrentCombatUnit, roundNumberBefore,
-                CurrentRoundNumber, factionBefore, CurrentFaction);
-            return RecordAction(result, nextUnitId: CurrentCombatUnit.UnitId);
+            var nextCombatUnit = CurrentCombatUnit;
+            var result = BattleActionResult.ActionEnded(sequence, actorUnit, nextCombatUnit, roundNumberBefore,
+                CurrentRoundNumber, factionBefore, CurrentFaction, actionPointsBefore[nextCombatUnit.UnitId],
+                nextCombatUnit.PilotRuntime.CurrentActionPoint);
+            return RecordAction(result, nextUnitId: nextCombatUnit.UnitId);
         }
 
         public IReadOnlyList<CombatUnit> GetCurrentFactionCombatUnits()
@@ -219,6 +271,30 @@ namespace MechStorm.Battle
             return _attackResolver.IsPositionInRange(attackerUnit, targetUnit.Position)
                 ? BattleActionFailureReason.None
                 : BattleActionFailureReason.TargetOutOfRange;
+        }
+
+        private BattleActionFailureReason GetAbilityFailureReason(AbilityDefinition ability,
+            CombatUnit sourceUnit, CombatUnit targetUnit)
+        {
+            if (targetUnit.IsDead())
+            {
+                return BattleActionFailureReason.TargetAlreadyDead;
+            }
+
+            if (_unitRegistry.GetFaction(sourceUnit) == _unitRegistry.GetFaction(targetUnit))
+            {
+                return BattleActionFailureReason.SameFactionTarget;
+            }
+
+            var distance = _squareGrid.GetManhattanDistance(sourceUnit.Position, targetUnit.Position);
+            if (distance < ability.MinRange || distance > ability.MaxRange)
+            {
+                return BattleActionFailureReason.TargetOutOfRange;
+            }
+
+            return sourceUnit.PilotRuntime.HasEnoughActionPoint(ability.ActionPointCost)
+                ? BattleActionFailureReason.None
+                : BattleActionFailureReason.InsufficientActionPoint;
         }
 
         private void ValidateUnitPositions(IReadOnlyList<CombatUnit> units, string parameterName)

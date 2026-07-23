@@ -55,7 +55,7 @@ namespace MechStorm.Battle.Tests.Actions
             var nextCombatUnit = CreateCombatUnit(2);
 
             var result = BattleActionResult.ActionEnded(3, actorUnit, nextCombatUnit, 1, 2,
-                CombatFaction.TeamB, CombatFaction.TeamA);
+                CombatFaction.TeamB, CombatFaction.TeamA, 3, 10);
 
             Assert.IsTrue(result.IsSuccess);
             Assert.AreSame(nextCombatUnit, result.NextCombatUnit);
@@ -66,9 +66,100 @@ namespace MechStorm.Battle.Tests.Actions
                     BattleActionChangeType.FactionTurnEnded,
                     BattleActionChangeType.RoundStarted,
                     BattleActionChangeType.FactionTurnStarted,
-                    BattleActionChangeType.CurrentUnitChanged
+                    BattleActionChangeType.CurrentUnitChanged,
+                    BattleActionChangeType.ActionPointRestored
                 },
                 result.ChangeTypes);
+            Assert.AreEqual(3, result.ActionPointBefore);
+            Assert.AreEqual(10, result.ActionPointAfter);
+        }
+
+        [Test]
+        public void AbilitySucceeded_WithLethalDamage_OrdersActionPointBeforeDamageAndDeath()
+        {
+            var actorUnit = CreateCombatUnit(1);
+            var targetUnit = CreateCombatUnit(2);
+
+            var result = BattleActionResult.AbilitySucceeded(
+                4, actorUnit, targetUnit, 101, 10, 7, 30, 0);
+
+            Assert.IsTrue(result.IsSuccess);
+            Assert.AreEqual(BattleActionType.UseAbility, result.ActionType);
+            Assert.AreEqual(101, result.AbilityId);
+            Assert.AreSame(targetUnit, result.TargetUnit);
+            Assert.AreEqual(10, result.ActionPointBefore);
+            Assert.AreEqual(7, result.ActionPointAfter);
+            Assert.AreEqual(30, result.DurabilityBefore);
+            Assert.AreEqual(0, result.DurabilityAfter);
+            CollectionAssert.AreEqual(
+                new[]
+                {
+                    BattleActionChangeType.ActionPointSpent,
+                    BattleActionChangeType.DamageApplied,
+                    BattleActionChangeType.UnitDied
+                },
+                result.ChangeTypes);
+        }
+
+        [Test]
+        public void AbilityFailed_PreservesAbilityAndTargetWithoutChanges()
+        {
+            var actorUnit = CreateCombatUnit(1);
+            var targetUnit = CreateCombatUnit(2);
+
+            var result = BattleActionResult.AbilityFailed(5, actorUnit, targetUnit, 101,
+                BattleActionFailureReason.InsufficientActionPoint);
+
+            Assert.IsFalse(result.IsSuccess);
+            Assert.AreEqual(BattleActionType.UseAbility, result.ActionType);
+            Assert.AreEqual(BattleActionFailureReason.InsufficientActionPoint, result.FailureReason);
+            Assert.AreEqual(101, result.AbilityId);
+            Assert.AreSame(targetUnit, result.TargetUnit);
+            Assert.IsNull(result.ActionPointBefore);
+            Assert.IsNull(result.ActionPointAfter);
+            Assert.IsEmpty(result.ChangeTypes);
+        }
+
+        [Test]
+        public void AbilitySucceeded_WithoutActionPointChange_DoesNotReportSpend()
+        {
+            var actorUnit = CreateCombatUnit(1);
+            var targetUnit = CreateCombatUnit(2);
+
+            var result = BattleActionResult.AbilitySucceeded(
+                5, actorUnit, targetUnit, 101, 10, 10, 80, 55);
+
+            CollectionAssert.AreEqual(
+                new[] { BattleActionChangeType.DamageApplied },
+                result.ChangeTypes);
+        }
+
+        [Test]
+        public void AbilitySucceeded_WithoutDurabilityChange_DoesNotReportDamage()
+        {
+            var actorUnit = CreateCombatUnit(1);
+            var targetUnit = CreateCombatUnit(2);
+
+            var result = BattleActionResult.AbilitySucceeded(
+                5, actorUnit, targetUnit, 101, 10, 7, 80, 80);
+
+            CollectionAssert.AreEqual(
+                new[] { BattleActionChangeType.ActionPointSpent },
+                result.ChangeTypes);
+        }
+
+        [Test]
+        public void ActionEnded_WithoutActionPointChange_DoesNotReportRestore()
+        {
+            var actorUnit = CreateCombatUnit(1);
+            var nextCombatUnit = CreateCombatUnit(2);
+
+            var result = BattleActionResult.ActionEnded(6, actorUnit, nextCombatUnit, 1, 1,
+                CombatFaction.TeamA, CombatFaction.TeamA, 10, 10);
+
+            CollectionAssert.DoesNotContain(
+                result.ChangeTypes,
+                BattleActionChangeType.ActionPointRestored);
         }
 
         [Test]

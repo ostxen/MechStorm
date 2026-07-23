@@ -46,6 +46,8 @@ namespace MechStorm.Battle.Tests
             Assert.AreEqual(CombatFaction.TeamA, initialSnapshot.CurrentFaction);
             Assert.AreEqual(1, initialSnapshot.CurrentUnitId);
             Assert.AreEqual(new Vector2Int(1, 1), initialSnapshot.Units[0].Position);
+            Assert.AreEqual(10, initialSnapshot.Units[0].CurrentActionPoint);
+            Assert.AreEqual(10, initialSnapshot.Units[0].MaxActionPoint);
             Assert.AreEqual(80, initialSnapshot.Units[1].CurrentDurability);
 
             Assert.AreEqual(new Vector2Int(2, 1), updatedSnapshot.Units[0].Position);
@@ -353,6 +355,166 @@ namespace MechStorm.Battle.Tests
         }
 
         [Test]
+        public void TryUseAbility_WithValidTarget_SpendsActionPointAndRecordsResult()
+        {
+            var playerUnit = CreateCombatUnit(1, new Vector2Int(1, 1));
+            var enemyUnit = CreateCombatUnit(2, new Vector2Int(2, 1), durability: 80);
+            var session = CreateBattleSession(playerUnit, enemyUnit);
+
+            var result = session.TryUseAbility(CreateAbility(), enemyUnit);
+
+            Assert.IsTrue(result.IsSuccess);
+            Assert.AreEqual(BattleActionType.UseAbility, result.ActionType);
+            Assert.AreEqual(101, result.AbilityId);
+            Assert.AreSame(playerUnit, result.ActorUnit);
+            Assert.AreSame(enemyUnit, result.TargetUnit);
+            Assert.AreEqual(10, result.ActionPointBefore);
+            Assert.AreEqual(7, result.ActionPointAfter);
+            Assert.AreEqual(80, result.DurabilityBefore);
+            Assert.AreEqual(55, result.DurabilityAfter);
+            Assert.AreEqual(7, playerUnit.PilotRuntime.CurrentActionPoint);
+            Assert.AreEqual(55, enemyUnit.MechRuntime.CurrentDurability);
+            CollectionAssert.AreEqual(
+                new[]
+                {
+                    BattleActionChangeType.ActionPointSpent,
+                    BattleActionChangeType.DamageApplied
+                },
+                result.ChangeTypes);
+
+            Assert.AreEqual(1, session.ActionLogs.Count);
+            Assert.AreEqual(101, session.ActionLogs[0].AbilityId);
+            Assert.AreEqual(enemyUnit.UnitId, session.ActionLogs[0].TargetUnitId);
+        }
+
+        [Test]
+        public void TryUseAbility_WithInsufficientActionPoint_ReturnsFailureWithoutSideEffects()
+        {
+            var playerUnit = CreateCombatUnit(1, new Vector2Int(1, 1));
+            var enemyUnit = CreateCombatUnit(2, new Vector2Int(2, 1), durability: 80);
+            playerUnit.PilotRuntime.TrySpendActionPoint(8);
+            var session = CreateBattleSession(playerUnit, enemyUnit);
+
+            var result = session.TryUseAbility(CreateAbility(actionPointCost: 3), enemyUnit);
+
+            Assert.IsFalse(result.IsSuccess);
+            Assert.AreEqual(BattleActionFailureReason.InsufficientActionPoint, result.FailureReason);
+            Assert.AreEqual(101, result.AbilityId);
+            Assert.AreSame(enemyUnit, result.TargetUnit);
+            Assert.IsEmpty(result.ChangeTypes);
+            Assert.AreEqual(2, playerUnit.PilotRuntime.CurrentActionPoint);
+            Assert.AreEqual(80, enemyUnit.MechRuntime.CurrentDurability);
+            Assert.AreEqual(BattleActionFailureReason.InsufficientActionPoint,
+                session.ActionLogs[0].FailureReason);
+        }
+
+        [Test]
+        public void TryUseAbility_WithOutOfRangeTarget_ReturnsFailureWithoutSpendingActionPoint()
+        {
+            var playerUnit = CreateCombatUnit(1, new Vector2Int(0, 0));
+            var enemyUnit = CreateCombatUnit(2, new Vector2Int(4, 4), durability: 80);
+            var session = CreateBattleSession(playerUnit, enemyUnit);
+
+            var result = session.TryUseAbility(CreateAbility(maxRange: 3), enemyUnit);
+
+            Assert.IsFalse(result.IsSuccess);
+            Assert.AreEqual(BattleActionFailureReason.TargetOutOfRange, result.FailureReason);
+            Assert.AreEqual(10, playerUnit.PilotRuntime.CurrentActionPoint);
+            Assert.AreEqual(80, enemyUnit.MechRuntime.CurrentDurability);
+        }
+
+        [Test]
+        public void TryUseAbility_WithSameFactionTarget_ReturnsFailureWithoutSpendingActionPoint()
+        {
+            var playerUnit = CreateCombatUnit(1, new Vector2Int(1, 1));
+            var alliedUnit = CreateCombatUnit(2, new Vector2Int(2, 1), durability: 80);
+            var enemyUnit = CreateCombatUnit(3, new Vector2Int(4, 4));
+            var session = CreateBattleSession(
+                new[] { playerUnit, alliedUnit },
+                new[] { enemyUnit });
+
+            var result = session.TryUseAbility(CreateAbility(), alliedUnit);
+
+            Assert.IsFalse(result.IsSuccess);
+            Assert.AreEqual(BattleActionFailureReason.SameFactionTarget, result.FailureReason);
+            Assert.AreEqual(10, playerUnit.PilotRuntime.CurrentActionPoint);
+            Assert.AreEqual(80, alliedUnit.MechRuntime.CurrentDurability);
+        }
+
+        [Test]
+        public void TryUseAbility_WithDeadTarget_ReturnsFailureWithoutSpendingActionPoint()
+        {
+            var playerUnit = CreateCombatUnit(1, new Vector2Int(1, 1));
+            var deadEnemy = CreateCombatUnit(2, new Vector2Int(2, 1));
+            var aliveEnemy = CreateCombatUnit(3, new Vector2Int(3, 1));
+            deadEnemy.MechRuntime.TakeDamage(deadEnemy.Mech.MaxDurability);
+            var session = CreateBattleSession(
+                new[] { playerUnit },
+                new[] { deadEnemy, aliveEnemy });
+
+            var result = session.TryUseAbility(CreateAbility(), deadEnemy);
+
+            Assert.IsFalse(result.IsSuccess);
+            Assert.AreEqual(BattleActionFailureReason.TargetAlreadyDead, result.FailureReason);
+            Assert.AreEqual(10, playerUnit.PilotRuntime.CurrentActionPoint);
+            Assert.AreEqual(0, deadEnemy.MechRuntime.CurrentDurability);
+        }
+
+        [Test]
+        public void TryUseAbility_WithLethalDamage_RecordsUnitDeath()
+        {
+            var playerUnit = CreateCombatUnit(1, new Vector2Int(1, 1));
+            var enemyUnit = CreateCombatUnit(2, new Vector2Int(2, 1), durability: 20);
+            var session = CreateBattleSession(playerUnit, enemyUnit);
+
+            var result = session.TryUseAbility(CreateAbility(damage: 30), enemyUnit);
+
+            Assert.IsTrue(result.IsSuccess);
+            Assert.AreEqual(0, enemyUnit.MechRuntime.CurrentDurability);
+            CollectionAssert.AreEqual(
+                new[]
+                {
+                    BattleActionChangeType.ActionPointSpent,
+                    BattleActionChangeType.DamageApplied,
+                    BattleActionChangeType.UnitDied
+                },
+                result.ChangeTypes);
+        }
+
+        [Test]
+        public void TryUseAbility_WhenTeamBActs_UsesCurrentTeamBUnit()
+        {
+            var playerUnit = CreateCombatUnit(1, new Vector2Int(1, 1), durability: 80);
+            var enemyUnit = CreateCombatUnit(2, new Vector2Int(2, 1));
+            var session = CreateBattleSession(playerUnit, enemyUnit);
+            session.EndCurrentUnitAction();
+
+            var result = session.TryUseAbility(CreateAbility(), playerUnit);
+
+            Assert.IsTrue(result.IsSuccess);
+            Assert.AreSame(enemyUnit, result.ActorUnit);
+            Assert.AreEqual(7, enemyUnit.PilotRuntime.CurrentActionPoint);
+            Assert.AreEqual(55, playerUnit.MechRuntime.CurrentDurability);
+        }
+
+        [Test]
+        public void TryUseAbility_WithInvalidContractArgument_DoesNotRecordAction()
+        {
+            var playerUnit = CreateCombatUnit(1, new Vector2Int(1, 1));
+            var enemyUnit = CreateCombatUnit(2, new Vector2Int(2, 1));
+            var unknownUnit = CreateCombatUnit(3, new Vector2Int(3, 1));
+            var session = CreateBattleSession(playerUnit, enemyUnit);
+
+            Assert.Throws<ArgumentNullException>(() => session.TryUseAbility(null, enemyUnit));
+            Assert.Throws<ArgumentNullException>(() => session.TryUseAbility(CreateAbility(), null));
+            Assert.Throws<ArgumentException>(() => session.TryUseAbility(CreateAbility(), unknownUnit));
+            Assert.IsEmpty(session.ActionLogs);
+
+            var moveResult = session.TryMoveCurrentCombatUnit(new Vector2Int(1, 2));
+            Assert.AreEqual(1, moveResult.Sequence);
+        }
+
+        [Test]
         public void EndCurrentUnitAction_AdvancesUnitsTurnsAndRounds()
         {
             var playerUnit = CreateCombatUnit(1, new Vector2Int(1, 1));
@@ -397,6 +559,26 @@ namespace MechStorm.Battle.Tests
             Assert.AreSame(playerUnit, session.CurrentCombatUnit);
             Assert.AreEqual(CombatFaction.TeamA, session.CurrentFaction);
             Assert.AreEqual(2, session.CurrentRoundNumber);
+        }
+
+        [Test]
+        public void EndCurrentUnitAction_RestoresNextUnitActionPointInResultAndLog()
+        {
+            var playerUnit = CreateCombatUnit(1, new Vector2Int(1, 1));
+            var enemyUnit = CreateCombatUnit(2, new Vector2Int(3, 1));
+            enemyUnit.PilotRuntime.TrySpendActionPoint(7);
+            var session = CreateBattleSession(playerUnit, enemyUnit);
+
+            var result = session.EndCurrentUnitAction();
+
+            Assert.AreEqual(3, result.ActionPointBefore);
+            Assert.AreEqual(10, result.ActionPointAfter);
+            CollectionAssert.Contains(
+                result.ChangeTypes,
+                BattleActionChangeType.ActionPointRestored);
+            Assert.AreEqual(10, enemyUnit.PilotRuntime.CurrentActionPoint);
+            Assert.AreEqual(3, session.ActionLogs[0].ActionPointBefore);
+            Assert.AreEqual(10, session.ActionLogs[0].ActionPointAfter);
         }
 
         [Test]
@@ -585,6 +767,13 @@ namespace MechStorm.Battle.Tests
             CombatUnit[] enemyUnits)
         {
             return new BattleSession(5, 5, playerUnits, enemyUnits);
+        }
+
+        private static AbilityDefinition CreateAbility(int damage = 25, int minRange = 1,
+            int maxRange = 3, int actionPointCost = 3)
+        {
+            return new AbilityDefinition(101, "Test Ability", minRange, maxRange, damage,
+                actionPointCost, TargetRule.EnemyUnit);
         }
 
         private static CombatUnit CreateCombatUnit(

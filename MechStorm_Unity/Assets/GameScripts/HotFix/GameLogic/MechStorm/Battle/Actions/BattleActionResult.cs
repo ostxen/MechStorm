@@ -46,6 +46,11 @@ namespace MechStorm.Battle.Actions
         public CombatUnit TargetUnit { get; }
 
         /// <summary>
+        /// 本次尝试使用的技能 ID，非技能操作为 null。
+        /// </summary>
+        public int? AbilityId { get; }
+
+        /// <summary>
         /// 行动结束后的下一个单位，其他操作为 null。
         /// </summary>
         public CombatUnit NextCombatUnit { get; }
@@ -66,14 +71,24 @@ namespace MechStorm.Battle.Actions
         public Vector2Int? PositionAfter { get; }
 
         /// <summary>
-        /// 受击前的耐久值，非攻击操作为 null。
+        /// 受到攻击或技能伤害前的耐久值，其他操作为 null。
         /// </summary>
         public int? DurabilityBefore { get; }
 
         /// <summary>
-        /// 受击后的耐久值，非攻击操作为 null。
+        /// 受到攻击或技能伤害后的耐久值，其他操作为 null。
         /// </summary>
         public int? DurabilityAfter { get; }
+
+        /// <summary>
+        /// 技能 Actor 消耗前或 NextCombatUnit 恢复前的 AP，其他操作为 null。
+        /// </summary>
+        public int? ActionPointBefore { get; }
+
+        /// <summary>
+        /// 技能 Actor 消耗后或 NextCombatUnit 恢复后的 AP，其他操作为 null。
+        /// </summary>
+        public int? ActionPointAfter { get; }
 
         /// <summary>
         /// 行动结束前的回合数，其他操作为 null。
@@ -97,7 +112,8 @@ namespace MechStorm.Battle.Actions
 
         private BattleActionResult(int sequence, BattleActionType actionType, BattleActionFailureReason failureReason, CombatUnit actorUnit, CombatUnit targetUnit, CombatUnit nextCombatUnit,
             IReadOnlyList<BattleActionChangeType> changeTypes, Vector2Int? positionBefore = null, Vector2Int? positionAfter = null, int? durabilityBefore = null, int? durabilityAfter = null,
-            int? roundNumberBefore = null, int? roundNumberAfter = null, CombatFaction? factionBefore = null, CombatFaction? factionAfter = null)
+            int? abilityId = null, int? actionPointBefore = null, int? actionPointAfter = null, int? roundNumberBefore = null, int? roundNumberAfter = null,
+            CombatFaction? factionBefore = null, CombatFaction? factionAfter = null)
         {
             Sequence = sequence;
             ActionType = actionType;
@@ -110,6 +126,9 @@ namespace MechStorm.Battle.Actions
             PositionAfter = positionAfter;
             DurabilityBefore = durabilityBefore;
             DurabilityAfter = durabilityAfter;
+            AbilityId = abilityId;
+            ActionPointBefore = actionPointBefore;
+            ActionPointAfter = actionPointAfter;
             RoundNumberBefore = roundNumberBefore;
             RoundNumberAfter = roundNumberAfter;
             FactionBefore = factionBefore;
@@ -164,6 +183,62 @@ namespace MechStorm.Battle.Actions
         }
 
         /// <summary>
+        /// 创建技能成功结果。
+        /// </summary>
+        public static BattleActionResult AbilitySucceeded(int sequence, CombatUnit actorUnit,
+            CombatUnit targetUnit, int abilityId, int actionPointBefore, int actionPointAfter,
+            int durabilityBefore, int durabilityAfter)
+        {
+            if (actorUnit == null)
+            {
+                throw new ArgumentNullException(nameof(actorUnit));
+            }
+
+            if (targetUnit == null)
+            {
+                throw new ArgumentNullException(nameof(targetUnit));
+            }
+
+            if (abilityId <= 0)
+            {
+                throw new ArgumentOutOfRangeException(nameof(abilityId), abilityId,
+                    "Ability ID must be greater than zero.");
+            }
+
+            if (actionPointBefore < 0)
+            {
+                throw new ArgumentOutOfRangeException(nameof(actionPointBefore), actionPointBefore,
+                    "Action point before ability use must be non-negative.");
+            }
+
+            if (actionPointAfter < 0 || actionPointAfter > actionPointBefore)
+            {
+                throw new ArgumentOutOfRangeException(nameof(actionPointAfter), actionPointAfter,
+                    "Action point after ability use must be between zero and the previous value.");
+            }
+
+            var changeTypes = new List<BattleActionChangeType>();
+            if (actionPointBefore != actionPointAfter)
+            {
+                changeTypes.Add(BattleActionChangeType.ActionPointSpent);
+            }
+
+            if (durabilityBefore != durabilityAfter)
+            {
+                changeTypes.Add(BattleActionChangeType.DamageApplied);
+                if (durabilityAfter <= 0)
+                {
+                    changeTypes.Add(BattleActionChangeType.UnitDied);
+                }
+            }
+
+            return new BattleActionResult(sequence, BattleActionType.UseAbility,
+                BattleActionFailureReason.None, actorUnit, targetUnit, null, changeTypes.ToArray(),
+                durabilityBefore: durabilityBefore, durabilityAfter: durabilityAfter, abilityId: abilityId,
+                actionPointBefore: actionPointBefore, actionPointAfter: actionPointAfter);
+        }
+
+        /// <summary>
         /// 创建单位行动结束结果。
         /// </summary>
         /// <param name="sequence">操作序号。</param>
@@ -173,8 +248,11 @@ namespace MechStorm.Battle.Actions
         /// <param name="roundNumberAfter">行动结束后的回合数。</param>
         /// <param name="factionBefore">行动结束前的当前阵营。</param>
         /// <param name="factionAfter">行动结束后的当前阵营。</param>
+        /// <param name="actionPointBefore">下一行动单位恢复前的 AP。</param>
+        /// <param name="actionPointAfter">下一行动单位恢复后的 AP。</param>
         public static BattleActionResult ActionEnded(int sequence, CombatUnit actorUnit, CombatUnit nextCombatUnit, int roundNumberBefore,
-            int roundNumberAfter, CombatFaction factionBefore, CombatFaction factionAfter)
+            int roundNumberAfter, CombatFaction factionBefore, CombatFaction factionAfter, int actionPointBefore,
+            int actionPointAfter)
         {
             if (actorUnit == null)
             {
@@ -184,6 +262,18 @@ namespace MechStorm.Battle.Actions
             if (nextCombatUnit == null)
             {
                 throw new ArgumentNullException(nameof(nextCombatUnit));
+            }
+
+            if (actionPointBefore < 0)
+            {
+                throw new ArgumentOutOfRangeException(nameof(actionPointBefore), actionPointBefore,
+                    "Action point before restore must be non-negative.");
+            }
+
+            if (actionPointAfter < 0)
+            {
+                throw new ArgumentOutOfRangeException(nameof(actionPointAfter), actionPointAfter,
+                    "Action point after restore must be non-negative.");
             }
 
             var changeTypes = new List<BattleActionChangeType>
@@ -207,10 +297,47 @@ namespace MechStorm.Battle.Actions
             }
 
             changeTypes.Add(BattleActionChangeType.CurrentUnitChanged);
+            if (actionPointBefore != actionPointAfter)
+            {
+                changeTypes.Add(BattleActionChangeType.ActionPointRestored);
+            }
 
             return new BattleActionResult(sequence, BattleActionType.EndUnitAction, BattleActionFailureReason.None, actorUnit, null,
                 nextCombatUnit, changeTypes.ToArray(), roundNumberBefore: roundNumberBefore, roundNumberAfter: roundNumberAfter,
-                factionBefore: factionBefore, factionAfter: factionAfter);
+                factionBefore: factionBefore, factionAfter: factionAfter, actionPointBefore: actionPointBefore,
+                actionPointAfter: actionPointAfter);
+        }
+
+        /// <summary>
+        /// 创建技能失败结果，并保留请求中的技能和目标身份。
+        /// </summary>
+        public static BattleActionResult AbilityFailed(int sequence, CombatUnit actorUnit,
+            CombatUnit targetUnit, int abilityId, BattleActionFailureReason failureReason)
+        {
+            if (actorUnit == null)
+            {
+                throw new ArgumentNullException(nameof(actorUnit));
+            }
+
+            if (targetUnit == null)
+            {
+                throw new ArgumentNullException(nameof(targetUnit));
+            }
+
+            if (abilityId <= 0)
+            {
+                throw new ArgumentOutOfRangeException(nameof(abilityId), abilityId,
+                    "Ability ID must be greater than zero.");
+            }
+
+            if (failureReason == BattleActionFailureReason.None)
+            {
+                throw new ArgumentException("A failed ability must provide a failure reason.",
+                    nameof(failureReason));
+            }
+
+            return new BattleActionResult(sequence, BattleActionType.UseAbility, failureReason, actorUnit,
+                targetUnit, null, _emptyChangeTypes, abilityId: abilityId);
         }
 
         /// <summary>

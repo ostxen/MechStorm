@@ -3,9 +3,9 @@
 ## 当前阶段
 
 - 当前里程碑：P1 / Sprint 4
-- 当前任务：Task 4.4 技能 Result、ActionLog、Snapshot 与 JSON 诊断
-- 当前状态：Sprint 4 进行中；Task 4.1～4.3 已完成
-- 最后更新：2026-07-22
+- 当前任务：Task 4.5 临时技能按钮、目标选择和技能范围高亮
+- 当前状态：Sprint 4 进行中；Task 4.1～4.4 已完成
+- 最后更新：2026-07-23
 
 ## 状态约定
 
@@ -213,9 +213,10 @@
     1. [x] Task 4.1 最小 `AbilityDefinition` 与 `TargetRule`
     2. [x] Task 4.2 `AbilityResolver` 与单体直接伤害技能
     3. [x] Task 4.3 仅服务首个主动技能的固定 AP 消耗与行动开始恢复
-    4. [~] Task 4.4 技能 Result、ActionLog、Snapshot 与 JSON 诊断
-    5. [ ] Task 4.5 临时技能按钮、目标选择和技能范围高亮
-  - 当前验证：Task 4.2 已随提交 `63639d6` 完成；Task 4.3 的 Data、Runtime、Resolver 与 Turn 相关纯 C# NUnit 测试 75 / 75 通过，Battle、Battle.Tests、Presentation、Presentation.Tests、GameLogic 与 Editor 项目编译通过
+    4. [x] Task 4.4 技能 Result、ActionLog、Snapshot 与 JSON 诊断
+    5. [~] Task 4.5 临时技能按钮、目标选择和技能范围高亮
+  - 当前验证：Task 4.4 纯 C# NUnit 隔离运行 180 / 180 通过；Battle、Battle.Tests、Presentation 编译通过
+  - Task 4.4 完成内容：扩展 UseAbility / InsufficientActionPoint / ActionPointSpent / ActionPointRestored；BattleActionResult 增加 AbilitySucceeded / AbilityFailed 与 AP 字段；BattleActionLog 与 BattleUnitSnapshot 同步技能身份与 AP；BattleSession.TryUseAbility 接入 AbilityResolver 并在结束行动时记录 AP 恢复；调试 JSON Schema 升级为 3；补齐 Result、Session、Snapshot 测试
   - Task 4.3 完成规则：
     - AP 归属 `Pilot`；移动继续不消耗 AP，本任务也不改变普通攻击规则
     - `Pilot.MaxActionPoint`、局内当前 AP 与技能消耗均为非负整数；每个技能只配置一个 `ActionPointCost`，首个实际技能使用正消耗，数据模型允许后续出现 0 AP 技能
@@ -223,6 +224,13 @@
     - 空参数和未注册单位仍属于调用错误；死亡、同阵营、棋盘外、射程非法和 AP 不足属于正常玩法失败
     - 所有目标与 AP 校验必须先无副作用完成；成功时先原子支付 AP，再结算伤害，任一失败都不能扣 AP 或修改目标耐久
     - 当下一个存活单位成为 `CurrentCombatUnit`、开始自己的行动时，将其 AP 恢复到 `Pilot.MaxActionPoint`；首个行动单位由 `CombatUnitFactory` 以满 AP 初始化
+  - Task 4.4 已确认玩法规则：
+    - BattleSession 提供技能释放入口，返回结构化 BattleActionResult 并写入 ActionLogs
+    - 成功技能结果记录技能 ID、目标、Actor AP 前后值、目标耐久前后值，以及 ActionPointSpent / DamageApplied（致死时再加 UnitDied）
+    - 失败技能结果保留技能 ID 与目标身份，失败原因可区分 AP 不足、同阵营、死亡、越距等；失败不修改 AP 与耐久
+    - 单位快照与 JSON 导出补充当前 AP / 最大 AP；结束行动时若下一单位 AP 被恢复，结果记录该恢复前后值
+    - 调试 JSON 因契约扩展升级 Schema 版本；空技能、空目标、未注册目标仍属调用契约异常
+  - Task 4.4 开发范围：扩展 BattleActionType / FailureReason / ChangeType；扩展 BattleActionResult / BattleActionLog / BattleUnitSnapshot；BattleSession 接入 AbilityResolver 并返回技能 Result；扩展 JSON 序列化与对应测试
   - Task 4.3 完成内容：扩展 `AbilityDefinition` 固定 AP 消耗；为 `PilotData` / `PilotRuntime` 建立 AP 非负不变量，并为 Runtime 增加查询、原子支付和恢复方法；由 `AbilityResolver` 编排“校验目标与余额 → 提交消耗 → 伤害”；由 `TurnCoordinator` 在单位行动开始边界恢复 AP；补齐 Data、Runtime、Resolver 和 Turn 测试
   - 备注：首个技能不附带 Buff，不实现 Effect 列表、Modifier、Trigger、完整 GAS 或正式技能栏；Task 4.3 不建立通用 `BattleResource` / `SkillCost[]`，Sprint 7 再将固定 AP 规则迁移为通用资源管线；仅当首个真实技能明确需要召唤时，才在本 Sprint 验收后追加动态召唤垂直切片
 

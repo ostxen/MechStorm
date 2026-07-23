@@ -19,9 +19,14 @@ namespace MechStorm.Battle.Snapshots
 
         public int MaxDurability { get; }
 
+        public int CurrentActionPoint { get; }
+
+        public int MaxActionPoint { get; }
+
         public bool IsDead => CurrentDurability <= 0;
 
-        public BattleUnitSnapshot(int unitId, CombatFaction faction, Vector2Int position, int currentDurability, int maxDurability)
+        public BattleUnitSnapshot(int unitId, CombatFaction faction, Vector2Int position, int currentDurability,
+            int maxDurability, int currentActionPoint, int maxActionPoint)
         {
             if (unitId <= 0)
             {
@@ -38,11 +43,25 @@ namespace MechStorm.Battle.Snapshots
                 throw new ArgumentOutOfRangeException(nameof(currentDurability), currentDurability, "Current durability must be between zero and maximum durability.");
             }
 
+            if (maxActionPoint < 0)
+            {
+                throw new ArgumentOutOfRangeException(nameof(maxActionPoint), maxActionPoint,
+                    "Maximum action point must be non-negative.");
+            }
+
+            if (currentActionPoint < 0 || currentActionPoint > maxActionPoint)
+            {
+                throw new ArgumentOutOfRangeException(nameof(currentActionPoint), currentActionPoint,
+                    "Current action point must be between zero and maximum action point.");
+            }
+
             UnitId = unitId;
             Faction = faction;
             Position = position;
             CurrentDurability = currentDurability;
             MaxDurability = maxDurability;
+            CurrentActionPoint = currentActionPoint;
+            MaxActionPoint = maxActionPoint;
         }
     }
 }
