@@ -1,44 +1,121 @@
 using System;
+using System.Collections.Generic;
 using MechStorm.Battle.Data;
+using MechStorm.Battle.Foundation;
 using MechStorm.Battle.Spatial;
 using MechStorm.Battle.Units;
 
 namespace MechStorm.Battle.Rules
 {
+    /// <summary>
+    /// 校验并结算单体主动技能。
+    /// </summary>
     public sealed class AbilityResolver
     {
         private readonly SquareGrid _squareGrid;
-        private readonly CombatUnitRegistry _combatUnitRegistry;
+        private readonly CombatUnitRegistry _unitRegistry;
 
-        public AbilityResolver(SquareGrid squareGrid, CombatUnitRegistry combatUnitRegistry)
+        public AbilityResolver(SquareGrid squareGrid, CombatUnitRegistry unitRegistry)
         {
             _squareGrid = squareGrid ?? throw new ArgumentNullException(nameof(squareGrid));
-            _combatUnitRegistry = combatUnitRegistry ?? throw new ArgumentNullException(nameof(combatUnitRegistry));
+            _unitRegistry = unitRegistry ?? throw new ArgumentNullException(nameof(unitRegistry));
         }
 
-        public bool TryResolveAbility(AbilityDefinition ability, CombatUnit source, CombatUnit target)
+        /// <summary>
+        /// 判断技能是否可对目标使用，不修改战斗状态。
+        /// </summary>
+        public bool CanUseAbility(AbilityDefinition ability, CombatUnit source, CombatUnit target)
         {
-            // 技能结算分为三个阶段：
-            // 1. 参数合法性校验处理调用错误，失败时抛出异常，避免掩盖接线或对象归属问题。
             ValidateArguments(ability, source, target);
 
-            // 2. 结算前状态校验处理正常玩法限制，失败时返回 false，并且不能修改战斗状态。
-            if (!CanResolveAbility(ability, source, target))
+            if (source.IsDead() || target.IsDead())
+            {
+                return false;
+            }
+
+            if (!_squareGrid.IsInside(source.Position) || !_squareGrid.IsInside(target.Position))
+            {
+                return false;
+            }
+
+            if (!MatchesTargetRule(ability.TargetRule, source, target))
+            {
+                return false;
+            }
+
+            return IsPositionInRange(ability, source, target.Position) &&
+                   source.PilotRuntime.HasEnoughActionPoint(ability.ActionPointCost);
+        }
+
+        public bool IsPositionInRange(AbilityDefinition ability, CombatUnit source, Vector2Int targetPosition)
+        {
+            ValidateSource(ability, source);
+
+            if (!_squareGrid.IsInside(source.Position) || !_squareGrid.IsInside(targetPosition))
+            {
+                return false;
+            }
+
+            var distance = _squareGrid.GetManhattanDistance(source.Position, targetPosition);
+            return distance >= ability.MinRange && distance <= ability.MaxRange;
+        }
+
+        public IReadOnlyList<Vector2Int> GetPositionsInRange(AbilityDefinition ability, CombatUnit source)
+        {
+            ValidateSource(ability, source);
+
+            var positions = new List<Vector2Int>();
+            for (var x = 0; x < _squareGrid.Width; x++)
+            {
+                for (var y = 0; y < _squareGrid.Height; y++)
+                {
+                    var position = new Vector2Int(x, y);
+                    if (IsPositionInRange(ability, source, position))
+                    {
+                        positions.Add(position);
+                    }
+                }
+            }
+
+            return positions;
+        }
+
+        /// <summary>
+        /// 对合法目标支付固定 AP 并结算固定伤害。
+        /// </summary>
+        public bool TryResolveAbility(AbilityDefinition ability, CombatUnit source, CombatUnit target)
+        {
+            if (!CanUseAbility(ability, source, target))
             {
                 return false;
             }
 
             if (!source.PilotRuntime.TrySpendActionPoint(ability.ActionPointCost))
             {
-                throw new InvalidOperationException("Validated ability cost could not be committed.");
+                throw new InvalidOperationException(
+                    "Validated ability cost could not be committed.");
             }
 
-            // 3. 前置条件全部通过后才进入结算，所有状态修改都集中在这个阶段。
-            ApplyAbility(ability, target);
+            target.MechRuntime.TakeDamage(ability.Damage);
             return true;
         }
 
         private void ValidateArguments(AbilityDefinition ability, CombatUnit source, CombatUnit target)
+        {
+            ValidateSource(ability, source);
+
+            if (target == null)
+            {
+                throw new ArgumentNullException(nameof(target));
+            }
+
+            if (!_unitRegistry.Contains(target))
+            {
+                throw new ArgumentException("Target unit does not belong to this battle registry.", nameof(target));
+            }
+        }
+
+        private void ValidateSource(AbilityDefinition ability, CombatUnit source)
         {
             if (ability == null)
             {
@@ -50,49 +127,21 @@ namespace MechStorm.Battle.Rules
                 throw new ArgumentNullException(nameof(source));
             }
 
-            if (target == null)
-            {
-                throw new ArgumentNullException(nameof(target));
-            }
-
-            if (!_combatUnitRegistry.Contains(source))
+            if (!_unitRegistry.Contains(source))
             {
                 throw new ArgumentException("Source unit does not belong to this battle registry.", nameof(source));
             }
-
-            if (!_combatUnitRegistry.Contains(target))
-            {
-                throw new ArgumentException("Target unit does not belong to this battle registry.", nameof(target));
-            }
         }
 
-        private bool CanResolveAbility(AbilityDefinition ability, CombatUnit source, CombatUnit target)
+        private bool MatchesTargetRule(TargetRule targetRule, CombatUnit source, CombatUnit target)
         {
-            if (!source.IsAlive() || !target.IsAlive())
+            switch (targetRule)
             {
-                return false;
+                case TargetRule.EnemyUnit:
+                    return _unitRegistry.GetFaction(source) != _unitRegistry.GetFaction(target);
+                default:
+                    throw new ArgumentOutOfRangeException(nameof(targetRule), targetRule, null);
             }
-
-            if (!_squareGrid.IsInside(source.Position) || !_squareGrid.IsInside(target.Position))
-            {
-                return false;
-            }
-
-            if (ability.TargetRule != TargetRule.EnemyUnit ||
-                _combatUnitRegistry.GetFaction(source) == _combatUnitRegistry.GetFaction(target))
-            {
-                return false;
-            }
-
-            var distance = _squareGrid.GetManhattanDistance(source.Position, target.Position);
-            return distance >= ability.MinRange &&
-                   distance <= ability.MaxRange &&
-                   source.PilotRuntime.HasEnoughActionPoint(ability.ActionPointCost);
-        }
-
-        private static void ApplyAbility(AbilityDefinition ability, CombatUnit target)
-        {
-            target.MechRuntime.TakeDamage(ability.Damage);
         }
     }
 }

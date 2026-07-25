@@ -190,6 +190,51 @@ namespace MechStorm.Battle.Tests
         }
 
         [Test]
+        public void GetCurrentCombatUnitAbilityPositions_ReturnsConfiguredRangeWithinGrid()
+        {
+            var playerUnit = CreateCombatUnit(1, new Vector2Int(0, 0));
+            var enemyUnit = CreateCombatUnit(2, new Vector2Int(4, 4));
+            var session = CreateBattleSession(playerUnit, enemyUnit);
+
+            var positions = session.GetCurrentCombatUnitAbilityPositions(
+                CreateAbility(minRange: 2, maxRange: 3));
+
+            Assert.AreEqual(7, positions.Count);
+            CollectionAssert.DoesNotContain(positions, new Vector2Int(1, 0));
+            CollectionAssert.Contains(positions, new Vector2Int(2, 0));
+            CollectionAssert.Contains(positions, new Vector2Int(1, 2));
+            CollectionAssert.Contains(positions, new Vector2Int(3, 0));
+            CollectionAssert.DoesNotContain(positions, new Vector2Int(4, 0));
+        }
+
+        [Test]
+        public void GetCurrentCombatUnitAbilityTargets_FiltersRuleDeathRangeAndActionPoint()
+        {
+            var playerUnit = CreateCombatUnit(1, new Vector2Int(0, 0));
+            var alliedUnit = CreateCombatUnit(2, new Vector2Int(1, 0));
+            var validEnemy = CreateCombatUnit(3, new Vector2Int(2, 0));
+            var deadEnemy = CreateCombatUnit(4, new Vector2Int(0, 2));
+            var farEnemy = CreateCombatUnit(5, new Vector2Int(4, 4));
+            var neutralUnit = CreateCombatUnit(6, new Vector2Int(0, 3));
+            deadEnemy.MechRuntime.TakeDamage(deadEnemy.Mech.MaxDurability);
+            var session = new BattleSession(
+                5,
+                5,
+                new[] { playerUnit, alliedUnit },
+                new[] { validEnemy, deadEnemy, farEnemy },
+                new[] { neutralUnit });
+            var ability = CreateAbility(minRange: 2, maxRange: 3, actionPointCost: 3);
+
+            CollectionAssert.AreEqual(
+                new[] { validEnemy, neutralUnit },
+                session.GetCurrentCombatUnitAbilityTargets(ability));
+
+            playerUnit.PilotRuntime.TrySpendActionPoint(8);
+
+            Assert.IsEmpty(session.GetCurrentCombatUnitAbilityTargets(ability));
+        }
+
+        [Test]
         public void CurrentCombatUnitQueries_DoNotMutateBattleState()
         {
             var playerUnit = CreateCombatUnit(1, new Vector2Int(0, 0), moveRange: 4,
@@ -201,6 +246,8 @@ namespace MechStorm.Battle.Tests
             session.GetCurrentCombatUnitReachablePositions();
             session.GetCurrentCombatUnitBasicAttackPositions();
             session.GetCurrentCombatUnitBasicAttackTargets();
+            session.GetCurrentCombatUnitAbilityPositions(CreateAbility());
+            session.GetCurrentCombatUnitAbilityTargets(CreateAbility());
 
             var jsonAfter = BattleDebugJsonSerializer.Serialize(session.CreateSnapshot(), session.ActionLogs);
             Assert.AreEqual(jsonBefore, jsonAfter);
@@ -579,6 +626,46 @@ namespace MechStorm.Battle.Tests
             Assert.AreEqual(10, enemyUnit.PilotRuntime.CurrentActionPoint);
             Assert.AreEqual(3, session.ActionLogs[0].ActionPointBefore);
             Assert.AreEqual(10, session.ActionLogs[0].ActionPointAfter);
+        }
+
+        [Test]
+        public void EndCurrentFactionTurn_SkipsRemainingUnitsAndRecordsResult()
+        {
+            var playerA = CreateCombatUnit(1, new Vector2Int(1, 1));
+            var playerB = CreateCombatUnit(2, new Vector2Int(1, 2));
+            var enemyUnit = CreateCombatUnit(3, new Vector2Int(3, 1));
+            playerB.PilotRuntime.TrySpendActionPoint(9);
+            enemyUnit.PilotRuntime.TrySpendActionPoint(7);
+            var session = CreateBattleSession(
+                new[] { playerA, playerB },
+                new[] { enemyUnit });
+
+            var result = session.EndCurrentFactionTurn();
+
+            Assert.IsTrue(result.IsSuccess);
+            Assert.AreEqual(BattleActionType.EndFactionTurn, result.ActionType);
+            Assert.AreSame(playerA, result.ActorUnit);
+            Assert.AreSame(enemyUnit, result.NextCombatUnit);
+            Assert.AreEqual(CombatFaction.TeamA, result.FactionBefore);
+            Assert.AreEqual(CombatFaction.TeamB, result.FactionAfter);
+            Assert.AreEqual(1, result.RoundNumberBefore);
+            Assert.AreEqual(1, result.RoundNumberAfter);
+            Assert.AreEqual(3, result.ActionPointBefore);
+            Assert.AreEqual(10, result.ActionPointAfter);
+            CollectionAssert.AreEqual(
+                new[]
+                {
+                    BattleActionChangeType.UnitActionEnded,
+                    BattleActionChangeType.FactionTurnEnded,
+                    BattleActionChangeType.FactionTurnStarted,
+                    BattleActionChangeType.CurrentUnitChanged,
+                    BattleActionChangeType.ActionPointRestored
+                },
+                result.ChangeTypes);
+            Assert.AreSame(enemyUnit, session.CurrentCombatUnit);
+            Assert.AreEqual(1, playerB.PilotRuntime.CurrentActionPoint);
+            Assert.AreEqual(BattleActionType.EndFactionTurn, session.ActionLogs[0].ActionType);
+            Assert.AreEqual(enemyUnit.UnitId, session.ActionLogs[0].NextUnitId);
         }
 
         [Test]

@@ -14,7 +14,8 @@ namespace MechStorm.Presentation.Board
         /// 按移动、攻击、合法目标的优先级生成高亮映射。
         /// </summary>
         public IReadOnlyDictionary<Vector2Int, BattleCellHighlightType> Build(IReadOnlyList<Vector2Int> movePositions,
-            IReadOnlyList<Vector2Int> attackPositions, IReadOnlyList<CombatUnit> attackTargets)
+            IReadOnlyList<Vector2Int> attackPositions, IReadOnlyList<CombatUnit> attackTargets,
+            CombatUnit selectedTarget = null)
         {
             if (movePositions == null)
             {
@@ -54,7 +55,82 @@ namespace MechStorm.Presentation.Board
                 highlights[target.Position] = BattleCellHighlightType.ValidTarget;
             }
 
+            if (selectedTarget != null)
+            {
+                if (!ContainsTarget(attackTargets, selectedTarget))
+                {
+                    throw new ArgumentException(
+                        "Selected attack target must be present in attack targets.",
+                        nameof(selectedTarget));
+                }
+
+                highlights[selectedTarget.Position] = BattleCellHighlightType.SelectedAttackTarget;
+            }
+
             return highlights;
+        }
+
+        /// <summary>
+        /// 生成技能范围与合法技能目标的高亮映射。
+        /// </summary>
+        public IReadOnlyDictionary<Vector2Int, BattleCellHighlightType> BuildAbility(
+            IReadOnlyList<Vector2Int> abilityPositions,
+            IReadOnlyList<CombatUnit> abilityTargets,
+            CombatUnit selectedTarget = null)
+        {
+            if (abilityPositions == null)
+            {
+                throw new ArgumentNullException(nameof(abilityPositions));
+            }
+
+            if (abilityTargets == null)
+            {
+                throw new ArgumentNullException(nameof(abilityTargets));
+            }
+
+            var highlights = new Dictionary<Vector2Int, BattleCellHighlightType>();
+            foreach (var position in abilityPositions)
+            {
+                highlights[position] = BattleCellHighlightType.Ability;
+            }
+
+            foreach (var target in abilityTargets)
+            {
+                if (target == null)
+                {
+                    throw new ArgumentException("Ability targets cannot contain null.",
+                        nameof(abilityTargets));
+                }
+
+                highlights[target.Position] = BattleCellHighlightType.ValidAbilityTarget;
+            }
+
+            if (selectedTarget != null)
+            {
+                if (!ContainsTarget(abilityTargets, selectedTarget))
+                {
+                    throw new ArgumentException(
+                        "Selected ability target must be present in ability targets.",
+                        nameof(selectedTarget));
+                }
+
+                highlights[selectedTarget.Position] = BattleCellHighlightType.SelectedAbilityTarget;
+            }
+
+            return highlights;
+        }
+
+        private static bool ContainsTarget(IReadOnlyList<CombatUnit> targets, CombatUnit selectedTarget)
+        {
+            foreach (var target in targets)
+            {
+                if (ReferenceEquals(target, selectedTarget))
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
     }
 }

@@ -56,6 +56,13 @@ namespace MechStorm.Battle.Turns
             RestoreCurrentCombatUnitActionPoint();
         }
 
+        public void EndCurrentFactionTurn()
+        {
+            AdvanceFaction();
+            _currentFactionUnitIndex = FindNextAliveUnitIndex(GetCurrentFactionUnits(), InvalidFactionUnitIndex);
+            RestoreCurrentCombatUnitActionPoint();
+        }
+
         private IReadOnlyList<CombatUnit> GetCurrentFactionUnits()
         {
             return _unitRegistry.GetFactionUnits(CurrentFaction);

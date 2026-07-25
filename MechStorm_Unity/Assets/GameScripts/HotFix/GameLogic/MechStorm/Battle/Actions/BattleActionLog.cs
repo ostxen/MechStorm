@@ -129,14 +129,18 @@ namespace MechStorm.Battle.Actions
                 throw new ArgumentException("Only ability log can provide an ability ID.", nameof(result));
             }
 
-            if (result.ActionType == BattleActionType.EndUnitAction && nextUnitId == null)
+            var requiresNextUnit = result.ActionType == BattleActionType.EndUnitAction ||
+                                   result.ActionType == BattleActionType.EndFactionTurn;
+            if (requiresNextUnit && nextUnitId == null)
             {
-                throw new ArgumentException("End action log must provide the next unit ID.", nameof(nextUnitId));
+                throw new ArgumentException("Turn advancement log must provide the next unit ID.",
+                    nameof(nextUnitId));
             }
 
-            if (result.ActionType != BattleActionType.EndUnitAction && nextUnitId != null)
+            if (!requiresNextUnit && nextUnitId != null)
             {
-                throw new ArgumentException("Only end action log can provide the next unit ID.", nameof(nextUnitId));
+                throw new ArgumentException("Only turn advancement logs can provide the next unit ID.",
+                    nameof(nextUnitId));
             }
         }
 

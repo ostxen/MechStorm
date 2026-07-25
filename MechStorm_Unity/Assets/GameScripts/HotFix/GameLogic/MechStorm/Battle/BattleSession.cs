@@ -134,7 +134,8 @@ namespace MechStorm.Battle
             var failureReason = GetAbilityFailureReason(ability, actorUnit, targetUnit);
             if (failureReason != BattleActionFailureReason.None)
             {
-                var failedResult = BattleActionResult.AbilityFailed(sequence, actorUnit, targetUnit, ability.AbilityId, failureReason);
+                var failedResult = BattleActionResult.AbilityFailed(sequence, actorUnit, targetUnit,
+                    ability.AbilityId, failureReason);
                 return RecordAction(failedResult, targetUnitId: targetUnit.UnitId);
             }
 
@@ -157,18 +158,31 @@ namespace MechStorm.Battle
             var roundNumberBefore = CurrentRoundNumber;
             var factionBefore = CurrentFaction;
             var sequence = ++_actionSequence;
-            var actionPointsBefore = new Dictionary<int, int>(CombatUnits.Count);
-            foreach (var combatUnit in CombatUnits)
-            {
-                actionPointsBefore.Add(combatUnit.UnitId,
-                    combatUnit.PilotRuntime.CurrentActionPoint);
-            }
+            var actionPointsBefore = CaptureActionPoints();
 
             _turnCoordinator.EndCurrentUnitAction();
 
             var nextCombatUnit = CurrentCombatUnit;
             var result = BattleActionResult.ActionEnded(sequence, actorUnit, nextCombatUnit, roundNumberBefore,
                 CurrentRoundNumber, factionBefore, CurrentFaction, actionPointsBefore[nextCombatUnit.UnitId],
+                nextCombatUnit.PilotRuntime.CurrentActionPoint);
+            return RecordAction(result, nextUnitId: nextCombatUnit.UnitId);
+        }
+
+        public BattleActionResult EndCurrentFactionTurn()
+        {
+            var actorUnit = CurrentCombatUnit;
+            var roundNumberBefore = CurrentRoundNumber;
+            var factionBefore = CurrentFaction;
+            var sequence = ++_actionSequence;
+            var actionPointsBefore = CaptureActionPoints();
+
+            _turnCoordinator.EndCurrentFactionTurn();
+
+            var nextCombatUnit = CurrentCombatUnit;
+            var result = BattleActionResult.FactionTurnEnded(
+                sequence, actorUnit, nextCombatUnit, roundNumberBefore, CurrentRoundNumber,
+                factionBefore, CurrentFaction, actionPointsBefore[nextCombatUnit.UnitId],
                 nextCombatUnit.PilotRuntime.CurrentActionPoint);
             return RecordAction(result, nextUnitId: nextCombatUnit.UnitId);
         }
@@ -223,6 +237,35 @@ namespace MechStorm.Battle
             return _attackResolver.GetPositionsInRange(CurrentCombatUnit);
         }
 
+        public IReadOnlyList<Vector2Int> GetCurrentCombatUnitAbilityPositions(AbilityDefinition ability)
+        {
+            if (ability == null)
+            {
+                throw new ArgumentNullException(nameof(ability));
+            }
+
+            return _abilityResolver.GetPositionsInRange(ability, CurrentCombatUnit);
+        }
+
+        public IReadOnlyList<CombatUnit> GetCurrentCombatUnitAbilityTargets(AbilityDefinition ability)
+        {
+            if (ability == null)
+            {
+                throw new ArgumentNullException(nameof(ability));
+            }
+            var targets = new List<CombatUnit>();
+            var sourceUnit = CurrentCombatUnit;
+            foreach (var targetUnit in CombatUnits)
+            {
+                if (_abilityResolver.CanUseAbility(ability, sourceUnit, targetUnit))
+                {
+                    targets.Add(targetUnit);
+                }
+            }
+
+            return targets;
+        }
+
         public bool TryGetAliveCombatUnitAt(Vector2Int position, out CombatUnit combatUnit)
         {
             ValidateGridPosition(position, nameof(position));
@@ -248,6 +291,19 @@ namespace MechStorm.Battle
         public bool AreFactionUnitsDead(CombatFaction faction)
         {
             return _unitRegistry.AreFactionUnitsDead(faction);
+        }
+
+        private Dictionary<int, int> CaptureActionPoints()
+        {
+            var actionPoints = new Dictionary<int, int>(CombatUnits.Count);
+            foreach (var combatUnit in CombatUnits)
+            {
+                actionPoints.Add(
+                    combatUnit.UnitId,
+                    combatUnit.PilotRuntime.CurrentActionPoint);
+            }
+
+            return actionPoints;
         }
 
         private BattleActionResult RecordAction(BattleActionResult result, int? targetUnitId = null, int? nextUnitId = null)
@@ -286,8 +342,7 @@ namespace MechStorm.Battle
                 return BattleActionFailureReason.SameFactionTarget;
             }
 
-            var distance = _squareGrid.GetManhattanDistance(sourceUnit.Position, targetUnit.Position);
-            if (distance < ability.MinRange || distance > ability.MaxRange)
+            if (!_abilityResolver.IsPositionInRange(ability, sourceUnit, targetUnit.Position))
             {
                 return BattleActionFailureReason.TargetOutOfRange;
             }

@@ -18,15 +18,18 @@ namespace MechStorm.Presentation.Input
         // Unity Collider 到纯 C# 战斗单位的点击映射。
         private readonly IReadOnlyDictionary<Collider, CombatUnit> _combatUnitColliders;
         private readonly int _layerMask;
+        private readonly Func<bool> _isPointerBlocked;
 
         public BattleBoardInputter(Camera camera, Collider boardCollider, GridCoordinateConverter coordinateConverter,
-            IReadOnlyDictionary<Collider, CombatUnit> combatUnitColliders, int layerMask)
+            IReadOnlyDictionary<Collider, CombatUnit> combatUnitColliders, int layerMask,
+            Func<bool> isPointerBlocked = null)
         {
             _camera = camera ? camera : throw new ArgumentNullException(nameof(camera));
             _boardCollider = boardCollider ? boardCollider : throw new ArgumentNullException(nameof(boardCollider));
             _coordinateConverter = coordinateConverter ?? throw new ArgumentNullException(nameof(coordinateConverter));
             _combatUnitColliders = combatUnitColliders ?? throw new ArgumentNullException(nameof(combatUnitColliders));
             _layerMask = layerMask;
+            _isPointerBlocked = isPointerBlocked;
         }
 
         public bool Tick(out CombatUnit combatUnit, out Vector2Int gridPosition)
@@ -34,7 +37,7 @@ namespace MechStorm.Presentation.Input
             combatUnit = null;
             gridPosition = default;
 
-            if (!UnityInput.GetMouseButtonDown(0)) return false;
+            if (!UnityInput.GetMouseButtonDown(0) || _isPointerBlocked?.Invoke() == true) return false;
 
             var ray = _camera.ScreenPointToRay(UnityInput.mousePosition);
             if (!Physics.Raycast(ray, out var hitInfo, MAX_RAY_DISTANCE, _layerMask, QueryTriggerInteraction.Ignore))

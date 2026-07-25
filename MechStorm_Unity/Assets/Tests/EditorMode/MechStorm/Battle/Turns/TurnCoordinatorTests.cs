@@ -121,6 +121,43 @@ namespace MechStorm.Battle.Tests.Turns
         }
 
         [Test]
+        public void EndCurrentFactionTurn_SkipsRemainingFactionUnits()
+        {
+            var firstTeamAUnit = CreateCombatUnit(1, currentActionPoint: 3);
+            var skippedTeamAUnit = CreateCombatUnit(2, currentActionPoint: 1);
+            var teamBUnit = CreateCombatUnit(3, currentActionPoint: 0);
+            var coordinator = CreateTurnCoordinator(
+                new[] { firstTeamAUnit, skippedTeamAUnit },
+                new[] { teamBUnit });
+
+            coordinator.EndCurrentFactionTurn();
+
+            Assert.AreEqual(CombatFaction.TeamB, coordinator.CurrentFaction);
+            Assert.AreSame(teamBUnit, coordinator.CurrentCombatUnit);
+            Assert.AreEqual(3, firstTeamAUnit.PilotRuntime.CurrentActionPoint);
+            Assert.AreEqual(1, skippedTeamAUnit.PilotRuntime.CurrentActionPoint);
+            Assert.AreEqual(10, teamBUnit.PilotRuntime.CurrentActionPoint);
+        }
+
+        [Test]
+        public void EndCurrentFactionTurn_FromTeamB_StartsNextRound()
+        {
+            var teamAUnit = CreateCombatUnit(1, currentActionPoint: 0);
+            var teamBUnit = CreateCombatUnit(2);
+            var coordinator = CreateTurnCoordinator(
+                new[] { teamAUnit },
+                new[] { teamBUnit });
+            coordinator.EndCurrentFactionTurn();
+
+            coordinator.EndCurrentFactionTurn();
+
+            Assert.AreEqual(CombatFaction.TeamA, coordinator.CurrentFaction);
+            Assert.AreSame(teamAUnit, coordinator.CurrentCombatUnit);
+            Assert.AreEqual(2, coordinator.CurrentRoundNumber);
+            Assert.AreEqual(10, teamAUnit.PilotRuntime.CurrentActionPoint);
+        }
+
+        [Test]
         public void Constructor_WithNullRegistry_Throws()
         {
             Assert.Throws<ArgumentNullException>(() =>

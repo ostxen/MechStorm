@@ -182,7 +182,7 @@ namespace MechStorm.Battle.Tests.Snapshots
             var json = BattleDebugJsonSerializer.Serialize(snapshot,
                 new[] { actionLog, failedActionLog, abilityActionLog, failedAbilityActionLog });
 
-            StringAssert.Contains("\"schemaVersion\": 3", json);
+            StringAssert.Contains("\"schemaVersion\": 4", json);
             StringAssert.Contains("\"currentFaction\": \"TeamA\"", json);
             StringAssert.Contains("\"currentUnitId\": 1", json);
             StringAssert.Contains("\"x\": 1", json);

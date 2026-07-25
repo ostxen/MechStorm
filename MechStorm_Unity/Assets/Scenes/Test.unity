@@ -514,6 +514,7 @@ MonoBehaviour:
   _battleInputLayerMask:
     serializedVersion: 2
     m_Bits: 4294967291
+  _hudTheme: {fileID: 11400000, guid: 0a2d7f9d8c564de4a7a0fd8a3e3d8f10, type: 2}
 --- !u!1 &1341193990
 GameObject:
   m_ObjectHideFlags: 0

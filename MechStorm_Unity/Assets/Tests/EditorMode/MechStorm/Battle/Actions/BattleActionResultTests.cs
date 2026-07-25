@@ -75,6 +75,31 @@ namespace MechStorm.Battle.Tests.Actions
         }
 
         [Test]
+        public void FactionTurnEnded_CreatesExplicitTurnResult()
+        {
+            var actorUnit = CreateCombatUnit(1);
+            var nextCombatUnit = CreateCombatUnit(2);
+
+            var result = BattleActionResult.FactionTurnEnded(
+                4, actorUnit, nextCombatUnit, 1, 1,
+                CombatFaction.TeamA, CombatFaction.TeamB, 3, 10);
+
+            Assert.IsTrue(result.IsSuccess);
+            Assert.AreEqual(BattleActionType.EndFactionTurn, result.ActionType);
+            Assert.AreSame(nextCombatUnit, result.NextCombatUnit);
+            CollectionAssert.AreEqual(
+                new[]
+                {
+                    BattleActionChangeType.UnitActionEnded,
+                    BattleActionChangeType.FactionTurnEnded,
+                    BattleActionChangeType.FactionTurnStarted,
+                    BattleActionChangeType.CurrentUnitChanged,
+                    BattleActionChangeType.ActionPointRestored
+                },
+                result.ChangeTypes);
+        }
+
+        [Test]
         public void AbilitySucceeded_WithLethalDamage_OrdersActionPointBeforeDamageAndDeath()
         {
             var actorUnit = CreateCombatUnit(1);

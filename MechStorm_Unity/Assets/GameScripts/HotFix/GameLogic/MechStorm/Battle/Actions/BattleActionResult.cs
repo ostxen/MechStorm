@@ -309,6 +309,67 @@ namespace MechStorm.Battle.Actions
         }
 
         /// <summary>
+        /// 创建当前阵营回合结束结果。
+        /// </summary>
+        public static BattleActionResult FactionTurnEnded(
+            int sequence,
+            CombatUnit actorUnit,
+            CombatUnit nextCombatUnit,
+            int roundNumberBefore,
+            int roundNumberAfter,
+            CombatFaction factionBefore,
+            CombatFaction factionAfter,
+            int actionPointBefore,
+            int actionPointAfter)
+        {
+            if (actorUnit == null)
+            {
+                throw new ArgumentNullException(nameof(actorUnit));
+            }
+
+            if (nextCombatUnit == null)
+            {
+                throw new ArgumentNullException(nameof(nextCombatUnit));
+            }
+
+            if (actionPointBefore < 0)
+            {
+                throw new ArgumentOutOfRangeException(nameof(actionPointBefore), actionPointBefore,
+                    "Action point before restore must be non-negative.");
+            }
+
+            if (actionPointAfter < 0)
+            {
+                throw new ArgumentOutOfRangeException(nameof(actionPointAfter), actionPointAfter,
+                    "Action point after restore must be non-negative.");
+            }
+
+            var changeTypes = new List<BattleActionChangeType>
+            {
+                BattleActionChangeType.UnitActionEnded,
+                BattleActionChangeType.FactionTurnEnded
+            };
+
+            if (roundNumberBefore != roundNumberAfter)
+            {
+                changeTypes.Add(BattleActionChangeType.RoundStarted);
+            }
+
+            changeTypes.Add(BattleActionChangeType.FactionTurnStarted);
+            changeTypes.Add(BattleActionChangeType.CurrentUnitChanged);
+            if (actionPointBefore != actionPointAfter)
+            {
+                changeTypes.Add(BattleActionChangeType.ActionPointRestored);
+            }
+
+            return new BattleActionResult(sequence, BattleActionType.EndFactionTurn,
+                BattleActionFailureReason.None, actorUnit, null, nextCombatUnit, changeTypes.ToArray(),
+                roundNumberBefore: roundNumberBefore, roundNumberAfter: roundNumberAfter,
+                factionBefore: factionBefore, factionAfter: factionAfter,
+                actionPointBefore: actionPointBefore, actionPointAfter: actionPointAfter);
+        }
+
+        /// <summary>
         /// 创建技能失败结果，并保留请求中的技能和目标身份。
         /// </summary>
         public static BattleActionResult AbilityFailed(int sequence, CombatUnit actorUnit,

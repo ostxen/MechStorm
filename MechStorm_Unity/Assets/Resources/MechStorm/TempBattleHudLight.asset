@@ -1,0 +1,30 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c9a3b46d70f14da8b6f816a75d3ef092, type: 3}
+  m_Name: TempBattleHudLight
+  m_EditorClassIdentifier: GameLogic::MechStorm.Presentation.TempBattleHudTheme
+  _panelBackground: {r: 0.84, g: 0.86, b: 0.88, a: 0.96}
+  _panelBorder: {r: 0.35, g: 0.4, b: 0.44, a: 0.95}
+  _primaryText: {r: 0.1, g: 0.13, b: 0.15, a: 1}
+  _secondaryText: {r: 0.24, g: 0.3, b: 0.34, a: 1}
+  _accentText: {r: 0.1, g: 0.33, b: 0.5, a: 1}
+  _targetText: {r: 0.58, g: 0.36, b: 0.04, a: 1}
+  _abilityButton: {r: 0.55, g: 0.76, b: 0.66, a: 1}
+  _attackButton: {r: 0.78, g: 0.61, b: 0.58, a: 1}
+  _endActionButton: {r: 0.9, g: 0.72, b: 0.37, a: 1}
+  _endTurnButton: {r: 0.72, g: 0.68, b: 0.56, a: 1}
+  _neutralButton: {r: 0.68, g: 0.72, b: 0.75, a: 1}
+  _buttonText: {r: 0.08, g: 0.1, b: 0.12, a: 1}
+  _durabilityTrack: {r: 0.62, g: 0.65, b: 0.67, a: 1}
+  _durabilityFill: {r: 0.18, g: 0.57, b: 0.37, a: 1}
+  _actionPointFilled: {r: 0.84, g: 0.62, b: 0.13, a: 1}
+  _actionPointEmpty: {r: 0.66, g: 0.69, b: 0.71, a: 1}
