@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using MechStorm.Battle.Outcomes;
 using MechStorm.Battle.Units;
 
 namespace MechStorm.Battle.Snapshots
@@ -19,10 +20,15 @@ namespace MechStorm.Battle.Snapshots
 
         public int CurrentUnitId { get; }
 
+        /// <summary>
+        /// 创建快照时的对局结果。
+        /// </summary>
+        public BattleOutcome Outcome { get; }
+
         public IReadOnlyList<BattleUnitSnapshot> Units { get; }
 
         public BattleSnapshot(int boardWidth, int boardHeight, int roundNumber, CombatFaction currentFaction,
-            int currentUnitId, IEnumerable<BattleUnitSnapshot> units)
+            int currentUnitId, IEnumerable<BattleUnitSnapshot> units, BattleOutcome outcome = null)
         {
             ValidateBasicFields(boardWidth, boardHeight, roundNumber, currentUnitId);
 
@@ -35,6 +41,7 @@ namespace MechStorm.Battle.Snapshots
             CurrentFaction = currentFaction;
             CurrentUnitId = currentUnitId;
             Units = unitList.AsReadOnly();
+            Outcome = outcome ?? BattleOutcome.InProgress;
         }
 
         private static void ValidateBasicFields(int boardWidth, int boardHeight, int roundNumber, int currentUnitId)

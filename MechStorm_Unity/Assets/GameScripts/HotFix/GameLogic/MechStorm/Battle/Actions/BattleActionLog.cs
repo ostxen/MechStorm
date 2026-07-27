@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using MechStorm.Battle.Foundation;
+using MechStorm.Battle.Outcomes;
 using MechStorm.Battle.Units;
 
 namespace MechStorm.Battle.Actions
@@ -48,6 +49,11 @@ namespace MechStorm.Battle.Actions
 
         public CombatFaction? FactionAfter { get; }
 
+        /// <summary>
+        /// 操作完成后的对局结果快照。
+        /// </summary>
+        public BattleOutcome Outcome { get; }
+
         public BattleActionLog(BattleActionResult result, int actorUnitId, int? targetUnitId = null, int? nextUnitId = null)
         {
             if (result == null)
@@ -75,6 +81,7 @@ namespace MechStorm.Battle.Actions
             RoundNumberAfter = result.RoundNumberAfter;
             FactionBefore = result.FactionBefore;
             FactionAfter = result.FactionAfter;
+            Outcome = result.Outcome;
         }
 
         private static void ValidateUnitIds(BattleActionResult result, int actorUnitId, int? targetUnitId, int? nextUnitId)
@@ -129,17 +136,18 @@ namespace MechStorm.Battle.Actions
                 throw new ArgumentException("Only ability log can provide an ability ID.", nameof(result));
             }
 
-            var requiresNextUnit = result.ActionType == BattleActionType.EndUnitAction ||
-                                   result.ActionType == BattleActionType.EndFactionTurn;
+            var isTurnAdvancement = result.ActionType == BattleActionType.EndUnitAction ||
+                                    result.ActionType == BattleActionType.EndFactionTurn;
+            var requiresNextUnit = result.IsSuccess && isTurnAdvancement;
             if (requiresNextUnit && nextUnitId == null)
             {
-                throw new ArgumentException("Turn advancement log must provide the next unit ID.",
+                throw new ArgumentException("Successful turn advancement log must provide the next unit ID.",
                     nameof(nextUnitId));
             }
 
-            if (!requiresNextUnit && nextUnitId != null)
+            if ((!isTurnAdvancement || !result.IsSuccess) && nextUnitId != null)
             {
-                throw new ArgumentException("Only turn advancement logs can provide the next unit ID.",
+                throw new ArgumentException("Only successful turn advancement logs can provide the next unit ID.",
                     nameof(nextUnitId));
             }
         }

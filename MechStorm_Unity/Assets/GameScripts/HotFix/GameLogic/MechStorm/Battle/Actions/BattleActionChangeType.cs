@@ -15,5 +15,7 @@ namespace MechStorm.Battle.Actions
         CurrentUnitChanged,
         ActionPointSpent,
         ActionPointRestored,
+        FactionEliminated,
+        BattleEnded,
     }
 }

@@ -40,6 +40,8 @@ namespace MechStorm.Presentation
 
         public bool IsBattleReady => _battleSession != null;
 
+        public bool IsBattleEnded => _battleSession.IsBattleEnded;
+
         public bool IsCurrentUnitSelected => _presentationController.IsCurrentUnitSelected;
 
         public int CurrentRoundNumber => _battleSession.CurrentRoundNumber;
@@ -94,6 +96,11 @@ namespace MechStorm.Presentation
                 if (_presentationController == null)
                 {
                     return "战斗尚未就绪";
+                }
+
+                if (_battleSession.IsBattleEnded)
+                {
+                    return "对局已经结束";
                 }
 
                 var currentUnit = _battleSession.CurrentCombatUnit;
@@ -161,6 +168,12 @@ namespace MechStorm.Presentation
 
         public void ApplyDebugDamageToPlayerA()
         {
+            if (_battleSession.IsBattleEnded)
+            {
+                Log.Warning("[MechStorm] Debug damage rejected: battle has already ended.");
+                return;
+            }
+
             if (_debugDamage <= 0)
             {
                 Log.Warning("[MechStorm] Debug damage must be greater than zero.");
@@ -251,6 +264,12 @@ namespace MechStorm.Presentation
             var result = _presentationController != null
                 ? _presentationController.EndCurrentUnitAction()
                 : _battleSession.EndCurrentUnitAction();
+            if (!result.IsSuccess)
+            {
+                Log.Warning($"[MechStorm] End action rejected: {result.FailureReason}");
+                return;
+            }
+
             Log.Info(
                 $"[MechStorm] {result.ActorUnit.Pilot.Name} ended action, " +
                 $"Next={result.NextCombatUnit.Pilot.Name}, " +
@@ -266,6 +285,12 @@ namespace MechStorm.Presentation
             var result = _presentationController != null
                 ? _presentationController.EndCurrentFactionTurn()
                 : _battleSession.EndCurrentFactionTurn();
+            if (!result.IsSuccess)
+            {
+                Log.Warning($"[MechStorm] End faction turn rejected: {result.FailureReason}");
+                return;
+            }
+
             Log.Info(
                 $"[MechStorm] {result.FactionBefore} turn ended by " +
                 $"{result.ActorUnit.Pilot.Name}, " +

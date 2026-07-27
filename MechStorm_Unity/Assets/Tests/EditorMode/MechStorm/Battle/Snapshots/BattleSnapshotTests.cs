@@ -4,6 +4,7 @@ using MechStorm.Battle.Actions;
 using MechStorm.Battle.Data;
 using MechStorm.Battle.Diagnostics;
 using MechStorm.Battle.Foundation;
+using MechStorm.Battle.Outcomes;
 using MechStorm.Battle.Snapshots;
 using MechStorm.Battle.Units;
 using NUnit.Framework;
@@ -81,8 +82,27 @@ namespace MechStorm.Battle.Tests.Snapshots
             Assert.AreEqual(2, snapshot.RoundNumber);
             Assert.AreEqual(CombatFaction.TeamA, snapshot.CurrentFaction);
             Assert.AreEqual(1, snapshot.CurrentUnitId);
+            Assert.AreSame(BattleOutcome.InProgress, snapshot.Outcome);
             Assert.AreSame(currentUnit, snapshot.Units[0]);
             Assert.AreSame(enemyUnit, snapshot.Units[1]);
+        }
+
+        [Test]
+        public void BattleSnapshot_CapturesCompletedOutcome()
+        {
+            var currentUnit = new BattleUnitSnapshot(
+                1, CombatFaction.TeamA, new Vector2Int(1, 1), 80, 100, 7, 10);
+            var enemyUnit = new BattleUnitSnapshot(
+                2, CombatFaction.TeamB, new Vector2Int(2, 1), 0, 100, 10, 10);
+            var outcome = BattleOutcome.FactionEliminated(
+                CombatFaction.TeamA, CombatFaction.TeamB);
+
+            var snapshot = new BattleSnapshot(
+                5, 4, 2, CombatFaction.TeamA, 1,
+                new[] { currentUnit, enemyUnit }, outcome);
+
+            Assert.AreSame(outcome, snapshot.Outcome);
+            Assert.IsTrue(snapshot.Outcome.IsBattleEnded);
         }
 
         [Test]
@@ -143,6 +163,24 @@ namespace MechStorm.Battle.Tests.Snapshots
         }
 
         [Test]
+        public void BattleActionLog_CopiesCompletedOutcome()
+        {
+            var actorUnit = CreateCombatUnit(1);
+            var targetUnit = CreateCombatUnit(2);
+            var outcome = BattleOutcome.FactionEliminated(
+                CombatFaction.TeamA, CombatFaction.TeamB);
+            var result = BattleActionResult.AttackSucceeded(
+                4, actorUnit, targetUnit, 20, 0, outcome);
+
+            var log = new BattleActionLog(
+                result, actorUnit.UnitId, targetUnitId: targetUnit.UnitId);
+
+            Assert.AreSame(outcome, log.Outcome);
+            CollectionAssert.Contains(
+                log.ChangeTypes, BattleActionChangeType.BattleEnded);
+        }
+
+        [Test]
         public void BattleActionLog_AbilityRequiresTargetUnitId()
         {
             var actorUnit = CreateCombatUnit(1);
@@ -182,7 +220,7 @@ namespace MechStorm.Battle.Tests.Snapshots
             var json = BattleDebugJsonSerializer.Serialize(snapshot,
                 new[] { actionLog, failedActionLog, abilityActionLog, failedAbilityActionLog });
 
-            StringAssert.Contains("\"schemaVersion\": 4", json);
+            StringAssert.Contains("\"schemaVersion\": 5", json);
             StringAssert.Contains("\"currentFaction\": \"TeamA\"", json);
             StringAssert.Contains("\"currentUnitId\": 1", json);
             StringAssert.Contains("\"x\": 1", json);
@@ -199,6 +237,41 @@ namespace MechStorm.Battle.Tests.Snapshots
             StringAssert.Contains("\"actionPointBefore\": 10", json);
             StringAssert.Contains("\"actionPointAfter\": 7", json);
             StringAssert.Contains("\"nextUnitId\": null", json);
+        }
+
+        [Test]
+        public void BattleDebugJsonSerializer_ExportsCompletedOutcome()
+        {
+            var actorUnit = CreateCombatUnit(1);
+            var targetUnit = CreateCombatUnit(2);
+            var outcome = BattleOutcome.FactionEliminated(
+                CombatFaction.TeamA, CombatFaction.TeamB);
+            var snapshot = new BattleSnapshot(
+                5, 4, 1, CombatFaction.TeamA, actorUnit.UnitId,
+                new[]
+                {
+                    new BattleUnitSnapshot(
+                        actorUnit.UnitId, CombatFaction.TeamA, actorUnit.Position,
+                        100, 100, 10, 10),
+                    new BattleUnitSnapshot(
+                        targetUnit.UnitId, CombatFaction.TeamB, targetUnit.Position,
+                        0, 100, 10, 10)
+                },
+                outcome);
+            var result = BattleActionResult.AttackSucceeded(
+                1, actorUnit, targetUnit, 20, 0, outcome);
+            var log = new BattleActionLog(
+                result, actorUnit.UnitId, targetUnitId: targetUnit.UnitId);
+
+            var json = BattleDebugJsonSerializer.Serialize(snapshot, new[] { log });
+
+            StringAssert.Contains("\"schemaVersion\": 5", json);
+            StringAssert.Contains("\"isBattleEnded\": true", json);
+            StringAssert.Contains("\"winningFaction\": \"TeamA\"", json);
+            StringAssert.Contains("\"eliminatedFaction\": \"TeamB\"", json);
+            StringAssert.Contains("\"endReason\": \"FactionEliminated\"", json);
+            StringAssert.Contains("\"FactionEliminated\"", json);
+            StringAssert.Contains("\"BattleEnded\"", json);
         }
 
         private static CombatUnit CreateCombatUnit(int id)

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using MechStorm.Battle.Foundation;
+using MechStorm.Battle.Outcomes;
 using MechStorm.Battle.Units;
 
 namespace MechStorm.Battle.Actions
@@ -110,10 +111,15 @@ namespace MechStorm.Battle.Actions
         /// </summary>
         public CombatFaction? FactionAfter { get; }
 
+        /// <summary>
+        /// 本次操作完成后的对局结果。
+        /// </summary>
+        public BattleOutcome Outcome { get; }
+
         private BattleActionResult(int sequence, BattleActionType actionType, BattleActionFailureReason failureReason, CombatUnit actorUnit, CombatUnit targetUnit, CombatUnit nextCombatUnit,
             IReadOnlyList<BattleActionChangeType> changeTypes, Vector2Int? positionBefore = null, Vector2Int? positionAfter = null, int? durabilityBefore = null, int? durabilityAfter = null,
             int? abilityId = null, int? actionPointBefore = null, int? actionPointAfter = null, int? roundNumberBefore = null, int? roundNumberAfter = null,
-            CombatFaction? factionBefore = null, CombatFaction? factionAfter = null)
+            CombatFaction? factionBefore = null, CombatFaction? factionAfter = null, BattleOutcome outcome = null)
         {
             Sequence = sequence;
             ActionType = actionType;
@@ -133,6 +139,8 @@ namespace MechStorm.Battle.Actions
             RoundNumberAfter = roundNumberAfter;
             FactionBefore = factionBefore;
             FactionAfter = factionAfter;
+            Outcome = outcome ?? BattleOutcome.InProgress;
+            ValidateOutcome(actionType, failureReason, durabilityAfter, Outcome);
         }
 
         /// <summary>
@@ -162,7 +170,8 @@ namespace MechStorm.Battle.Actions
         /// <param name="durabilityBefore">目标受击前的耐久值。</param>
         /// <param name="durabilityAfter">目标受击后的耐久值。</param>
         public static BattleActionResult AttackSucceeded(int sequence, CombatUnit actorUnit,
-            CombatUnit targetUnit, int durabilityBefore, int durabilityAfter)
+            CombatUnit targetUnit, int durabilityBefore, int durabilityAfter,
+            BattleOutcome outcome = null)
         {
             if (actorUnit == null)
             {
@@ -174,12 +183,20 @@ namespace MechStorm.Battle.Actions
                 throw new ArgumentNullException(nameof(targetUnit));
             }
 
-            var changeTypes = durabilityAfter <= 0
-                ? new[] { BattleActionChangeType.DamageApplied, BattleActionChangeType.UnitDied }
-                : new[] { BattleActionChangeType.DamageApplied };
+            var changeTypes = new List<BattleActionChangeType>
+            {
+                BattleActionChangeType.DamageApplied
+            };
+            if (durabilityAfter <= 0)
+            {
+                changeTypes.Add(BattleActionChangeType.UnitDied);
+            }
+
+            AppendBattleOutcomeChanges(changeTypes, outcome);
 
             return new BattleActionResult(sequence, BattleActionType.Attack, BattleActionFailureReason.None, actorUnit, targetUnit,
-                null, changeTypes, durabilityBefore: durabilityBefore, durabilityAfter: durabilityAfter);
+                null, changeTypes.ToArray(), durabilityBefore: durabilityBefore,
+                durabilityAfter: durabilityAfter, outcome: outcome);
         }
 
         /// <summary>
@@ -187,7 +204,7 @@ namespace MechStorm.Battle.Actions
         /// </summary>
         public static BattleActionResult AbilitySucceeded(int sequence, CombatUnit actorUnit,
             CombatUnit targetUnit, int abilityId, int actionPointBefore, int actionPointAfter,
-            int durabilityBefore, int durabilityAfter)
+            int durabilityBefore, int durabilityAfter, BattleOutcome outcome = null)
         {
             if (actorUnit == null)
             {
@@ -232,10 +249,13 @@ namespace MechStorm.Battle.Actions
                 }
             }
 
+            AppendBattleOutcomeChanges(changeTypes, outcome);
+
             return new BattleActionResult(sequence, BattleActionType.UseAbility,
                 BattleActionFailureReason.None, actorUnit, targetUnit, null, changeTypes.ToArray(),
                 durabilityBefore: durabilityBefore, durabilityAfter: durabilityAfter, abilityId: abilityId,
-                actionPointBefore: actionPointBefore, actionPointAfter: actionPointAfter);
+                actionPointBefore: actionPointBefore, actionPointAfter: actionPointAfter,
+                outcome: outcome);
         }
 
         /// <summary>
@@ -373,7 +393,8 @@ namespace MechStorm.Battle.Actions
         /// 创建技能失败结果，并保留请求中的技能和目标身份。
         /// </summary>
         public static BattleActionResult AbilityFailed(int sequence, CombatUnit actorUnit,
-            CombatUnit targetUnit, int abilityId, BattleActionFailureReason failureReason)
+            CombatUnit targetUnit, int abilityId, BattleActionFailureReason failureReason,
+            BattleOutcome outcome = null)
         {
             if (actorUnit == null)
             {
@@ -398,7 +419,7 @@ namespace MechStorm.Battle.Actions
             }
 
             return new BattleActionResult(sequence, BattleActionType.UseAbility, failureReason, actorUnit,
-                targetUnit, null, _emptyChangeTypes, abilityId: abilityId);
+                targetUnit, null, _emptyChangeTypes, abilityId: abilityId, outcome: outcome);
         }
 
         /// <summary>
@@ -409,7 +430,8 @@ namespace MechStorm.Battle.Actions
         /// <param name="actorUnit">尝试执行操作的单位。</param>
         /// <param name="failureReason">操作失败原因。</param>
         public static BattleActionResult Failed(int sequence, BattleActionType actionType,
-            CombatUnit actorUnit, BattleActionFailureReason failureReason)
+            CombatUnit actorUnit, BattleActionFailureReason failureReason,
+            BattleOutcome outcome = null)
         {
             if (actorUnit == null)
             {
@@ -421,7 +443,63 @@ namespace MechStorm.Battle.Actions
                 throw new ArgumentException("A failed action must provide a failure reason.", nameof(failureReason));
             }
 
-            return new BattleActionResult(sequence, actionType, failureReason, actorUnit, null, null, _emptyChangeTypes);
+            return new BattleActionResult(sequence, actionType, failureReason, actorUnit, null, null,
+                _emptyChangeTypes, outcome: outcome);
+        }
+
+        private static void ValidateOutcome(
+            BattleActionType actionType, BattleActionFailureReason failureReason,
+            int? durabilityAfter, BattleOutcome outcome)
+        {
+            var isSuccess = failureReason == BattleActionFailureReason.None;
+            if (failureReason == BattleActionFailureReason.BattleAlreadyEnded &&
+                !outcome.IsBattleEnded)
+            {
+                throw new ArgumentException(
+                    "BattleAlreadyEnded failure must provide a completed battle outcome.",
+                    nameof(outcome));
+            }
+
+            if (!outcome.IsBattleEnded)
+            {
+                return;
+            }
+
+            if (!isSuccess)
+            {
+                if (failureReason != BattleActionFailureReason.BattleAlreadyEnded)
+                {
+                    throw new ArgumentException(
+                        "A failed action can carry a completed outcome only when the battle already ended.",
+                        nameof(outcome));
+                }
+
+                return;
+            }
+
+            var isDamageAction = actionType == BattleActionType.Attack ||
+                                 actionType == BattleActionType.UseAbility;
+            if (!isDamageAction || durabilityAfter != 0)
+            {
+                throw new ArgumentException(
+                    "A successful action can complete the battle only through lethal damage.",
+                    nameof(outcome));
+            }
+        }
+
+        /// <summary>
+        /// 对局结束变化必须排在具体伤害和死亡变化之后，便于表现层按结算时序消费。
+        /// </summary>
+        private static void AppendBattleOutcomeChanges(
+            ICollection<BattleActionChangeType> changeTypes, BattleOutcome outcome)
+        {
+            if (outcome?.IsBattleEnded != true)
+            {
+                return;
+            }
+
+            changeTypes.Add(BattleActionChangeType.FactionEliminated);
+            changeTypes.Add(BattleActionChangeType.BattleEnded);
         }
     }
 }

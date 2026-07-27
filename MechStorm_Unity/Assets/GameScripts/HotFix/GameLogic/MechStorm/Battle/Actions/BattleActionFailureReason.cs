@@ -9,5 +9,6 @@ namespace MechStorm.Battle.Actions
         TargetAlreadyDead,
         ActorCannotAct,
         InsufficientActionPoint,
+        BattleAlreadyEnded,
     }
 }

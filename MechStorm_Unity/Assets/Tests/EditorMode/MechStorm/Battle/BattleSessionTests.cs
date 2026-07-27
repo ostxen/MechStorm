@@ -5,6 +5,7 @@ using MechStorm.Battle.Actions;
 using MechStorm.Battle.Data;
 using MechStorm.Battle.Diagnostics;
 using MechStorm.Battle.Foundation;
+using MechStorm.Battle.Outcomes;
 using MechStorm.Battle.Units;
 using NUnit.Framework;
 
@@ -26,6 +27,8 @@ namespace MechStorm.Battle.Tests
             Assert.AreSame(playerUnit, session.CurrentCombatUnit);
             Assert.AreEqual(CombatFaction.TeamA, session.CurrentFaction);
             Assert.AreEqual(1, session.CurrentRoundNumber);
+            Assert.IsFalse(session.IsBattleEnded);
+            Assert.AreSame(BattleOutcome.InProgress, session.Outcome);
         }
 
         [Test]
@@ -320,10 +323,49 @@ namespace MechStorm.Battle.Tests
 
             Assert.IsTrue(result.IsSuccess);
             CollectionAssert.AreEqual(
-                new[] { BattleActionChangeType.DamageApplied, BattleActionChangeType.UnitDied },
+                new[]
+                {
+                    BattleActionChangeType.DamageApplied,
+                    BattleActionChangeType.UnitDied,
+                    BattleActionChangeType.FactionEliminated,
+                    BattleActionChangeType.BattleEnded
+                },
                 result.ChangeTypes);
             Assert.AreEqual(0, enemyUnit.MechRuntime.CurrentDurability);
             Assert.IsTrue(enemyUnit.IsDead());
+            Assert.IsTrue(session.IsBattleEnded);
+            Assert.AreEqual(CombatFaction.TeamA, session.Outcome.WinningFaction);
+            Assert.AreEqual(CombatFaction.TeamB, session.Outcome.EliminatedFaction);
+            Assert.AreEqual(BattleEndReason.FactionEliminated, session.Outcome.EndReason);
+            Assert.AreSame(session.Outcome, result.Outcome);
+            Assert.AreSame(session.Outcome, session.ActionLogs[0].Outcome);
+        }
+
+        [Test]
+        public void AttackTargetCombatUnit_WhenAnotherEnemySurvives_DoesNotEndBattle()
+        {
+            var playerUnit = CreateCombatUnit(
+                1, new Vector2Int(1, 1), attack: 50);
+            var defeatedEnemy = CreateCombatUnit(
+                2, new Vector2Int(2, 1), durability: 30);
+            var survivingEnemy = CreateCombatUnit(
+                3, new Vector2Int(3, 1));
+            var session = CreateBattleSession(
+                new[] { playerUnit },
+                new[] { defeatedEnemy, survivingEnemy });
+
+            var result = session.AttackTargetCombatUnit(defeatedEnemy);
+
+            Assert.IsTrue(result.IsSuccess);
+            Assert.IsFalse(session.IsBattleEnded);
+            Assert.AreSame(BattleOutcome.InProgress, result.Outcome);
+            CollectionAssert.AreEqual(
+                new[]
+                {
+                    BattleActionChangeType.DamageApplied,
+                    BattleActionChangeType.UnitDied
+                },
+                result.ChangeTypes);
         }
 
         [Test]
@@ -399,6 +441,50 @@ namespace MechStorm.Battle.Tests
             Assert.AreSame(enemyUnit, result.ActorUnit);
             Assert.AreSame(enemyUnit, session.CurrentCombatUnit);
             Assert.AreEqual(55, playerUnit.MechRuntime.CurrentDurability);
+        }
+
+        [Test]
+        public void AttackTargetCombatUnit_WhenTeamBEliminatesTeamA_EndsBattleForTeamB()
+        {
+            var playerUnit = CreateCombatUnit(
+                1, new Vector2Int(1, 1), durability: 20);
+            var enemyUnit = CreateCombatUnit(
+                2, new Vector2Int(2, 1), attack: 30);
+            var session = CreateBattleSession(playerUnit, enemyUnit);
+            session.EndCurrentUnitAction();
+
+            var result = session.AttackTargetCombatUnit(playerUnit);
+
+            Assert.IsTrue(result.IsSuccess);
+            Assert.IsTrue(session.IsBattleEnded);
+            Assert.AreEqual(CombatFaction.TeamB, session.Outcome.WinningFaction);
+            Assert.AreEqual(CombatFaction.TeamA, session.Outcome.EliminatedFaction);
+            Assert.AreEqual(CombatFaction.TeamB, session.CurrentFaction);
+            Assert.AreSame(enemyUnit, session.CurrentCombatUnit);
+            Assert.AreSame(session.Outcome, result.Outcome);
+        }
+
+        [Test]
+        public void AttackTargetCombatUnit_WhenNeutralIsDestroyed_DoesNotEndBattle()
+        {
+            var playerUnit = CreateCombatUnit(
+                1, new Vector2Int(1, 1), attack: 50);
+            var enemyUnit = CreateCombatUnit(
+                2, new Vector2Int(4, 4));
+            var neutralUnit = CreateCombatUnit(
+                3, new Vector2Int(2, 1), durability: 30);
+            var session = new BattleSession(
+                5, 5, new[] { playerUnit }, new[] { enemyUnit },
+                new[] { neutralUnit });
+
+            var result = session.AttackTargetCombatUnit(neutralUnit);
+
+            Assert.IsTrue(result.IsSuccess);
+            Assert.IsTrue(neutralUnit.IsDead());
+            Assert.IsFalse(session.IsBattleEnded);
+            Assert.AreSame(BattleOutcome.InProgress, result.Outcome);
+            CollectionAssert.DoesNotContain(
+                result.ChangeTypes, BattleActionChangeType.BattleEnded);
         }
 
         [Test]
@@ -523,9 +609,14 @@ namespace MechStorm.Battle.Tests
                 {
                     BattleActionChangeType.ActionPointSpent,
                     BattleActionChangeType.DamageApplied,
-                    BattleActionChangeType.UnitDied
+                    BattleActionChangeType.UnitDied,
+                    BattleActionChangeType.FactionEliminated,
+                    BattleActionChangeType.BattleEnded
                 },
                 result.ChangeTypes);
+            Assert.IsTrue(session.IsBattleEnded);
+            Assert.AreEqual(CombatFaction.TeamA, session.Outcome.WinningFaction);
+            Assert.AreSame(session.Outcome, result.Outcome);
         }
 
         [Test]
@@ -666,6 +757,66 @@ namespace MechStorm.Battle.Tests
             Assert.AreEqual(1, playerB.PilotRuntime.CurrentActionPoint);
             Assert.AreEqual(BattleActionType.EndFactionTurn, session.ActionLogs[0].ActionType);
             Assert.AreEqual(enemyUnit.UnitId, session.ActionLogs[0].NextUnitId);
+        }
+
+        [Test]
+        public void BattleEnded_RejectsStateChangingActionsWithoutGameplaySideEffects()
+        {
+            var playerUnit = CreateCombatUnit(
+                1, new Vector2Int(1, 1), attack: 50);
+            var enemyUnit = CreateCombatUnit(
+                2, new Vector2Int(2, 1), durability: 30);
+            var session = CreateBattleSession(playerUnit, enemyUnit);
+            session.AttackTargetCombatUnit(enemyUnit);
+            var positionBefore = playerUnit.Position;
+            var actionPointBefore = playerUnit.PilotRuntime.CurrentActionPoint;
+            var roundBefore = session.CurrentRoundNumber;
+            var factionBefore = session.CurrentFaction;
+
+            var moveResult = session.TryMoveCurrentCombatUnit(new Vector2Int(1, 2));
+            var attackResult = session.AttackTargetCombatUnit(enemyUnit);
+            var abilityResult = session.TryUseAbility(CreateAbility(), enemyUnit);
+            var endActionResult = session.EndCurrentUnitAction();
+            var endFactionResult = session.EndCurrentFactionTurn();
+
+            AssertBattleAlreadyEnded(moveResult, session.Outcome);
+            AssertBattleAlreadyEnded(attackResult, session.Outcome);
+            AssertBattleAlreadyEnded(abilityResult, session.Outcome);
+            AssertBattleAlreadyEnded(endActionResult, session.Outcome);
+            AssertBattleAlreadyEnded(endFactionResult, session.Outcome);
+            Assert.AreEqual(positionBefore, playerUnit.Position);
+            Assert.AreEqual(actionPointBefore, playerUnit.PilotRuntime.CurrentActionPoint);
+            Assert.AreEqual(0, enemyUnit.MechRuntime.CurrentDurability);
+            Assert.AreEqual(roundBefore, session.CurrentRoundNumber);
+            Assert.AreEqual(factionBefore, session.CurrentFaction);
+            Assert.AreSame(playerUnit, session.CurrentCombatUnit);
+            Assert.AreEqual(6, session.ActionLogs.Count);
+            Assert.AreEqual(2, moveResult.Sequence);
+            Assert.AreEqual(6, endFactionResult.Sequence);
+            Assert.IsNull(endActionResult.NextCombatUnit);
+            Assert.IsNull(endFactionResult.NextCombatUnit);
+        }
+
+        [Test]
+        public void BattleEnded_CurrentActionQueriesReturnEmptyAndSnapshotKeepsOutcome()
+        {
+            var playerUnit = CreateCombatUnit(
+                1, new Vector2Int(1, 1), attack: 50);
+            var enemyUnit = CreateCombatUnit(
+                2, new Vector2Int(2, 1), durability: 30);
+            var session = CreateBattleSession(playerUnit, enemyUnit);
+            session.AttackTargetCombatUnit(enemyUnit);
+
+            Assert.IsEmpty(session.GetCurrentCombatUnitReachablePositions());
+            Assert.IsEmpty(session.GetCurrentCombatUnitBasicAttackPositions());
+            Assert.IsEmpty(session.GetCurrentCombatUnitBasicAttackTargets());
+            Assert.IsEmpty(session.GetCurrentCombatUnitAbilityPositions(CreateAbility()));
+            Assert.IsEmpty(session.GetCurrentCombatUnitAbilityTargets(CreateAbility()));
+
+            var snapshot = session.CreateSnapshot();
+            Assert.AreSame(session.Outcome, snapshot.Outcome);
+            Assert.IsTrue(snapshot.Outcome.IsBattleEnded);
+            Assert.AreEqual(playerUnit.UnitId, snapshot.CurrentUnitId);
         }
 
         [Test]
@@ -838,6 +989,17 @@ namespace MechStorm.Battle.Tests
                 session.TryMoveCurrentCombatUnit(new Vector2Int(1, 2)));
             Assert.Throws<InvalidOperationException>(() =>
                 session.AttackTargetCombatUnit(enemyUnit));
+        }
+
+        private static void AssertBattleAlreadyEnded(
+            BattleActionResult result, BattleOutcome expectedOutcome)
+        {
+            Assert.IsFalse(result.IsSuccess);
+            Assert.AreEqual(
+                BattleActionFailureReason.BattleAlreadyEnded,
+                result.FailureReason);
+            Assert.AreSame(expectedOutcome, result.Outcome);
+            Assert.IsEmpty(result.ChangeTypes);
         }
 
         private static BattleSession CreateBattleSession(

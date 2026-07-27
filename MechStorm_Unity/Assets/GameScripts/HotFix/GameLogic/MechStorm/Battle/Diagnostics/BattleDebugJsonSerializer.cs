@@ -10,7 +10,7 @@ namespace MechStorm.Battle.Diagnostics
 {
     public static class BattleDebugJsonSerializer
     {
-        private const int CurrentSchemaVersion = 4;
+        private const int CurrentSchemaVersion = 5;
         private static readonly JsonSerializerSettings SerializerSettings = CreateSerializerSettings();
 
         public static string Serialize(BattleSnapshot snapshot, IReadOnlyList<BattleActionLog> actionLogs)

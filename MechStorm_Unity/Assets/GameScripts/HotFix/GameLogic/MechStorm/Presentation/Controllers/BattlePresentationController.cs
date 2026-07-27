@@ -51,10 +51,13 @@ namespace MechStorm.Presentation.Controllers
         public bool IsCurrentUnitSelected =>
             ReferenceEquals(_selectedCombatUnit, _battleSession.CurrentCombatUnit);
 
-        public bool CanConfirmBasicAttack => _selectedAttackTarget != null;
+        public bool CanConfirmBasicAttack =>
+            !_battleSession.IsBattleEnded && _selectedAttackTarget != null;
 
         public bool CanConfirmAbilityTargeting =>
-            _targetingAbility != null && _selectedAbilityTarget != null;
+            !_battleSession.IsBattleEnded &&
+            _targetingAbility != null &&
+            _selectedAbilityTarget != null;
 
         public BattlePresentationController(BattleSession battleSession, IReadOnlyDictionary<CombatUnit, CombatUnitVisual> combatUnitVisuals,
             BattleBoardInputter battleBoardInputter, BattleRangeHighlighter rangeHighlighter)
@@ -77,6 +80,16 @@ namespace MechStorm.Presentation.Controllers
                 return BattleInputAction.None;
             }
 
+            if (_battleSession.IsBattleEnded)
+            {
+                actionUnit = clickedCombatUnit ?? _battleSession.CurrentCombatUnit;
+                LastRejectionReason = GetFailureReason(
+                    BattleActionFailureReason.BattleAlreadyEnded,
+                    BattleActionType.Move);
+                ClearSelection();
+                return BattleInputAction.ActionRejected;
+            }
+
             var currentCombatUnit = _battleSession.CurrentCombatUnit;
             if (!ReferenceEquals(_selectedCombatUnit, currentCombatUnit))
             {
@@ -97,6 +110,12 @@ namespace MechStorm.Presentation.Controllers
         /// </summary>
         public void RefreshSelection()
         {
+            if (_battleSession.IsBattleEnded)
+            {
+                ClearSelection();
+                return;
+            }
+
             if (_selectedCombatUnit == null)
             {
                 return;
@@ -143,6 +162,15 @@ namespace MechStorm.Presentation.Controllers
 
             LastRejectionReason = null;
             LastActionResult = null;
+            if (_battleSession.IsBattleEnded)
+            {
+                LastRejectionReason = GetFailureReason(
+                    BattleActionFailureReason.BattleAlreadyEnded,
+                    BattleActionType.UseAbility);
+                ClearSelection();
+                return;
+            }
+
             _selectedCombatUnit = _battleSession.CurrentCombatUnit;
             _selectedAttackTarget = null;
             _targetingAbility = ability;
@@ -177,7 +205,15 @@ namespace MechStorm.Presentation.Controllers
                 LastRejectionReason = GetFailureReason(
                     LastActionResult.FailureReason,
                     LastActionResult.ActionType);
-                RefreshRangeHighlights();
+                if (_battleSession.IsBattleEnded)
+                {
+                    ClearSelection();
+                }
+                else
+                {
+                    RefreshRangeHighlights();
+                }
+
                 return LastActionResult;
             }
 
@@ -215,6 +251,13 @@ namespace MechStorm.Presentation.Controllers
         {
             LastRejectionReason = null;
             LastActionResult = _battleSession.EndCurrentUnitAction();
+            if (!LastActionResult.IsSuccess)
+            {
+                LastRejectionReason = GetFailureReason(
+                    LastActionResult.FailureReason,
+                    LastActionResult.ActionType);
+            }
+
             ClearSelection();
             return LastActionResult;
         }
@@ -223,6 +266,13 @@ namespace MechStorm.Presentation.Controllers
         {
             LastRejectionReason = null;
             LastActionResult = _battleSession.EndCurrentFactionTurn();
+            if (!LastActionResult.IsSuccess)
+            {
+                LastRejectionReason = GetFailureReason(
+                    LastActionResult.FailureReason,
+                    LastActionResult.ActionType);
+            }
+
             ClearSelection();
             return LastActionResult;
         }
@@ -361,6 +411,7 @@ namespace MechStorm.Presentation.Controllers
                     : "Cannot attack a dead combat unit.",
                 BattleActionFailureReason.InsufficientActionPoint => "Current combat unit does not have enough AP.",
                 BattleActionFailureReason.ActorCannotAct => "Current combat unit cannot act.",
+                BattleActionFailureReason.BattleAlreadyEnded => "Battle has already ended.",
                 _ => "Battle action was rejected.",
             };
         }

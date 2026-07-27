@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using MechStorm.Battle.Actions;
 using MechStorm.Battle.Data;
 using MechStorm.Battle.Foundation;
+using MechStorm.Battle.Outcomes;
 using MechStorm.Battle.Rules;
 using MechStorm.Battle.Snapshots;
 using MechStorm.Battle.Spatial;
@@ -23,6 +24,7 @@ namespace MechStorm.Battle
         private readonly IReadOnlyList<BattleActionLog> _readOnlyActionLogs;
 
         private int _actionSequence;
+        private BattleOutcome _outcome;
 
         public BattleSession(int boardWidth, int boardHeight, IEnumerable<CombatUnit> teamAUnits, IEnumerable<CombatUnit> teamBUnits, IEnumerable<CombatUnit> neutralUnits = null)
         {
@@ -38,6 +40,7 @@ namespace MechStorm.Battle
             ValidateUnitPositions(_unitRegistry.GetFactionUnits(CombatFaction.Neutral), nameof(neutralUnits));
             ValidateAliveUnitPositionsDoNotOverlap();
             _turnCoordinator = new TurnCoordinator(_unitRegistry);
+            _outcome = BattleOutcome.InProgress;
         }
 
         public SquareGrid Grid => _squareGrid;
@@ -49,6 +52,10 @@ namespace MechStorm.Battle
         public CombatFaction CurrentFaction => _turnCoordinator.CurrentFaction;
 
         public CombatUnit CurrentCombatUnit => _turnCoordinator.CurrentCombatUnit;
+
+        public bool IsBattleEnded => _outcome.IsBattleEnded;
+
+        public BattleOutcome Outcome => _outcome;
 
         public IReadOnlyList<BattleActionLog> ActionLogs => _readOnlyActionLogs;
 
@@ -63,15 +70,19 @@ namespace MechStorm.Battle
             }
 
             return new BattleSnapshot(Grid.Width, Grid.Height, CurrentRoundNumber, CurrentFaction,
-                CurrentCombatUnit.UnitId, unitSnapshots);
+                CurrentCombatUnit.UnitId, unitSnapshots, _outcome);
         }
 
         public BattleActionResult TryMoveCurrentCombatUnit(Vector2Int target)
         {
             var actorUnit = CurrentCombatUnit;
-            var positionBefore = actorUnit.Position;
             var sequence = ++_actionSequence;
+            if (IsBattleEnded)
+            {
+                return RecordBattleEndedFailure(sequence, BattleActionType.Move, actorUnit);
+            }
 
+            var positionBefore = actorUnit.Position;
             var result = !_movementResolver.TryMoveTo(actorUnit, target)
                 ? BattleActionResult.Failed(sequence, BattleActionType.Move, actorUnit, BattleActionFailureReason.InvalidMoveTarget)
                 : BattleActionResult.MoveSucceeded(sequence, actorUnit, positionBefore, actorUnit.Position);
@@ -92,6 +103,14 @@ namespace MechStorm.Battle
 
             var attackerUnit = CurrentCombatUnit;
             var sequence = ++_actionSequence;
+            if (IsBattleEnded)
+            {
+                var endedResult = BattleActionResult.Failed(
+                    sequence, BattleActionType.Attack, attackerUnit,
+                    BattleActionFailureReason.BattleAlreadyEnded, _outcome);
+                return RecordAction(endedResult, targetUnitId: targetUnit.UnitId);
+            }
+
             var failureReason = GetBasicAttackFailureReason(attackerUnit, targetUnit);
             if (failureReason != BattleActionFailureReason.None)
             {
@@ -106,8 +125,10 @@ namespace MechStorm.Battle
                 throw new InvalidOperationException("Validated basic attack could not be executed.");
             }
 
+            // 伤害提交后立即判定全灭，使最后一击结果同时携带死亡与对局结束事实。
+            UpdateOutcomeAfterDamage(targetUnit);
             var successResult = BattleActionResult.AttackSucceeded(sequence, attackerUnit, targetUnit,
-                durabilityBefore, targetUnit.MechRuntime.CurrentDurability);
+                durabilityBefore, targetUnit.MechRuntime.CurrentDurability, _outcome);
             return RecordAction(successResult, targetUnitId: targetUnit.UnitId);
         }
 
@@ -131,6 +152,14 @@ namespace MechStorm.Battle
 
             var actorUnit = CurrentCombatUnit;
             var sequence = ++_actionSequence;
+            if (IsBattleEnded)
+            {
+                var endedResult = BattleActionResult.AbilityFailed(
+                    sequence, actorUnit, targetUnit, ability.AbilityId,
+                    BattleActionFailureReason.BattleAlreadyEnded, _outcome);
+                return RecordAction(endedResult, targetUnitId: targetUnit.UnitId);
+            }
+
             var failureReason = GetAbilityFailureReason(ability, actorUnit, targetUnit);
             if (failureReason != BattleActionFailureReason.None)
             {
@@ -146,18 +175,25 @@ namespace MechStorm.Battle
                 throw new InvalidOperationException("Validated ability could not be executed.");
             }
 
+            UpdateOutcomeAfterDamage(targetUnit);
             var successResult = BattleActionResult.AbilitySucceeded(sequence, actorUnit, targetUnit,
                 ability.AbilityId, actionPointBefore, actorUnit.PilotRuntime.CurrentActionPoint,
-                durabilityBefore, targetUnit.MechRuntime.CurrentDurability);
+                durabilityBefore, targetUnit.MechRuntime.CurrentDurability, _outcome);
             return RecordAction(successResult, targetUnitId: targetUnit.UnitId);
         }
 
         public BattleActionResult EndCurrentUnitAction()
         {
             var actorUnit = CurrentCombatUnit;
+            var sequence = ++_actionSequence;
+            if (IsBattleEnded)
+            {
+                return RecordBattleEndedFailure(
+                    sequence, BattleActionType.EndUnitAction, actorUnit);
+            }
+
             var roundNumberBefore = CurrentRoundNumber;
             var factionBefore = CurrentFaction;
-            var sequence = ++_actionSequence;
             var actionPointsBefore = CaptureActionPoints();
 
             _turnCoordinator.EndCurrentUnitAction();
@@ -172,9 +208,15 @@ namespace MechStorm.Battle
         public BattleActionResult EndCurrentFactionTurn()
         {
             var actorUnit = CurrentCombatUnit;
+            var sequence = ++_actionSequence;
+            if (IsBattleEnded)
+            {
+                return RecordBattleEndedFailure(
+                    sequence, BattleActionType.EndFactionTurn, actorUnit);
+            }
+
             var roundNumberBefore = CurrentRoundNumber;
             var factionBefore = CurrentFaction;
-            var sequence = ++_actionSequence;
             var actionPointsBefore = CaptureActionPoints();
 
             _turnCoordinator.EndCurrentFactionTurn();
@@ -214,11 +256,21 @@ namespace MechStorm.Battle
 
         public IReadOnlyList<Vector2Int> GetCurrentCombatUnitReachablePositions()
         {
+            if (IsBattleEnded)
+            {
+                return Array.Empty<Vector2Int>();
+            }
+
             return _movementResolver.GetReachablePositions(CurrentCombatUnit);
         }
 
         public IReadOnlyList<CombatUnit> GetCurrentCombatUnitBasicAttackTargets()
         {
+            if (IsBattleEnded)
+            {
+                return Array.Empty<CombatUnit>();
+            }
+
             var attackTargets = new List<CombatUnit>();
             var attackerUnit = CurrentCombatUnit;
             foreach (var targetUnit in CombatUnits)
@@ -234,6 +286,11 @@ namespace MechStorm.Battle
 
         public IReadOnlyList<Vector2Int> GetCurrentCombatUnitBasicAttackPositions()
         {
+            if (IsBattleEnded)
+            {
+                return Array.Empty<Vector2Int>();
+            }
+
             return _attackResolver.GetPositionsInRange(CurrentCombatUnit);
         }
 
@@ -242,6 +299,11 @@ namespace MechStorm.Battle
             if (ability == null)
             {
                 throw new ArgumentNullException(nameof(ability));
+            }
+
+            if (IsBattleEnded)
+            {
+                return Array.Empty<Vector2Int>();
             }
 
             return _abilityResolver.GetPositionsInRange(ability, CurrentCombatUnit);
@@ -253,6 +315,12 @@ namespace MechStorm.Battle
             {
                 throw new ArgumentNullException(nameof(ability));
             }
+
+            if (IsBattleEnded)
+            {
+                return Array.Empty<CombatUnit>();
+            }
+
             var targets = new List<CombatUnit>();
             var sourceUnit = CurrentCombatUnit;
             foreach (var targetUnit in CombatUnits)
@@ -291,6 +359,37 @@ namespace MechStorm.Battle
         public bool AreFactionUnitsDead(CombatFaction faction)
         {
             return _unitRegistry.AreFactionUnitsDead(faction);
+        }
+
+        /// <summary>
+        /// 只有 TeamA 或 TeamB 的最后一名机兵死亡才会完成对局，Neutral 不参与胜负。
+        /// </summary>
+        private void UpdateOutcomeAfterDamage(CombatUnit targetUnit)
+        {
+            if (targetUnit.IsAlive())
+            {
+                return;
+            }
+
+            var eliminatedFaction = _unitRegistry.GetFaction(targetUnit);
+            if (eliminatedFaction == CombatFaction.Neutral ||
+                !_unitRegistry.AreFactionUnitsDead(eliminatedFaction))
+            {
+                return;
+            }
+
+            var winningFaction = eliminatedFaction == CombatFaction.TeamA
+                ? CombatFaction.TeamB
+                : CombatFaction.TeamA;
+            _outcome = BattleOutcome.FactionEliminated(winningFaction, eliminatedFaction);
+        }
+
+        private BattleActionResult RecordBattleEndedFailure(
+            int sequence, BattleActionType actionType, CombatUnit actorUnit)
+        {
+            var result = BattleActionResult.Failed(sequence, actionType, actorUnit,
+                BattleActionFailureReason.BattleAlreadyEnded, _outcome);
+            return RecordAction(result);
         }
 
         private Dictionary<int, int> CaptureActionPoints()

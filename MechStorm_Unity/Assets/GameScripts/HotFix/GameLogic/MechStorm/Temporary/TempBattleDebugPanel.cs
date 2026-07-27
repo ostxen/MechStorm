@@ -460,6 +460,11 @@ namespace MechStorm.Presentation
             _normalActionsRoot.style.display = targeting ? DisplayStyle.None : DisplayStyle.Flex;
             _targetingActionsRoot.style.display = targeting ? DisplayStyle.Flex : DisplayStyle.None;
             SetButtonsEnabled(ready);
+            if (ready && _actions.IsBattleEnded)
+            {
+                SetBattleInteractionButtonsEnabled(false);
+            }
+
             var selectedAttackTargetName = ready
                 ? _actions.SelectedAttackTargetName
                 : null;
@@ -504,6 +509,17 @@ namespace MechStorm.Presentation
             _damageButton.SetEnabled(enabled);
             _logButton.SetEnabled(enabled);
             _exportButton.SetEnabled(enabled);
+        }
+
+        private void SetBattleInteractionButtonsEnabled(bool enabled)
+        {
+            _endActionButton.SetEnabled(enabled);
+            _endFactionTurnButton.SetEnabled(enabled);
+            _attackButton.SetEnabled(enabled);
+            _abilityButton.SetEnabled(enabled);
+            _targetingAbilityButton.SetEnabled(enabled);
+            _cancelAbilityButton.SetEnabled(enabled);
+            _damageButton.SetEnabled(enabled);
         }
 
         private void OnEndActionClicked()
