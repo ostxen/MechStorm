@@ -8,6 +8,9 @@ using NUnit.Framework;
 
 namespace MechStorm.Battle.Tests.Actions
 {
+    /// <summary>
+    /// 验证每类操作 Result 的字段、变化顺序以及 Result 与 Outcome 的组合约束。
+    /// </summary>
     public class BattleActionResultTests
     {
         [Test]

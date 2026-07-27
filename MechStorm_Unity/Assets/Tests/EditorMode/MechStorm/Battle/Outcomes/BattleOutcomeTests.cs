@@ -5,6 +5,9 @@ using NUnit.Framework;
 
 namespace MechStorm.Battle.Tests.Outcomes
 {
+    /// <summary>
+    /// 验证进行中、阵营全灭和非法胜负组合的 Outcome 契约。
+    /// </summary>
     public class BattleOutcomeTests
     {
         [Test]

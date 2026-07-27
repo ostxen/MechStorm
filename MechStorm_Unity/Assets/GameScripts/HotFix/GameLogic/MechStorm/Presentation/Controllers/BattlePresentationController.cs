@@ -51,9 +51,15 @@ namespace MechStorm.Presentation.Controllers
         public bool IsCurrentUnitSelected =>
             ReferenceEquals(_selectedCombatUnit, _battleSession.CurrentCombatUnit);
 
+        /// <summary>
+        /// 只有对局未结束且已经选择合法目标时才能确认普通攻击。
+        /// </summary>
         public bool CanConfirmBasicAttack =>
             !_battleSession.IsBattleEnded && _selectedAttackTarget != null;
 
+        /// <summary>
+        /// 只有对局未结束、已选择技能并选中合法目标时才能确认技能。
+        /// </summary>
         public bool CanConfirmAbilityTargeting =>
             !_battleSession.IsBattleEnded &&
             _targetingAbility != null &&
@@ -69,6 +75,9 @@ namespace MechStorm.Presentation.Controllers
             _highlightMapper = new BattleRangeHighlightMapper();
         }
 
+        /// <summary>
+        /// 读取一次棋盘点击并转换成表现层动作；对局结束后统一拒绝输入并清除旧高亮。
+        /// </summary>
         public BattleInputAction Tick(out CombatUnit actionUnit)
         {
             actionUnit = null;
@@ -82,6 +91,7 @@ namespace MechStorm.Presentation.Controllers
 
             if (_battleSession.IsBattleEnded)
             {
+                // 仍返回被点击单位，方便调试日志说明这次被拒绝的输入来自哪里。
                 actionUnit = clickedCombatUnit ?? _battleSession.CurrentCombatUnit;
                 LastRejectionReason = GetFailureReason(
                     BattleActionFailureReason.BattleAlreadyEnded,
@@ -106,7 +116,7 @@ namespace MechStorm.Presentation.Controllers
             return HandleGridClick(currentCombatUnit, targetGridPosition);
         }
         /// <summary>
-        /// 保持当前单位选中，并按最新战斗状态刷新范围。
+        /// 保持当前单位选中，并按最新战斗数据刷新范围；对局结束时直接清空选择。
         /// </summary>
         public void RefreshSelection()
         {
@@ -151,7 +161,7 @@ namespace MechStorm.Presentation.Controllers
         }
 
         /// <summary>
-        /// 选中当前单位并进入指定技能的目标选择模式。
+        /// 选中当前单位并进入指定技能的目标选择模式；对局结束后不允许重新进入。
         /// </summary>
         public void BeginAbilityTargeting(AbilityDefinition ability)
         {
@@ -188,6 +198,9 @@ namespace MechStorm.Presentation.Controllers
             RefreshSelection();
         }
 
+        /// <summary>
+        /// 提交已选择的技能和目标；最后一击结束对局时清空选择和全部高亮。
+        /// </summary>
         public BattleActionResult ConfirmAbilityTargeting()
         {
             if (_targetingAbility == null || _selectedAbilityTarget == null)
@@ -223,6 +236,9 @@ namespace MechStorm.Presentation.Controllers
             return LastActionResult;
         }
 
+        /// <summary>
+        /// 提交已选择的普通攻击目标，并按最新胜负结果刷新或清空选择。
+        /// </summary>
         public BattleActionResult ConfirmBasicAttack()
         {
             if (_selectedAttackTarget == null)
@@ -245,7 +261,7 @@ namespace MechStorm.Presentation.Controllers
         }
 
         /// <summary>
-        /// 结束当前单位行动并清除选择。
+        /// 结束当前单位行动并清除选择；对局已结束时保留明确的拒绝原因。
         /// </summary>
         public BattleActionResult EndCurrentUnitAction()
         {
@@ -262,6 +278,9 @@ namespace MechStorm.Presentation.Controllers
             return LastActionResult;
         }
 
+        /// <summary>
+        /// 结束当前阵营回合并清除选择；对局已结束时不会推进阵营。
+        /// </summary>
         public BattleActionResult EndCurrentFactionTurn()
         {
             LastRejectionReason = null;

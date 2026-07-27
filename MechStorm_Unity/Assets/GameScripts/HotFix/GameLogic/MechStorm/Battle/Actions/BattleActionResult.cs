@@ -112,7 +112,7 @@ namespace MechStorm.Battle.Actions
         public CombatFaction? FactionAfter { get; }
 
         /// <summary>
-        /// 本次操作完成后的对局结果。
+        /// 本次操作完成后的对局结果；普通结果为进行中，最后一击或结束后的失败结果为已结束。
         /// </summary>
         public BattleOutcome Outcome { get; }
 
@@ -169,6 +169,7 @@ namespace MechStorm.Battle.Actions
         /// <param name="targetUnit">受到攻击的目标单位。</param>
         /// <param name="durabilityBefore">目标受击前的耐久值。</param>
         /// <param name="durabilityAfter">目标受击后的耐久值。</param>
+        /// <param name="outcome">攻击完成后的对局结果。</param>
         public static BattleActionResult AttackSucceeded(int sequence, CombatUnit actorUnit,
             CombatUnit targetUnit, int durabilityBefore, int durabilityAfter,
             BattleOutcome outcome = null)
@@ -200,7 +201,7 @@ namespace MechStorm.Battle.Actions
         }
 
         /// <summary>
-        /// 创建技能成功结果。
+        /// 创建技能成功结果，并按 AP、伤害、死亡和对局结束的顺序记录变化。
         /// </summary>
         public static BattleActionResult AbilitySucceeded(int sequence, CombatUnit actorUnit,
             CombatUnit targetUnit, int abilityId, int actionPointBefore, int actionPointAfter,
@@ -390,7 +391,7 @@ namespace MechStorm.Battle.Actions
         }
 
         /// <summary>
-        /// 创建技能失败结果，并保留请求中的技能和目标身份。
+        /// 创建技能失败结果，并保留请求中的技能、目标身份和失败后的对局结果。
         /// </summary>
         public static BattleActionResult AbilityFailed(int sequence, CombatUnit actorUnit,
             CombatUnit targetUnit, int abilityId, BattleActionFailureReason failureReason,
@@ -429,6 +430,7 @@ namespace MechStorm.Battle.Actions
         /// <param name="actionType">尝试执行的操作类型。</param>
         /// <param name="actorUnit">尝试执行操作的单位。</param>
         /// <param name="failureReason">操作失败原因。</param>
+        /// <param name="outcome">失败发生时的对局结果。</param>
         public static BattleActionResult Failed(int sequence, BattleActionType actionType,
             CombatUnit actorUnit, BattleActionFailureReason failureReason,
             BattleOutcome outcome = null)
@@ -447,6 +449,10 @@ namespace MechStorm.Battle.Actions
                 _emptyChangeTypes, outcome: outcome);
         }
 
+        /// <summary>
+        /// 约束 Result 与 Outcome 的组合：只有致死伤害能成功结束对局；
+        /// 已结束后的失败操作必须返回 BattleAlreadyEnded。
+        /// </summary>
         private static void ValidateOutcome(
             BattleActionType actionType, BattleActionFailureReason failureReason,
             int? durabilityAfter, BattleOutcome outcome)

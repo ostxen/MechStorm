@@ -54,6 +54,9 @@ namespace MechStorm.Battle.Actions
         /// </summary>
         public BattleOutcome Outcome { get; }
 
+        /// <summary>
+        /// 将一次 Result 复制成只保留稳定 ID 和数值的日志，避免日志依赖后续变化的单位对象。
+        /// </summary>
         public BattleActionLog(BattleActionResult result, int actorUnitId, int? targetUnitId = null, int? nextUnitId = null)
         {
             if (result == null)
@@ -136,6 +139,7 @@ namespace MechStorm.Battle.Actions
                 throw new ArgumentException("Only ability log can provide an ability ID.", nameof(result));
             }
 
+            // 只有成功推进回合时才存在下一单位；对局结束后的同类失败结果不能伪造 NextUnitId。
             var isTurnAdvancement = result.ActionType == BattleActionType.EndUnitAction ||
                                     result.ActionType == BattleActionType.EndFactionTurn;
             var requiresNextUnit = result.IsSuccess && isTurnAdvancement;

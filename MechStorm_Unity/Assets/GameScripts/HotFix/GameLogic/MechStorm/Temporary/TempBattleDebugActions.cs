@@ -12,6 +12,9 @@ using UnityEngine;
 
 namespace MechStorm.Presentation
 {
+    /// <summary>
+    /// 为临时战斗 HUD 提供只读显示数据和调试操作，不直接实现战斗规则。
+    /// </summary>
     public sealed class TempBattleDebugActions
     {
         private readonly BattlePresentationController _presentationController;
@@ -40,6 +43,9 @@ namespace MechStorm.Presentation
 
         public bool IsBattleReady => _battleSession != null;
 
+        /// <summary>
+        /// HUD 使用该值统一禁用会改变战场或回合的按钮。
+        /// </summary>
         public bool IsBattleEnded => _battleSession.IsBattleEnded;
 
         public bool IsCurrentUnitSelected => _presentationController.IsCurrentUnitSelected;
@@ -89,6 +95,9 @@ namespace MechStorm.Presentation
         public string SelectedAttackTargetName =>
             _presentationController.SelectedAttackTarget?.Pilot.Name;
 
+        /// <summary>
+        /// 返回临时技能按钮当前不可用的首要原因；返回 null 表示可以开始选择目标。
+        /// </summary>
         public string AbilityUnavailableReason
         {
             get
@@ -166,6 +175,9 @@ namespace MechStorm.Presentation
             }
         }
 
+        /// <summary>
+        /// 执行临时扣血操作；对局结束后拒绝执行，避免调试按钮继续修改最终结果。
+        /// </summary>
         public void ApplyDebugDamageToPlayerA()
         {
             if (_battleSession.IsBattleEnded)
@@ -258,6 +270,9 @@ namespace MechStorm.Presentation
             RefreshAndLogAbility(result);
         }
 
+        /// <summary>
+        /// 请求结束当前单位行动；失败时不读取不存在的下一单位。
+        /// </summary>
         public void EndCurrentUnitAction()
         {
             LogCurrentBattleState("Before End Action");
@@ -279,6 +294,9 @@ namespace MechStorm.Presentation
             LogCurrentBattleState("After End Action");
         }
 
+        /// <summary>
+        /// 请求结束当前阵营回合；失败时不读取不存在的下一单位。
+        /// </summary>
         public void EndCurrentFactionTurn()
         {
             LogCurrentBattleState("Before End Faction Turn");

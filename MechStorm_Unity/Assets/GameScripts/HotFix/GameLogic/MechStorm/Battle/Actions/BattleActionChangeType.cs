@@ -15,7 +15,15 @@ namespace MechStorm.Battle.Actions
         CurrentUnitChanged,
         ActionPointSpent,
         ActionPointRestored,
+
+        /// <summary>
+        /// TeamA 或 TeamB 的最后一名存活机兵死亡。
+        /// </summary>
         FactionEliminated,
+
+        /// <summary>
+        /// 本次操作产生最终胜负，后续战斗操作应被拒绝。
+        /// </summary>
         BattleEnded,
     }
 }

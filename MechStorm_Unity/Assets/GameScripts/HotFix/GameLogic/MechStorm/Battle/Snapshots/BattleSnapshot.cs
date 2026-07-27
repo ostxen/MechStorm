@@ -25,8 +25,14 @@ namespace MechStorm.Battle.Snapshots
         /// </summary>
         public BattleOutcome Outcome { get; }
 
+        /// <summary>
+        /// 创建快照时所有单位的只读副本。
+        /// </summary>
         public IReadOnlyList<BattleUnitSnapshot> Units { get; }
 
+        /// <summary>
+        /// 创建完整战场快照；未显式提供 Outcome 时表示对局仍在进行。
+        /// </summary>
         public BattleSnapshot(int boardWidth, int boardHeight, int roundNumber, CombatFaction currentFaction,
             int currentUnitId, IEnumerable<BattleUnitSnapshot> units, BattleOutcome outcome = null)
         {

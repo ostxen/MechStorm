@@ -53,12 +53,21 @@ namespace MechStorm.Battle
 
         public CombatUnit CurrentCombatUnit => _turnCoordinator.CurrentCombatUnit;
 
+        /// <summary>
+        /// 是否已经产生最终胜负。结束后所有改变战场或推进回合的入口都会失败。
+        /// </summary>
         public bool IsBattleEnded => _outcome.IsBattleEnded;
 
+        /// <summary>
+        /// 当前对局结果，包含胜方、全灭方和结束原因。
+        /// </summary>
         public BattleOutcome Outcome => _outcome;
 
         public IReadOnlyList<BattleActionLog> ActionLogs => _readOnlyActionLogs;
 
+        /// <summary>
+        /// 复制当前棋盘、单位、回合和胜负结果，供诊断导出使用。
+        /// </summary>
         public BattleSnapshot CreateSnapshot()
         {
             var unitSnapshots = new List<BattleUnitSnapshot>(CombatUnits.Count);
@@ -73,6 +82,9 @@ namespace MechStorm.Battle
                 CurrentCombatUnit.UnitId, unitSnapshots, _outcome);
         }
 
+        /// <summary>
+        /// 尝试移动当前单位；对局结束后只记录失败，不改变位置。
+        /// </summary>
         public BattleActionResult TryMoveCurrentCombatUnit(Vector2Int target)
         {
             var actorUnit = CurrentCombatUnit;
@@ -89,6 +101,9 @@ namespace MechStorm.Battle
             return RecordAction(result);
         }
 
+        /// <summary>
+        /// 尝试执行普通攻击，并在伤害结算后检查目标阵营是否全灭。
+        /// </summary>
         public BattleActionResult AttackTargetCombatUnit(CombatUnit targetUnit)
         {
             if (targetUnit == null)
@@ -132,6 +147,9 @@ namespace MechStorm.Battle
             return RecordAction(successResult, targetUnitId: targetUnit.UnitId);
         }
 
+        /// <summary>
+        /// 尝试释放单体技能，并在 AP 与伤害结算后检查目标阵营是否全灭。
+        /// </summary>
         public BattleActionResult TryUseAbility(AbilityDefinition ability, CombatUnit targetUnit)
         {
             if (ability == null)
@@ -175,6 +193,7 @@ namespace MechStorm.Battle
                 throw new InvalidOperationException("Validated ability could not be executed.");
             }
 
+            // 与普通攻击保持同一时序：先提交伤害，再把可能产生的胜负写入技能 Result。
             UpdateOutcomeAfterDamage(targetUnit);
             var successResult = BattleActionResult.AbilitySucceeded(sequence, actorUnit, targetUnit,
                 ability.AbilityId, actionPointBefore, actorUnit.PilotRuntime.CurrentActionPoint,
@@ -182,6 +201,9 @@ namespace MechStorm.Battle
             return RecordAction(successResult, targetUnitId: targetUnit.UnitId);
         }
 
+        /// <summary>
+        /// 结束当前单位行动并切换到下一单位；对局结束后不再推进回合。
+        /// </summary>
         public BattleActionResult EndCurrentUnitAction()
         {
             var actorUnit = CurrentCombatUnit;
@@ -205,6 +227,9 @@ namespace MechStorm.Battle
             return RecordAction(result, nextUnitId: nextCombatUnit.UnitId);
         }
 
+        /// <summary>
+        /// 结束当前阵营回合；对局结束后不再切换阵营。
+        /// </summary>
         public BattleActionResult EndCurrentFactionTurn()
         {
             var actorUnit = CurrentCombatUnit;
@@ -254,6 +279,9 @@ namespace MechStorm.Battle
             return _unitRegistry.GetDeadUnits();
         }
 
+        /// <summary>
+        /// 查询当前单位可移动格；对局结束后返回空集合以移除移动高亮。
+        /// </summary>
         public IReadOnlyList<Vector2Int> GetCurrentCombatUnitReachablePositions()
         {
             if (IsBattleEnded)
@@ -264,6 +292,9 @@ namespace MechStorm.Battle
             return _movementResolver.GetReachablePositions(CurrentCombatUnit);
         }
 
+        /// <summary>
+        /// 查询当前单位合法普通攻击目标；对局结束后返回空集合。
+        /// </summary>
         public IReadOnlyList<CombatUnit> GetCurrentCombatUnitBasicAttackTargets()
         {
             if (IsBattleEnded)
@@ -284,6 +315,9 @@ namespace MechStorm.Battle
             return attackTargets;
         }
 
+        /// <summary>
+        /// 查询当前单位普通攻击覆盖格；对局结束后返回空集合以移除攻击高亮。
+        /// </summary>
         public IReadOnlyList<Vector2Int> GetCurrentCombatUnitBasicAttackPositions()
         {
             if (IsBattleEnded)
@@ -294,6 +328,9 @@ namespace MechStorm.Battle
             return _attackResolver.GetPositionsInRange(CurrentCombatUnit);
         }
 
+        /// <summary>
+        /// 查询技能覆盖格；对局结束后返回空集合以移除技能高亮。
+        /// </summary>
         public IReadOnlyList<Vector2Int> GetCurrentCombatUnitAbilityPositions(AbilityDefinition ability)
         {
             if (ability == null)
@@ -309,6 +346,9 @@ namespace MechStorm.Battle
             return _abilityResolver.GetPositionsInRange(ability, CurrentCombatUnit);
         }
 
+        /// <summary>
+        /// 查询技能合法目标；对局结束后返回空集合。
+        /// </summary>
         public IReadOnlyList<CombatUnit> GetCurrentCombatUnitAbilityTargets(AbilityDefinition ability)
         {
             if (ability == null)
@@ -384,6 +424,9 @@ namespace MechStorm.Battle
             _outcome = BattleOutcome.FactionEliminated(winningFaction, eliminatedFaction);
         }
 
+        /// <summary>
+        /// 统一创建并记录“对局已结束”失败，确保失败操作仍占用连续日志序号。
+        /// </summary>
         private BattleActionResult RecordBattleEndedFailure(
             int sequence, BattleActionType actionType, CombatUnit actorUnit)
         {

@@ -5,6 +5,9 @@ using UnityEngine.UIElements;
 
 namespace MechStorm.Presentation
 {
+    /// <summary>
+    /// 运行时临时战斗 HUD，负责显示数据和转发按钮点击，不判断战斗规则。
+    /// </summary>
     [RequireComponent(typeof(UIDocument))]
     public sealed class TempBattleDebugPanel : MonoBehaviour
     {
@@ -462,6 +465,7 @@ namespace MechStorm.Presentation
             SetButtonsEnabled(ready);
             if (ready && _actions.IsBattleEnded)
             {
+                // 胜负产生后保留日志与 JSON 导出，只关闭会修改战场或推进回合的按钮。
                 SetBattleInteractionButtonsEnabled(false);
             }
 
@@ -511,6 +515,9 @@ namespace MechStorm.Presentation
             _exportButton.SetEnabled(enabled);
         }
 
+        /// <summary>
+        /// 统一控制所有会改变战场或目标选择的按钮，诊断按钮不受影响。
+        /// </summary>
         private void SetBattleInteractionButtonsEnabled(bool enabled)
         {
             _endActionButton.SetEnabled(enabled);

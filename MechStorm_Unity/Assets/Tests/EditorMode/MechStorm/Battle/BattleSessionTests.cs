@@ -11,6 +11,9 @@ using NUnit.Framework;
 
 namespace MechStorm.Battle.Tests
 {
+    /// <summary>
+    /// 验证 BattleSession 的战场操作、回合推进、全灭判定和结束后无副作用规则。
+    /// </summary>
     public class BattleSessionTests
     {
         [Test]

@@ -11,6 +11,9 @@ using NUnit.Framework;
 
 namespace MechStorm.Battle.Tests.Snapshots
 {
+    /// <summary>
+    /// 验证 Snapshot、ActionLog 和调试 JSON 对战场数据及胜负结果的完整记录。
+    /// </summary>
     public class BattleSnapshotTests
     {
         [Test]

@@ -11,14 +11,29 @@ namespace MechStorm.Battle.Outcomes
         private static readonly BattleOutcome _inProgress =
             new BattleOutcome(false, null, null, BattleEndReason.None);
 
+        /// <summary>
+        /// 复用的“对局进行中”结果，此时没有胜方和全灭方。
+        /// </summary>
         public static BattleOutcome InProgress => _inProgress;
 
+        /// <summary>
+        /// 是否已经产生最终胜负。
+        /// </summary>
         public bool IsBattleEnded { get; }
 
+        /// <summary>
+        /// 对局结束时的胜方；进行中为 null。
+        /// </summary>
         public CombatFaction? WinningFaction { get; }
 
+        /// <summary>
+        /// 对局结束时被全灭的一方；进行中为 null。
+        /// </summary>
         public CombatFaction? EliminatedFaction { get; }
 
+        /// <summary>
+        /// 对局结束原因；进行中为 None。
+        /// </summary>
         public BattleEndReason EndReason { get; }
 
         private BattleOutcome(bool isBattleEnded, CombatFaction? winningFaction,
@@ -51,6 +66,7 @@ namespace MechStorm.Battle.Outcomes
 
         private static void ValidateParticipatingFaction(CombatFaction faction, string parameterName)
         {
+            // 当前最小对局只有 TeamA 和 TeamB 参与胜负，Neutral 不能成为胜方或全灭方。
             if (faction != CombatFaction.TeamA && faction != CombatFaction.TeamB)
             {
                 throw new ArgumentOutOfRangeException(parameterName, faction,
