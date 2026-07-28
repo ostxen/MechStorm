@@ -32,6 +32,30 @@ namespace MechStorm.Battle.Tests.Actions
         }
 
         [Test]
+        public void UnitSelectionSucceeded_RecordsPositionResetAndCurrentUnitChange()
+        {
+            var actorUnit = CreateCombatUnit(1);
+            var selectedUnit = CreateCombatUnit(2);
+
+            var result = BattleActionResult.UnitSelectionSucceeded(
+                2, actorUnit, selectedUnit, new Vector2Int(2, 1),
+                new Vector2Int(1, 1), 3, 10);
+
+            Assert.IsTrue(result.IsSuccess);
+            Assert.AreEqual(BattleActionType.SelectUnit, result.ActionType);
+            Assert.AreSame(actorUnit, result.ActorUnit);
+            Assert.AreSame(selectedUnit, result.NextCombatUnit);
+            CollectionAssert.AreEqual(
+                new[]
+                {
+                    BattleActionChangeType.UnitPositionReset,
+                    BattleActionChangeType.CurrentUnitChanged,
+                    BattleActionChangeType.ActionPointRestored
+                },
+                result.ChangeTypes);
+        }
+
+        [Test]
         public void AttackSucceeded_WithLethalDamage_OrdersDamageBeforeDeath()
         {
             var actorUnit = CreateCombatUnit(1);

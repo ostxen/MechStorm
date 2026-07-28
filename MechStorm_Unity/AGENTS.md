@@ -17,6 +17,25 @@
 
 未读取这些文件前，不要开始设计、编码、提交或切换开发阶段。
 
+## 当前任务工作台
+
+- 本地文件 [`.factory/task-state/CURRENT_TASK.md`](./.factory/task-state/CURRENT_TASK.md) 用于记录当前任务的目标、范围、决策、执行清单、停留位置、验证结果和恢复入口。
+- `DEVELOPMENT_PROGRESS.md` 仍是阶段、任务完成情况和正式验收结果的唯一长期来源；`CURRENT_TASK.md` 只保存尚未完成任务的执行细节，不能取代正式进度文档。
+- 开始新的开发任务时，必须根据 `DEVELOPMENT_PROGRESS.md` 初始化或重写 `CURRENT_TASK.md`，再开始设计和编码。
+- 新会话、上下文压缩或中途问题结束后，必须先读 `DEVELOPMENT_PROGRESS.md`，再读 `CURRENT_TASK.md`，从“当前停留位置”和“恢复工作时的第一步”继续。
+- 完成步骤、发现阻塞、确认新决策、改变任务边界、运行验证或修改下一步时，必须同步更新 `CURRENT_TASK.md`；普通问答如果没有改变任务事实，则不记录完整聊天内容。
+- 同一时间只保留一个当前开发任务；执行清单使用 `[x]`、`[~]`、`[ ]` 表示完成、进行中和未开始，并保持只有一项 `[~]`。
+- 当前任务全部验收后，先把正式结果同步到 `DEVELOPMENT_PROGRESS.md`，再将 `CURRENT_TASK.md` 重置为“当前无活动任务”，等待下一个任务初始化。
+- `CURRENT_TASK.md` 是本地工作文件，必须被 Git 忽略；不得写入密钥、密码、令牌或其他敏感信息。
+
+## Unity 资源与 `.meta` 文件
+
+- 默认由 Unity Editor 自动创建和维护 `.meta` 文件，禁止为了触发导入、补齐测试项目或方便脚本编译而手工创建、编辑、替换或删除 `.meta`。
+- 新增资源或脚本后如果 `.meta` 尚未生成，应优先等待或触发 Unity 正常刷新；无法刷新时先告知用户，不得自行伪造 GUID。
+- 移动、重命名或删除 Unity 资源时必须保留资源与其 `.meta` 的配对关系，优先通过 Unity Editor 或项目已有的 Unity 工具执行，不能只处理其中一个文件。
+- 只有在用户明确授权修复指定 `.meta`，或已确认存在 GUID 损坏、合并冲突等必须人工介入的问题时，才允许编辑；操作前必须读取最新文件、检查 Git 状态并说明将保留或修改哪个 GUID。
+- 不得重新生成已有资源的 GUID，除非用户明确要求让引用失效并创建新的资源身份。
+
 ## 项目规范来源
 
 - TEngine、HybridCLR、YooAsset、UI、资源加载、事件系统、热更边界等规范，以 `CLAUDE.md` 和 `.claude/skills/tengine-dev/references/` 为准。

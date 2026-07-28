@@ -162,6 +162,51 @@ namespace MechStorm.Battle.Actions
         }
 
         /// <summary>
+        /// 创建阵营内行动单位切换成功结果，并携带上一单位可能发生的位置回退。
+        /// </summary>
+        public static BattleActionResult UnitSelectionSucceeded(int sequence, CombatUnit actorUnit,
+            CombatUnit selectedCombatUnit, Vector2Int positionBefore, Vector2Int positionAfter,
+            int actionPointBefore, int actionPointAfter)
+        {
+            if (actorUnit == null)
+            {
+                throw new ArgumentNullException(nameof(actorUnit));
+            }
+
+            if (selectedCombatUnit == null)
+            {
+                throw new ArgumentNullException(nameof(selectedCombatUnit));
+            }
+
+            if (actionPointBefore < 0 || actionPointAfter < 0)
+            {
+                throw new ArgumentOutOfRangeException(nameof(actionPointBefore),
+                    "Action points must be non-negative.");
+            }
+
+            var changeTypes = new List<BattleActionChangeType>();
+            if (positionBefore != positionAfter)
+            {
+                changeTypes.Add(BattleActionChangeType.UnitPositionReset);
+            }
+
+            if (!ReferenceEquals(actorUnit, selectedCombatUnit))
+            {
+                changeTypes.Add(BattleActionChangeType.CurrentUnitChanged);
+            }
+
+            if (actionPointBefore != actionPointAfter)
+            {
+                changeTypes.Add(BattleActionChangeType.ActionPointRestored);
+            }
+
+            return new BattleActionResult(sequence, BattleActionType.SelectUnit,
+                BattleActionFailureReason.None, actorUnit, null, selectedCombatUnit,
+                changeTypes.ToArray(), positionBefore, positionAfter,
+                actionPointBefore: actionPointBefore, actionPointAfter: actionPointAfter);
+        }
+
+        /// <summary>
         /// 创建攻击成功结果。
         /// </summary>
         /// <param name="sequence">操作序号。</param>
@@ -341,7 +386,9 @@ namespace MechStorm.Battle.Actions
             CombatFaction factionBefore,
             CombatFaction factionAfter,
             int actionPointBefore,
-            int actionPointAfter)
+            int actionPointAfter,
+            Vector2Int? positionBefore = null,
+            Vector2Int? positionAfter = null)
         {
             if (actorUnit == null)
             {
@@ -371,6 +418,11 @@ namespace MechStorm.Battle.Actions
                 BattleActionChangeType.FactionTurnEnded
             };
 
+            if (positionBefore != positionAfter)
+            {
+                changeTypes.Insert(0, BattleActionChangeType.UnitPositionReset);
+            }
+
             if (roundNumberBefore != roundNumberAfter)
             {
                 changeTypes.Add(BattleActionChangeType.RoundStarted);
@@ -385,6 +437,7 @@ namespace MechStorm.Battle.Actions
 
             return new BattleActionResult(sequence, BattleActionType.EndFactionTurn,
                 BattleActionFailureReason.None, actorUnit, null, nextCombatUnit, changeTypes.ToArray(),
+                positionBefore: positionBefore, positionAfter: positionAfter,
                 roundNumberBefore: roundNumberBefore, roundNumberAfter: roundNumberAfter,
                 factionBefore: factionBefore, factionAfter: factionAfter,
                 actionPointBefore: actionPointBefore, actionPointAfter: actionPointAfter);

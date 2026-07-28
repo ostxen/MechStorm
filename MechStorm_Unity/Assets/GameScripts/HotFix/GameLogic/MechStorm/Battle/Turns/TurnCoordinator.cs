@@ -6,11 +6,10 @@ namespace MechStorm.Battle.Turns
 {
     public sealed class TurnCoordinator
     {
-        private const int InvalidFactionUnitIndex = -1;
-
         private readonly CombatUnitRegistry _unitRegistry;
+        private readonly HashSet<int> _actedUnitIds = new HashSet<int>();
 
-        private int _currentFactionUnitIndex;
+        private CombatUnit _currentCombatUnit;
 
         public int CurrentRoundNumber { get; private set; } = 1;
 
@@ -20,46 +19,90 @@ namespace MechStorm.Battle.Turns
         {
             get
             {
-                var currentFactionUnits = GetCurrentFactionUnits();
-                if (_currentFactionUnitIndex == InvalidFactionUnitIndex || _currentFactionUnitIndex >= currentFactionUnits.Count)
+                if (_currentCombatUnit == null)
                 {
-                    throw new InvalidOperationException("Current faction has no alive combat unit.");
+                    throw new InvalidOperationException(
+                        "Current faction has no alive combat unit.");
                 }
 
-                var currentCombatUnit = currentFactionUnits[_currentFactionUnitIndex];
-                if (currentCombatUnit.IsDead())
+                if (_currentCombatUnit.IsDead())
                 {
-                    throw new InvalidOperationException("Dead combat unit cannot act.");
+                    throw new InvalidOperationException(
+                        "Dead combat unit cannot act.");
                 }
-                return currentCombatUnit;
+
+                return _currentCombatUnit;
             }
         }
 
         public TurnCoordinator(CombatUnitRegistry unitRegistry)
         {
             _unitRegistry = unitRegistry ?? throw new ArgumentNullException(nameof(unitRegistry));
-            _currentFactionUnitIndex = FindNextAliveUnitIndex(GetCurrentFactionUnits(), InvalidFactionUnitIndex);
+            _currentCombatUnit = FindNextAvailableUnit();
+        }
+
+        /// <summary>
+        /// 查询机兵是否已经提交本阵营回合中的行动。
+        /// </summary>
+        public bool HasUnitActed(CombatUnit combatUnit)
+        {
+            if (combatUnit == null)
+            {
+                throw new ArgumentNullException(nameof(combatUnit));
+            }
+
+            return _actedUnitIds.Contains(combatUnit.UnitId);
+        }
+
+        /// <summary>
+        /// 判断机兵能否成为当前阵营的新行动者。
+        /// </summary>
+        public bool CanSelectCombatUnit(CombatUnit combatUnit)
+        {
+            return combatUnit != null &&
+                   _unitRegistry.Contains(combatUnit) &&
+                   _unitRegistry.GetFaction(combatUnit) == CurrentFaction &&
+                   combatUnit.IsAlive() &&
+                   !HasUnitActed(combatUnit);
+        }
+
+        /// <summary>
+        /// 切换当前行动者；调用方必须先处理上一机兵的暂定位置回退。
+        /// </summary>
+        public void SelectCombatUnit(CombatUnit combatUnit)
+        {
+            if (!CanSelectCombatUnit(combatUnit))
+            {
+                throw new InvalidOperationException(
+                    "Only an alive, unacted combat unit from the current faction can be selected.");
+            }
+
+            _currentCombatUnit = combatUnit;
+            RestoreCurrentCombatUnitActionPoint();
         }
 
         public void EndCurrentUnitAction()
         {
-            var nextActionUnitIndex = FindNextAliveUnitIndex(GetCurrentFactionUnits(), _currentFactionUnitIndex);
-            if (nextActionUnitIndex != InvalidFactionUnitIndex)
+            _actedUnitIds.Add(CurrentCombatUnit.UnitId);
+            var nextCombatUnit = FindNextAvailableUnit();
+            if (nextCombatUnit != null)
             {
-                _currentFactionUnitIndex = nextActionUnitIndex;
+                _currentCombatUnit = nextCombatUnit;
                 RestoreCurrentCombatUnitActionPoint();
                 return;
             }
 
             AdvanceFaction();
-            _currentFactionUnitIndex = FindNextAliveUnitIndex(GetCurrentFactionUnits(), InvalidFactionUnitIndex);
+            _actedUnitIds.Clear();
+            _currentCombatUnit = FindNextAvailableUnit();
             RestoreCurrentCombatUnitActionPoint();
         }
 
         public void EndCurrentFactionTurn()
         {
             AdvanceFaction();
-            _currentFactionUnitIndex = FindNextAliveUnitIndex(GetCurrentFactionUnits(), InvalidFactionUnitIndex);
+            _actedUnitIds.Clear();
+            _currentCombatUnit = FindNextAvailableUnit();
             RestoreCurrentCombatUnitActionPoint();
         }
 
@@ -80,22 +123,22 @@ namespace MechStorm.Battle.Turns
             CurrentRoundNumber++;
         }
 
-        private static int FindNextAliveUnitIndex(IReadOnlyList<CombatUnit> units, int currentUnitIndex)
+        private CombatUnit FindNextAvailableUnit()
         {
-            for (var i = currentUnitIndex + 1; i < units.Count; i++)
+            foreach (var combatUnit in GetCurrentFactionUnits())
             {
-                if (units[i].IsAlive())
+                if (combatUnit.IsAlive() && !HasUnitActed(combatUnit))
                 {
-                    return i;
+                    return combatUnit;
                 }
             }
 
-            return InvalidFactionUnitIndex;
+            return null;
         }
 
         private void RestoreCurrentCombatUnitActionPoint()
         {
-            if (_currentFactionUnitIndex == InvalidFactionUnitIndex)
+            if (_currentCombatUnit == null)
             {
                 return;
             }

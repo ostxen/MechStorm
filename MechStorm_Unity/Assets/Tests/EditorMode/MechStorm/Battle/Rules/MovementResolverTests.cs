@@ -89,6 +89,35 @@ namespace MechStorm.Battle.Tests.Rules
         }
 
         [Test]
+        public void TryMoveTo_WithRangeOrigin_DoesNotRefreshRangeAfterPreviousMove()
+        {
+            var resolver = new MovementResolver(new SquareGrid(7, 3));
+            var actionStartPosition = new Vector2Int(1, 1);
+            var unit = CreateCombatUnit(2, actionStartPosition);
+            unit.MoveTo(new Vector2Int(3, 1));
+
+            var moved = resolver.TryMoveTo(
+                unit, actionStartPosition, new Vector2Int(5, 1));
+
+            Assert.IsFalse(moved);
+            Assert.AreEqual(new Vector2Int(3, 1), unit.Position);
+        }
+
+        [Test]
+        public void GetReachablePositions_WithRangeOrigin_IgnoresMovingUnitCurrentOccupancy()
+        {
+            var unit = CreateCombatUnit(2, new Vector2Int(3, 1));
+            var resolver = new MovementResolver(
+                new SquareGrid(5, 3),
+                position => position == unit.Position);
+
+            var positions = resolver.GetReachablePositions(
+                unit, new Vector2Int(1, 1));
+
+            CollectionAssert.Contains(positions, new Vector2Int(3, 1));
+        }
+
+        [Test]
         public void CanMoveTo_ReturnsFalse_WhenUnitIsNull()
         {
             var resolver = new MovementResolver(new SquareGrid(5, 5));

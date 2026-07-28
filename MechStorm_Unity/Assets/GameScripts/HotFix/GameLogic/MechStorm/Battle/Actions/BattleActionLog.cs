@@ -139,19 +139,20 @@ namespace MechStorm.Battle.Actions
                 throw new ArgumentException("Only ability log can provide an ability ID.", nameof(result));
             }
 
-            // 只有成功推进回合时才存在下一单位；对局结束后的同类失败结果不能伪造 NextUnitId。
-            var isTurnAdvancement = result.ActionType == BattleActionType.EndUnitAction ||
-                                    result.ActionType == BattleActionType.EndFactionTurn;
-            var requiresNextUnit = result.IsSuccess && isTurnAdvancement;
+            // 成功切换行动者或推进回合时才存在下一单位。
+            var changesCurrentUnit = result.ActionType == BattleActionType.SelectUnit ||
+                                     result.ActionType == BattleActionType.EndUnitAction ||
+                                     result.ActionType == BattleActionType.EndFactionTurn;
+            var requiresNextUnit = result.IsSuccess && changesCurrentUnit;
             if (requiresNextUnit && nextUnitId == null)
             {
-                throw new ArgumentException("Successful turn advancement log must provide the next unit ID.",
+                throw new ArgumentException("Successful current unit change log must provide the next unit ID.",
                     nameof(nextUnitId));
             }
 
-            if ((!isTurnAdvancement || !result.IsSuccess) && nextUnitId != null)
+            if ((!changesCurrentUnit || !result.IsSuccess) && nextUnitId != null)
             {
-                throw new ArgumentException("Only successful turn advancement logs can provide the next unit ID.",
+                throw new ArgumentException("Only successful current unit change logs can provide the next unit ID.",
                     nameof(nextUnitId));
             }
         }

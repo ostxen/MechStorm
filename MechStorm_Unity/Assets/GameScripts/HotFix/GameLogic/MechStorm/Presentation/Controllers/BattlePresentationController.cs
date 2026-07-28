@@ -15,6 +15,7 @@ namespace MechStorm.Presentation.Controllers
     {
         None,
         CurrentUnitSelected,
+        CurrentUnitChanged,
         CurrentUnitMoved,
         AttackTargetSelected,
         AbilityTargetSelected,
@@ -232,7 +233,7 @@ namespace MechStorm.Presentation.Controllers
 
             _targetingAbility = null;
             _selectedAbilityTarget = null;
-            RefreshSelection();
+            ClearSelection();
             return LastActionResult;
         }
 
@@ -254,9 +255,11 @@ namespace MechStorm.Presentation.Controllers
                 LastRejectionReason = GetFailureReason(
                     LastActionResult.FailureReason,
                     LastActionResult.ActionType);
+                RefreshSelection();
+                return LastActionResult;
             }
 
-            RefreshSelection();
+            ClearSelection();
             return LastActionResult;
         }
 
@@ -292,6 +295,7 @@ namespace MechStorm.Presentation.Controllers
                     LastActionResult.ActionType);
             }
 
+            RefreshActorPosition(LastActionResult);
             ClearSelection();
             return LastActionResult;
         }
@@ -323,6 +327,11 @@ namespace MechStorm.Presentation.Controllers
                 return BattleInputAction.AbilityTargetSelected;
             }
 
+            if (_selectedAttackTarget != null)
+            {
+                return SelectBasicAttackTarget(clickedCombatUnit);
+            }
+
             if (ReferenceEquals(currentCombatUnit, clickedCombatUnit))
             {
                 _selectedCombatUnit = currentCombatUnit;
@@ -330,18 +339,27 @@ namespace MechStorm.Presentation.Controllers
                 return BattleInputAction.CurrentUnitSelected;
             }
 
-            if (!ContainsTarget(
-                    _battleSession.GetCurrentCombatUnitBasicAttackTargets(),
-                    clickedCombatUnit))
+            if (_battleSession.GetCombatUnitFaction(clickedCombatUnit) ==
+                _battleSession.CurrentFaction)
             {
-                LastRejectionReason = "Select a highlighted valid attack target.";
-                return BattleInputAction.ActionRejected;
+                LastActionResult =
+                    _battleSession.TrySelectCurrentFactionCombatUnit(clickedCombatUnit);
+                if (!LastActionResult.IsSuccess)
+                {
+                    LastRejectionReason = GetFailureReason(
+                        LastActionResult.FailureReason,
+                        LastActionResult.ActionType);
+                    return BattleInputAction.ActionRejected;
+                }
+
+                RefreshActorPosition(LastActionResult);
+                _selectedCombatUnit = clickedCombatUnit;
+                _selectedAttackTarget = null;
+                RefreshSelection();
+                return BattleInputAction.CurrentUnitChanged;
             }
 
-            _selectedCombatUnit = currentCombatUnit;
-            _selectedAttackTarget = clickedCombatUnit;
-            RefreshRangeHighlights();
-            return BattleInputAction.AttackTargetSelected;
+            return SelectBasicAttackTarget(clickedCombatUnit);
         }
 
         private BattleInputAction HandleGridClick(CombatUnit currentCombatUnit, Vector2Int targetGridPosition)
@@ -355,6 +373,12 @@ namespace MechStorm.Presentation.Controllers
             if (_targetingAbility != null)
             {
                 LastRejectionReason = "Select a combat unit as the ability target.";
+                return BattleInputAction.ActionRejected;
+            }
+
+            if (_selectedAttackTarget != null)
+            {
+                LastRejectionReason = "Confirm or cancel the selected attack target before moving.";
                 return BattleInputAction.ActionRejected;
             }
 
@@ -374,6 +398,38 @@ namespace MechStorm.Presentation.Controllers
             currentUnitVisual.RefreshPosition(moveResult.PositionAfter.Value);
             RefreshSelection();
             return BattleInputAction.CurrentUnitMoved;
+        }
+
+        private BattleInputAction SelectBasicAttackTarget(CombatUnit clickedCombatUnit)
+        {
+            if (!ContainsTarget(
+                    _battleSession.GetCurrentCombatUnitBasicAttackTargets(),
+                    clickedCombatUnit))
+            {
+                LastRejectionReason = "Select a highlighted valid attack target.";
+                return BattleInputAction.ActionRejected;
+            }
+
+            _selectedCombatUnit = _battleSession.CurrentCombatUnit;
+            _selectedAttackTarget = clickedCombatUnit;
+            RefreshRangeHighlights();
+            return BattleInputAction.AttackTargetSelected;
+        }
+
+        private void RefreshActorPosition(BattleActionResult result)
+        {
+            if (result?.PositionAfter == null)
+            {
+                return;
+            }
+
+            if (!_combatUnitVisuals.TryGetValue(result.ActorUnit, out var actorVisual))
+            {
+                throw new InvalidOperationException(
+                    "Battle action actor does not have a presentation visual.");
+            }
+
+            actorVisual.RefreshPosition(result.PositionAfter.Value);
         }
 
         /// <summary>
@@ -419,6 +475,7 @@ namespace MechStorm.Presentation.Controllers
             return failureReason switch
             {
                 BattleActionFailureReason.InvalidMoveTarget => "Current combat unit cannot move to the selected grid position.",
+                BattleActionFailureReason.InvalidUnitSelection => "Select an alive, unacted combat unit from the current faction.",
                 BattleActionFailureReason.TargetOutOfRange => actionType == BattleActionType.UseAbility
                     ? "Target combat unit is outside ability range."
                     : "Target combat unit is outside attack range.",

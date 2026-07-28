@@ -23,10 +23,15 @@ namespace MechStorm.Battle.Snapshots
 
         public int MaxActionPoint { get; }
 
+        /// <summary>
+        /// 创建快照时该机兵是否已经提交本阵营回合中的行动。
+        /// </summary>
+        public bool HasActed { get; }
+
         public bool IsDead => CurrentDurability <= 0;
 
         public BattleUnitSnapshot(int unitId, CombatFaction faction, Vector2Int position, int currentDurability,
-            int maxDurability, int currentActionPoint, int maxActionPoint)
+            int maxDurability, int currentActionPoint, int maxActionPoint, bool hasActed = false)
         {
             if (unitId <= 0)
             {
@@ -62,6 +67,7 @@ namespace MechStorm.Battle.Snapshots
             MaxDurability = maxDurability;
             CurrentActionPoint = currentActionPoint;
             MaxActionPoint = maxActionPoint;
+            HasActed = hasActed;
         }
     }
 }

@@ -6,6 +6,12 @@ namespace MechStorm.Battle.Actions
     public enum BattleActionChangeType
     {
         UnitMoved,
+
+        /// <summary>
+        /// 未提交的暂定走位已恢复到本次行动的开始位置。
+        /// </summary>
+        UnitPositionReset,
+
         DamageApplied,
         UnitDied,
         UnitActionEnded,

@@ -20,7 +20,8 @@ namespace MechStorm.Battle.Tests.Snapshots
         public void BattleUnitSnapshot_CapturesUnitValues()
         {
             var snapshot = new BattleUnitSnapshot(
-                1, CombatFaction.TeamA, new Vector2Int(2, 3), 0, 100, 3, 10);
+                1, CombatFaction.TeamA, new Vector2Int(2, 3), 0, 100, 3, 10,
+                true);
 
             Assert.AreEqual(1, snapshot.UnitId);
             Assert.AreEqual(CombatFaction.TeamA, snapshot.Faction);
@@ -29,6 +30,7 @@ namespace MechStorm.Battle.Tests.Snapshots
             Assert.AreEqual(100, snapshot.MaxDurability);
             Assert.AreEqual(3, snapshot.CurrentActionPoint);
             Assert.AreEqual(10, snapshot.MaxActionPoint);
+            Assert.IsTrue(snapshot.HasActed);
             Assert.IsTrue(snapshot.IsDead);
         }
 
@@ -85,6 +87,8 @@ namespace MechStorm.Battle.Tests.Snapshots
             Assert.AreEqual(2, snapshot.RoundNumber);
             Assert.AreEqual(CombatFaction.TeamA, snapshot.CurrentFaction);
             Assert.AreEqual(1, snapshot.CurrentUnitId);
+            Assert.AreEqual(new Vector2Int(1, 1),
+                snapshot.CurrentActionStartPosition);
             Assert.AreSame(BattleOutcome.InProgress, snapshot.Outcome);
             Assert.AreSame(currentUnit, snapshot.Units[0]);
             Assert.AreSame(enemyUnit, snapshot.Units[1]);
@@ -223,9 +227,11 @@ namespace MechStorm.Battle.Tests.Snapshots
             var json = BattleDebugJsonSerializer.Serialize(snapshot,
                 new[] { actionLog, failedActionLog, abilityActionLog, failedAbilityActionLog });
 
-            StringAssert.Contains("\"schemaVersion\": 5", json);
+            StringAssert.Contains("\"schemaVersion\": 6", json);
             StringAssert.Contains("\"currentFaction\": \"TeamA\"", json);
             StringAssert.Contains("\"currentUnitId\": 1", json);
+            StringAssert.Contains("\"currentActionStartPosition\"", json);
+            StringAssert.Contains("\"hasActed\": false", json);
             StringAssert.Contains("\"x\": 1", json);
             StringAssert.Contains("\"currentActionPoint\": 7", json);
             StringAssert.Contains("\"maxActionPoint\": 10", json);
@@ -268,7 +274,7 @@ namespace MechStorm.Battle.Tests.Snapshots
 
             var json = BattleDebugJsonSerializer.Serialize(snapshot, new[] { log });
 
-            StringAssert.Contains("\"schemaVersion\": 5", json);
+            StringAssert.Contains("\"schemaVersion\": 6", json);
             StringAssert.Contains("\"isBattleEnded\": true", json);
             StringAssert.Contains("\"winningFaction\": \"TeamA\"", json);
             StringAssert.Contains("\"eliminatedFaction\": \"TeamB\"", json);

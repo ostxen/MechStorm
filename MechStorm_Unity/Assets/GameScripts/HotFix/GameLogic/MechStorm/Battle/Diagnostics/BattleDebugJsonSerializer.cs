@@ -13,8 +13,8 @@ namespace MechStorm.Battle.Diagnostics
     /// </summary>
     public static class BattleDebugJsonSerializer
     {
-        // Schema 5 新增 BattleOutcome、胜方、全灭方和结束原因。
-        private const int CurrentSchemaVersion = 5;
+        // Schema 6 新增行动开始位置与单位本阵营回合已行动状态。
+        private const int CurrentSchemaVersion = 6;
         private static readonly JsonSerializerSettings SerializerSettings = CreateSerializerSettings();
 
         /// <summary>

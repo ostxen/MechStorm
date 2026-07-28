@@ -1,7 +1,5 @@
-using System;
 using System.Collections.Generic;
 using MechStorm.Battle;
-using MechStorm.Battle.Data;
 using MechStorm.Battle.Units;
 using MechStorm.Presentation.Board;
 using MechStorm.Presentation.Controllers;
@@ -15,17 +13,12 @@ namespace MechStorm.Presentation
 {
     public class TempGameEntry : MonoBehaviour
     {
-        private const int PlayerAUnitId = 1;
-        private const int EnemyAUnitId = 2;
-
         [SerializeField]
         private Transform _plane;
         [SerializeField]
         private GameObject _rangeHighlightTemplate;
         [SerializeField]
-        private int _boardWidth = 5;
-        [SerializeField]
-        private int _boardHeight = 4;
+        private TempBattleScenarioConfig _scenarioConfig;
         [SerializeField]
         private float _cellSize = 1f;
         [SerializeField]
@@ -48,19 +41,18 @@ namespace MechStorm.Presentation
         [SerializeField]
         private TempBattleHudTheme _hudTheme;
 
-        private Transform _playerA;
-        private CombatUnitVisual _playerAVisual;
-        private Transform _enemyA;
-        private CombatUnitVisual _enemyAVisual;
+        private readonly Dictionary<CombatUnit, CombatUnitVisual> _combatUnitVisuals = new();
+        private readonly Dictionary<Collider, CombatUnit> _combatUnitColliders = new();
+        private readonly Dictionary<CombatUnit, Transform> _healthBarAnchors = new();
+
+        private int _boardWidth;
+        private int _boardHeight;
         private GridCoordinateConverter _coordConverter;
         private BattleRangeHighlighter _rangeHighlighter;
         private BattleBoardInputter _boardInputter;
         private BattlePresentationController _presentationController;
         private BattleSession _battleSession;
-        private CombatUnit _playerAUnit;
-        private CombatUnit _enemyAUnit;
-        private Transform _playerAHealthBarAnchor;
-        private Transform _enemyAHealthBarAnchor;
+        private TempBattleScenarioBuildResult _scenarioBuildResult;
         private TempBattleUnitPresenter _unitPresenter;
         private TempBattleDebugActions _debugActions;
 
@@ -78,21 +70,34 @@ namespace MechStorm.Presentation
                 return;
             }
 
-            if (_boardWidth <= 0 || _boardHeight <= 0)
+            if (_scenarioConfig == null)
             {
-                Log.Error("[MechStorm] Board width and height must be greater than zero.");
+                Log.Error("[MechStorm] TempGameEntry requires a TempBattleScenarioConfig.");
                 return;
             }
 
+            var scenarioBuilder = new TempBattleScenarioBuilder();
+            if (!scenarioBuilder.TryBuild(
+                    _scenarioConfig,
+                    out _scenarioBuildResult,
+                    out var validationResult))
+            {
+                Log.Error(
+                    $"[MechStorm] TempBattleScenarioConfig is invalid:" +
+                    $"{System.Environment.NewLine}{validationResult.ErrorMessage}");
+                return;
+            }
+
+            _boardWidth = _scenarioConfig.BoardWidth;
+            _boardHeight = _scenarioConfig.BoardHeight;
+            _battleSession = _scenarioBuildResult.BattleSession;
             EnsureDebugPanel();
             _debugPanel.SetTheme(_hudTheme);
             CreateBoard();
             CreateRangeHighlighter();
             LogBoardValidation();
             CreateDebugMarkers();
-            CreatePlayerA();
-            CreateEnemyA();
-            CreateBattleSession();
+            CreateCombatUnitVisuals();
             CreateBoardInputter();
             CreatePresentationController();
             CreateDebugTools();
@@ -173,77 +178,39 @@ namespace MechStorm.Presentation
             }
         }
 
-        private void CreatePlayerA()
+        private void CreateCombatUnitVisuals()
         {
-            CreatePlayerAUnit();
-            CreatePlayerAVisual();
-        }
+            foreach (var combatUnit in _scenarioBuildResult.Units)
+            {
+                var unitObject = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                unitObject.name = $"BattleUnit_{combatUnit.UnitId}_{combatUnit.Pilot.Name}";
+                unitObject.transform.localScale = new Vector3(
+                    _cellSize * 0.6f,
+                    _cellSize,
+                    _cellSize * 0.6f);
 
-        private void CreatePlayerAUnit()
-        {
-            var factory = new CombatUnitFactory();
-            var pilot = new PilotData(1, "我方机兵", 3);
-            var mech = new MechData(1, "训练机", new BasicAttackData(10, 2, 5), 100, 4);
-            _playerAUnit = factory.Create(PlayerAUnitId, pilot, mech, new Vector2Int(1, 1));
-        }
+                var anchorObject = new GameObject("HealthBarAnchor");
+                anchorObject.transform.SetParent(unitObject.transform, false);
+                anchorObject.transform.localPosition = Vector3.up * 0.8f;
+                anchorObject.transform.localScale = Vector3.one;
 
-        private void CreatePlayerAVisual()
-        {
-            var unitObject = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            unitObject.name = "PlayerA";
-            unitObject.transform.localScale = new Vector3(_cellSize * 0.6f, _cellSize, _cellSize * 0.6f);
+                var visual = new CombatUnitVisual(
+                    unitObject.transform,
+                    _coordConverter,
+                    unitObject.transform.localScale.y * 0.5f);
+                visual.RefreshPosition(combatUnit.Position);
+                _combatUnitVisuals.Add(combatUnit, visual);
+                _healthBarAnchors.Add(combatUnit, anchorObject.transform);
 
-            var anchorObject = new GameObject("HealthBarAnchor");
-            anchorObject.transform.SetParent(unitObject.transform, false);
-            anchorObject.transform.localPosition = Vector3.up * 0.8f;
-            anchorObject.transform.localScale = Vector3.one;
-            _playerAHealthBarAnchor = anchorObject.transform;
+                if (!unitObject.TryGetComponent<Collider>(out var unitCollider))
+                {
+                    Log.Error($"[MechStorm] Combat unit {combatUnit.UnitId} requires a collider.");
+                    continue;
+                }
 
-            _playerA = unitObject.transform;
-            _playerAVisual = new CombatUnitVisual(_playerA, _coordConverter, _playerA.localScale.y * 0.5f);
-            _playerAVisual.RefreshPosition(_playerAUnit.Position);
-            LogUnitStatus(_playerAUnit, _playerA.position);
-        }
-
-        private void CreateEnemyA()
-        {
-            CreateEnemyAUnit();
-            CreateEnemyAVisual();
-        }
-
-        private void CreateEnemyAUnit()
-        {
-            var factory = new CombatUnitFactory();
-            var pilot = new PilotData(2, "敌方机兵", 3);
-            var mech = new MechData(2, "训练敌机", new BasicAttackData(8, 1, 3), 100, 3);
-
-            _enemyAUnit = factory.Create(
-                EnemyAUnitId, pilot, mech,
-                new Vector2Int(_boardWidth - 1, _boardHeight - 1));
-        }
-
-        private void CreateEnemyAVisual()
-        {
-            var unitObject = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            unitObject.name = "EnemyA";
-            unitObject.transform.localScale = new Vector3(
-                _cellSize * 0.6f,
-                _cellSize,
-                _cellSize * 0.6f);
-
-            var anchorObject = new GameObject("HealthBarAnchor");
-            anchorObject.transform.SetParent(unitObject.transform, false);
-            anchorObject.transform.localPosition = Vector3.up * 0.8f;
-            anchorObject.transform.localScale = Vector3.one;
-            _enemyAHealthBarAnchor = anchorObject.transform;
-
-            _enemyA = unitObject.transform;
-            _enemyAVisual = new CombatUnitVisual(
-                _enemyA,
-                _coordConverter,
-                _enemyA.localScale.y * 0.5f);
-            _enemyAVisual.RefreshPosition(_enemyAUnit.Position);
-            LogUnitStatus(_enemyAUnit, _enemyA.position);
+                _combatUnitColliders.Add(unitCollider, combatUnit);
+                LogUnitStatus(combatUnit, unitObject.transform.position);
+            }
         }
 
         private void LogUnitStatus(CombatUnit combatUnit, Vector3 worldPosition)
@@ -271,24 +238,17 @@ namespace MechStorm.Presentation
                 return;
             }
 
-            if (!_playerA.TryGetComponent<Collider>(out var playerACollider) ||
-                !_enemyA.TryGetComponent<Collider>(out var enemyACollider))
+            if (_combatUnitColliders.Count != _scenarioBuildResult.Units.Count)
             {
-                Log.Error("[MechStorm] Combat unit input requires unit colliders.");
+                Log.Error("[MechStorm] Every combat unit requires an input collider.");
                 return;
             }
 
-            var combatUnitColliders =
-                new Dictionary<Collider, CombatUnit>
-                {
-                    [playerACollider] = _playerAUnit,
-                    [enemyACollider] = _enemyAUnit,
-                };
             _boardInputter = new BattleBoardInputter(
                 camera,
                 boardCollider,
                 _coordConverter,
-                combatUnitColliders,
+                _combatUnitColliders,
                 _battleInputLayerMask.value,
                 () => _debugPanel != null && _debugPanel.IsPointerOverPanel());
         }
@@ -296,8 +256,7 @@ namespace MechStorm.Presentation
         private void CreatePresentationController()
         {
             if (_battleSession == null ||
-                _playerAVisual == null ||
-                _enemyAVisual == null ||
+                _combatUnitVisuals.Count != _scenarioBuildResult.Units.Count ||
                 _boardInputter == null ||
                 _rangeHighlighter == null)
             {
@@ -305,52 +264,32 @@ namespace MechStorm.Presentation
                 return;
             }
 
-            var combatUnitVisuals =
-                new Dictionary<CombatUnit, CombatUnitVisual>
-                {
-                    [_playerAUnit] = _playerAVisual,
-                    [_enemyAUnit] = _enemyAVisual,
-                };
             _presentationController = new BattlePresentationController(
-                _battleSession, combatUnitVisuals, _boardInputter, _rangeHighlighter);
+                _battleSession, _combatUnitVisuals, _boardInputter, _rangeHighlighter);
         }
 
         private void CreateDebugTools()
         {
             var camera = _camera != null ? _camera : Camera.main;
-            _unitPresenter = new TempBattleUnitPresenter(
-                _playerAUnit,
-                _playerAHealthBarAnchor,
-                _enemyAUnit,
-                _enemyAHealthBarAnchor,
-                camera);
-
-            var debugAbility = new AbilityDefinition(
-                101, "强袭炮击", 1, Math.Max(1, _boardWidth + _boardHeight - 2),
-                20, 2, TargetRule.EnemyUnit);
-            _debugActions = new TempBattleDebugActions(
-                _battleSession,
-                _presentationController,
-                _playerAUnit,
-                debugAbility,
-                _unitPresenter,
-                _debugDamage);
-            _debugPanel?.Bind(_debugActions);
-        }
-
-        private void CreateBattleSession()
-        {
-            if (_playerAUnit == null || _enemyAUnit == null)
+            if (_presentationController == null || camera == null)
             {
-                Log.Error("[MechStorm] BattleSession requires PlayerA and EnemyA.");
+                Log.Error("[MechStorm] Temporary battle debug tools require a presentation controller and camera.");
                 return;
             }
 
-            _battleSession = new BattleSession(
-                _boardWidth,
-                _boardHeight,
-                new[] { _playerAUnit },
-                new[] { _enemyAUnit });
+            _unitPresenter = new TempBattleUnitPresenter(
+                _healthBarAnchors,
+                camera);
+
+            var teamAUnits = _battleSession.GetFactionCombatUnits(CombatFaction.TeamA);
+            _debugActions = new TempBattleDebugActions(
+                _battleSession,
+                _presentationController,
+                teamAUnits[0],
+                _scenarioBuildResult.AbilitiesByUnitId,
+                _unitPresenter,
+                _debugDamage);
+            _debugPanel?.Bind(_debugActions);
             var currentUnit = _battleSession.CurrentCombatUnit;
             Log.Info(
                 $"[MechStorm] Battle Started: " +

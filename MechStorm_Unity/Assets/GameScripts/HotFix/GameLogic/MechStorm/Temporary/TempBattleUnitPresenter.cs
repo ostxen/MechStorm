@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using MechStorm.Battle.Units;
 using MechStorm.Presentation.Units;
 using UnityEngine;
@@ -7,60 +8,64 @@ namespace MechStorm.Presentation
 {
     public sealed class TempBattleUnitPresenter
     {
-        private readonly CombatUnit _playerAUnit;
-        private readonly CombatUnit _enemyAUnit;
-        private readonly UnitHealthBarView _playerAHealthBarView;
-        private readonly UnitHealthBarView _enemyAHealthBarView;
+        private readonly Dictionary<CombatUnit, UnitHealthBarView> _healthBarViews;
 
         public TempBattleUnitPresenter(
-            CombatUnit playerAUnit,
-            Transform playerAHealthBarAnchor,
-            CombatUnit enemyAUnit,
-            Transform enemyAHealthBarAnchor,
+            IReadOnlyDictionary<CombatUnit, Transform> healthBarAnchors,
             Camera camera)
         {
-            _playerAUnit = playerAUnit ?? throw new ArgumentNullException(nameof(playerAUnit));
-            _enemyAUnit = enemyAUnit ?? throw new ArgumentNullException(nameof(enemyAUnit));
-            if (playerAHealthBarAnchor == null)
+            if (healthBarAnchors == null)
             {
-                throw new ArgumentNullException(nameof(playerAHealthBarAnchor));
+                throw new ArgumentNullException(nameof(healthBarAnchors));
             }
 
-            if (enemyAHealthBarAnchor == null)
+            _healthBarViews = new Dictionary<CombatUnit, UnitHealthBarView>(healthBarAnchors.Count);
+            foreach (var pair in healthBarAnchors)
             {
-                throw new ArgumentNullException(nameof(enemyAHealthBarAnchor));
+                if (pair.Key == null)
+                {
+                    throw new ArgumentException(
+                        "Health bar anchors cannot contain a null combat unit.",
+                        nameof(healthBarAnchors));
+                }
+
+                if (pair.Value == null)
+                {
+                    throw new ArgumentException(
+                        $"Combat unit {pair.Key.UnitId} requires a health bar anchor.",
+                        nameof(healthBarAnchors));
+                }
+
+                _healthBarViews.Add(pair.Key, new UnitHealthBarView(pair.Value, camera));
             }
 
-            _playerAHealthBarView = new UnitHealthBarView(playerAHealthBarAnchor, camera);
-            _enemyAHealthBarView = new UnitHealthBarView(enemyAHealthBarAnchor, camera);
             RefreshAll();
             RefreshFacing();
         }
 
         public void Refresh(CombatUnit combatUnit)
         {
-            if (ReferenceEquals(combatUnit, _playerAUnit))
+            if (combatUnit != null &&
+                _healthBarViews.TryGetValue(combatUnit, out var healthBarView))
             {
-                Refresh(_playerAUnit, _playerAHealthBarView);
-                return;
-            }
-
-            if (ReferenceEquals(combatUnit, _enemyAUnit))
-            {
-                Refresh(_enemyAUnit, _enemyAHealthBarView);
+                Refresh(combatUnit, healthBarView);
             }
         }
 
         public void RefreshAll()
         {
-            Refresh(_playerAUnit, _playerAHealthBarView);
-            Refresh(_enemyAUnit, _enemyAHealthBarView);
+            foreach (var pair in _healthBarViews)
+            {
+                Refresh(pair.Key, pair.Value);
+            }
         }
 
         public void RefreshFacing()
         {
-            _playerAHealthBarView.RefreshFacing();
-            _enemyAHealthBarView.RefreshFacing();
+            foreach (var healthBarView in _healthBarViews.Values)
+            {
+                healthBarView.RefreshFacing();
+            }
         }
 
         private static void Refresh(CombatUnit combatUnit, UnitHealthBarView healthBarView)

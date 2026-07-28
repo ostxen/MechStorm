@@ -25,6 +25,7 @@ namespace MechStorm.Battle
 
         private int _actionSequence;
         private BattleOutcome _outcome;
+        private Vector2Int _currentActionStartPosition;
 
         public BattleSession(int boardWidth, int boardHeight, IEnumerable<CombatUnit> teamAUnits, IEnumerable<CombatUnit> teamBUnits, IEnumerable<CombatUnit> neutralUnits = null)
         {
@@ -40,6 +41,7 @@ namespace MechStorm.Battle
             ValidateUnitPositions(_unitRegistry.GetFactionUnits(CombatFaction.Neutral), nameof(neutralUnits));
             ValidateAliveUnitPositionsDoNotOverlap();
             _turnCoordinator = new TurnCoordinator(_unitRegistry);
+            _currentActionStartPosition = CurrentCombatUnit.Position;
             _outcome = BattleOutcome.InProgress;
         }
 
@@ -52,6 +54,11 @@ namespace MechStorm.Battle
         public CombatFaction CurrentFaction => _turnCoordinator.CurrentFaction;
 
         public CombatUnit CurrentCombatUnit => _turnCoordinator.CurrentCombatUnit;
+
+        /// <summary>
+        /// 当前机兵本次行动的移动范围锚点；暂定走位不会改变该位置。
+        /// </summary>
+        public Vector2Int CurrentActionStartPosition => _currentActionStartPosition;
 
         /// <summary>
         /// 是否已经产生最终胜负。结束后所有改变战场或推进回合的入口都会失败。
@@ -75,11 +82,68 @@ namespace MechStorm.Battle
             {
                 unitSnapshots.Add(new BattleUnitSnapshot(unit.UnitId, _unitRegistry.GetFaction(unit), unit.Position,
                     unit.MechRuntime.CurrentDurability, unit.Mech.MaxDurability,
-                    unit.PilotRuntime.CurrentActionPoint, unit.Pilot.MaxActionPoint));
+                    unit.PilotRuntime.CurrentActionPoint, unit.Pilot.MaxActionPoint,
+                    _turnCoordinator.HasUnitActed(unit)));
             }
 
             return new BattleSnapshot(Grid.Width, Grid.Height, CurrentRoundNumber, CurrentFaction,
-                CurrentCombatUnit.UnitId, unitSnapshots, _outcome);
+                CurrentCombatUnit.UnitId, unitSnapshots, _outcome, _currentActionStartPosition);
+        }
+
+        /// <summary>
+        /// 判断指定机兵能否在当前阵营回合内被选为行动者。
+        /// </summary>
+        public bool CanSelectCurrentFactionCombatUnit(CombatUnit combatUnit)
+        {
+            return !IsBattleEnded && _turnCoordinator.CanSelectCombatUnit(combatUnit);
+        }
+
+        /// <summary>
+        /// 切换到当前阵营未行动机兵，并将上一机兵回退到其行动开始位置。
+        /// </summary>
+        public BattleActionResult TrySelectCurrentFactionCombatUnit(CombatUnit combatUnit)
+        {
+            if (combatUnit == null)
+            {
+                throw new ArgumentNullException(nameof(combatUnit));
+            }
+
+            if (!_unitRegistry.Contains(combatUnit))
+            {
+                throw new ArgumentException(
+                    "Selected unit does not belong to this battle session.",
+                    nameof(combatUnit));
+            }
+
+            var actorUnit = CurrentCombatUnit;
+            var sequence = ++_actionSequence;
+            if (IsBattleEnded)
+            {
+                return RecordBattleEndedFailure(
+                    sequence, BattleActionType.SelectUnit, actorUnit);
+            }
+
+            if (!_turnCoordinator.CanSelectCombatUnit(combatUnit))
+            {
+                var failedResult = BattleActionResult.Failed(sequence,
+                    BattleActionType.SelectUnit, actorUnit,
+                    BattleActionFailureReason.InvalidUnitSelection);
+                return RecordAction(failedResult);
+            }
+
+            var positionBefore = actorUnit.Position;
+            var actionPointBefore = combatUnit.PilotRuntime.CurrentActionPoint;
+            if (!ReferenceEquals(actorUnit, combatUnit))
+            {
+                actorUnit.MoveTo(_currentActionStartPosition);
+                _turnCoordinator.SelectCombatUnit(combatUnit);
+                _currentActionStartPosition = combatUnit.Position;
+            }
+
+            var result = BattleActionResult.UnitSelectionSucceeded(sequence, actorUnit,
+                combatUnit, positionBefore, actorUnit.Position, actionPointBefore,
+                combatUnit.PilotRuntime.CurrentActionPoint);
+            return RecordAction(result, nextUnitId: combatUnit.UnitId);
         }
 
         /// <summary>
@@ -95,7 +159,8 @@ namespace MechStorm.Battle
             }
 
             var positionBefore = actorUnit.Position;
-            var result = !_movementResolver.TryMoveTo(actorUnit, target)
+            var result = !_movementResolver.TryMoveTo(
+                    actorUnit, _currentActionStartPosition, target)
                 ? BattleActionResult.Failed(sequence, BattleActionType.Move, actorUnit, BattleActionFailureReason.InvalidMoveTarget)
                 : BattleActionResult.MoveSucceeded(sequence, actorUnit, positionBefore, actorUnit.Position);
             return RecordAction(result);
@@ -144,7 +209,13 @@ namespace MechStorm.Battle
             UpdateOutcomeAfterDamage(targetUnit);
             var successResult = BattleActionResult.AttackSucceeded(sequence, attackerUnit, targetUnit,
                 durabilityBefore, targetUnit.MechRuntime.CurrentDurability, _outcome);
-            return RecordAction(successResult, targetUnitId: targetUnit.UnitId);
+            RecordAction(successResult, targetUnitId: targetUnit.UnitId);
+            if (!IsBattleEnded)
+            {
+                EndCurrentUnitAction();
+            }
+
+            return successResult;
         }
 
         /// <summary>
@@ -198,7 +269,13 @@ namespace MechStorm.Battle
             var successResult = BattleActionResult.AbilitySucceeded(sequence, actorUnit, targetUnit,
                 ability.AbilityId, actionPointBefore, actorUnit.PilotRuntime.CurrentActionPoint,
                 durabilityBefore, targetUnit.MechRuntime.CurrentDurability, _outcome);
-            return RecordAction(successResult, targetUnitId: targetUnit.UnitId);
+            RecordAction(successResult, targetUnitId: targetUnit.UnitId);
+            if (!IsBattleEnded)
+            {
+                EndCurrentUnitAction();
+            }
+
+            return successResult;
         }
 
         /// <summary>
@@ -221,6 +298,7 @@ namespace MechStorm.Battle
             _turnCoordinator.EndCurrentUnitAction();
 
             var nextCombatUnit = CurrentCombatUnit;
+            _currentActionStartPosition = nextCombatUnit.Position;
             var result = BattleActionResult.ActionEnded(sequence, actorUnit, nextCombatUnit, roundNumberBefore,
                 CurrentRoundNumber, factionBefore, CurrentFaction, actionPointsBefore[nextCombatUnit.UnitId],
                 nextCombatUnit.PilotRuntime.CurrentActionPoint);
@@ -243,14 +321,17 @@ namespace MechStorm.Battle
             var roundNumberBefore = CurrentRoundNumber;
             var factionBefore = CurrentFaction;
             var actionPointsBefore = CaptureActionPoints();
+            var positionBefore = actorUnit.Position;
+            actorUnit.MoveTo(_currentActionStartPosition);
 
             _turnCoordinator.EndCurrentFactionTurn();
 
             var nextCombatUnit = CurrentCombatUnit;
+            _currentActionStartPosition = nextCombatUnit.Position;
             var result = BattleActionResult.FactionTurnEnded(
                 sequence, actorUnit, nextCombatUnit, roundNumberBefore, CurrentRoundNumber,
                 factionBefore, CurrentFaction, actionPointsBefore[nextCombatUnit.UnitId],
-                nextCombatUnit.PilotRuntime.CurrentActionPoint);
+                nextCombatUnit.PilotRuntime.CurrentActionPoint, positionBefore, actorUnit.Position);
             return RecordAction(result, nextUnitId: nextCombatUnit.UnitId);
         }
 
@@ -289,7 +370,8 @@ namespace MechStorm.Battle
                 return Array.Empty<Vector2Int>();
             }
 
-            return _movementResolver.GetReachablePositions(CurrentCombatUnit);
+            return _movementResolver.GetReachablePositions(
+                CurrentCombatUnit, _currentActionStartPosition);
         }
 
         /// <summary>

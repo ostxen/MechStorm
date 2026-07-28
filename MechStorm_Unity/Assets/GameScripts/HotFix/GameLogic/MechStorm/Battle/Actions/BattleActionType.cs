@@ -5,6 +5,11 @@ namespace MechStorm.Battle.Actions
     /// </summary>
     public enum BattleActionType
     {
+        /// <summary>
+        /// 在当前阵营内切换到另一台尚未行动的机兵。
+        /// </summary>
+        SelectUnit,
+
         Move,
         Attack,
         EndUnitAction,

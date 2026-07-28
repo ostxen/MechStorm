@@ -121,6 +121,45 @@ namespace MechStorm.Battle.Tests.Turns
         }
 
         [Test]
+        public void SelectCombatUnit_AllowsAliveUnactedUnitFromCurrentFaction()
+        {
+            var firstTeamAUnit = CreateCombatUnit(1, currentActionPoint: 3);
+            var selectedTeamAUnit = CreateCombatUnit(2, currentActionPoint: 1);
+            var teamBUnit = CreateCombatUnit(3);
+            var coordinator = CreateTurnCoordinator(
+                new[] { firstTeamAUnit, selectedTeamAUnit },
+                new[] { teamBUnit });
+
+            coordinator.SelectCombatUnit(selectedTeamAUnit);
+
+            Assert.AreSame(selectedTeamAUnit, coordinator.CurrentCombatUnit);
+            Assert.AreEqual(10, selectedTeamAUnit.PilotRuntime.CurrentActionPoint);
+            Assert.IsFalse(coordinator.HasUnitActed(firstTeamAUnit));
+            Assert.IsFalse(coordinator.HasUnitActed(selectedTeamAUnit));
+        }
+
+        [Test]
+        public void CanSelectCombatUnit_RejectsEnemyDeadAndAlreadyActedUnits()
+        {
+            var firstTeamAUnit = CreateCombatUnit(1);
+            var secondTeamAUnit = CreateCombatUnit(2);
+            var deadTeamAUnit = CreateCombatUnit(3);
+            var teamBUnit = CreateCombatUnit(4);
+            deadTeamAUnit.MechRuntime.TakeDamage(deadTeamAUnit.Mech.MaxDurability);
+            var coordinator = CreateTurnCoordinator(
+                new[] { firstTeamAUnit, secondTeamAUnit, deadTeamAUnit },
+                new[] { teamBUnit });
+            coordinator.SelectCombatUnit(secondTeamAUnit);
+            coordinator.EndCurrentUnitAction();
+
+            Assert.IsTrue(coordinator.HasUnitActed(secondTeamAUnit));
+            Assert.IsFalse(coordinator.CanSelectCombatUnit(secondTeamAUnit));
+            Assert.IsFalse(coordinator.CanSelectCombatUnit(deadTeamAUnit));
+            Assert.IsFalse(coordinator.CanSelectCombatUnit(teamBUnit));
+            Assert.IsTrue(coordinator.CanSelectCombatUnit(firstTeamAUnit));
+        }
+
+        [Test]
         public void EndCurrentFactionTurn_SkipsRemainingFactionUnits()
         {
             var firstTeamAUnit = CreateCombatUnit(1, currentActionPoint: 3);

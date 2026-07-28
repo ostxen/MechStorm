@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using Cysharp.Threading.Tasks;
 using MechStorm.Battle;
@@ -19,24 +20,26 @@ namespace MechStorm.Presentation
     {
         private readonly BattlePresentationController _presentationController;
         private readonly BattleSession _battleSession;
-        private readonly CombatUnit _playerAUnit;
-        private readonly AbilityDefinition _debugAbility;
+        private readonly CombatUnit _debugDamageTarget;
+        private readonly IReadOnlyDictionary<int, IReadOnlyList<AbilityDefinition>> _abilitiesByUnitId;
         private readonly TempBattleUnitPresenter _unitPresenter;
         private readonly int _debugDamage;
 
         public TempBattleDebugActions(
             BattleSession battleSession,
             BattlePresentationController presentationController,
-            CombatUnit playerAUnit,
-            AbilityDefinition debugAbility,
+            CombatUnit debugDamageTarget,
+            IReadOnlyDictionary<int, IReadOnlyList<AbilityDefinition>> abilitiesByUnitId,
             TempBattleUnitPresenter unitPresenter,
             int debugDamage)
         {
             _battleSession = battleSession ?? throw new ArgumentNullException(nameof(battleSession));
             _presentationController = presentationController ??
                 throw new ArgumentNullException(nameof(presentationController));
-            _playerAUnit = playerAUnit ?? throw new ArgumentNullException(nameof(playerAUnit));
-            _debugAbility = debugAbility ?? throw new ArgumentNullException(nameof(debugAbility));
+            _debugDamageTarget = debugDamageTarget ??
+                throw new ArgumentNullException(nameof(debugDamageTarget));
+            _abilitiesByUnitId = abilitiesByUnitId ??
+                throw new ArgumentNullException(nameof(abilitiesByUnitId));
             _unitPresenter = unitPresenter ?? throw new ArgumentNullException(nameof(unitPresenter));
             _debugDamage = debugDamage;
         }
@@ -73,11 +76,11 @@ namespace MechStorm.Presentation
         public int CurrentUnitMaxDurability =>
             _battleSession.CurrentCombatUnit.Mech.MaxDurability;
 
-        public string AbilityName => _debugAbility.Name;
+        public string AbilityName => CurrentAbility?.Name ?? "无主动技能";
 
-        public int AbilityActionPointCost => _debugAbility.ActionPointCost;
+        public int AbilityActionPointCost => CurrentAbility?.ActionPointCost ?? 0;
 
-        public int AbilityDamage => _debugAbility.Damage;
+        public int AbilityDamage => CurrentAbility?.Damage ?? 0;
 
         public int DebugDamage => _debugDamage;
 
@@ -112,6 +115,12 @@ namespace MechStorm.Presentation
                     return "对局已经结束";
                 }
 
+                var ability = CurrentAbility;
+                if (ability == null)
+                {
+                    return "当前单位没有主动技能";
+                }
+
                 var currentUnit = _battleSession.CurrentCombatUnit;
                 if (currentUnit.IsDead())
                 {
@@ -119,21 +128,29 @@ namespace MechStorm.Presentation
                 }
 
                 var currentActionPoint = currentUnit.PilotRuntime.CurrentActionPoint;
-                if (currentActionPoint < _debugAbility.ActionPointCost)
+                if (currentActionPoint < ability.ActionPointCost)
                 {
-                    return $"AP 不足：需要 {_debugAbility.ActionPointCost}，当前 {currentActionPoint}";
+                    return $"AP 不足：需要 {ability.ActionPointCost}，当前 {currentActionPoint}";
                 }
 
-                return _battleSession.GetCurrentCombatUnitAbilityTargets(_debugAbility).Count == 0
+                return _battleSession.GetCurrentCombatUnitAbilityTargets(ability).Count == 0
                     ? "范围内没有可用目标"
                     : null;
             }
         }
 
-        public string AbilitySummary =>
-            $"{_debugAbility.Name}（AP {_debugAbility.ActionPointCost}，" +
-            $"射程 {_debugAbility.MinRange}-{_debugAbility.MaxRange}，" +
-            $"伤害 {_debugAbility.Damage}）";
+        public string AbilitySummary
+        {
+            get
+            {
+                var ability = CurrentAbility;
+                return ability == null
+                    ? "当前单位没有主动技能"
+                    : $"{ability.Name}（AP {ability.ActionPointCost}，" +
+                      $"射程 {ability.MinRange}-{ability.MaxRange}，" +
+                      $"伤害 {ability.Damage}）";
+            }
+        }
 
         public void Tick()
         {
@@ -148,6 +165,12 @@ namespace MechStorm.Presentation
             {
                 case BattleInputAction.CurrentUnitSelected:
                     Log.Info($"[MechStorm] Selected current unit {actionUnit.Pilot.Name}.");
+                    break;
+                case BattleInputAction.CurrentUnitChanged:
+                    Log.Info(
+                        $"[MechStorm] Switched current unit from " +
+                        $"{actionResult.ActorUnit.Pilot.Name} to " +
+                        $"{actionResult.NextCombatUnit.Pilot.Name}.");
                     break;
                 case BattleInputAction.CurrentUnitMoved:
                     Log.Info(
@@ -192,17 +215,18 @@ namespace MechStorm.Presentation
                 return;
             }
 
-            if (_playerAUnit.MechRuntime.IsDestroyed)
+            if (_debugDamageTarget.MechRuntime.IsDestroyed)
             {
-                Log.Info("[MechStorm] PlayerA is already destroyed.");
+                Log.Info($"[MechStorm] {_debugDamageTarget.Pilot.Name} is already destroyed.");
                 return;
             }
 
-            _playerAUnit.MechRuntime.TakeDamage(_debugDamage);
-            _unitPresenter.Refresh(_playerAUnit);
+            _debugDamageTarget.MechRuntime.TakeDamage(_debugDamage);
+            _unitPresenter.Refresh(_debugDamageTarget);
             Log.Info(
-                $"[MechStorm] PlayerA took {_debugDamage} damage, " +
-                $"HP={_playerAUnit.MechRuntime.CurrentDurability}/{_playerAUnit.Mech.MaxDurability}");
+                $"[MechStorm] {_debugDamageTarget.Pilot.Name} took {_debugDamage} damage, " +
+                $"HP={_debugDamageTarget.MechRuntime.CurrentDurability}/" +
+                $"{_debugDamageTarget.Mech.MaxDurability}");
         }
 
         public void ConfirmBasicAttack()
@@ -227,7 +251,7 @@ namespace MechStorm.Presentation
             var unavailableReason = AbilityUnavailableReason;
             if (!string.IsNullOrEmpty(unavailableReason))
             {
-                Log.Warning($"[MechStorm] 无法使用 {_debugAbility.Name}：{unavailableReason}。");
+                Log.Warning($"[MechStorm] 无法使用 {AbilityName}：{unavailableReason}。");
                 return;
             }
 
@@ -236,7 +260,13 @@ namespace MechStorm.Presentation
                 return;
             }
 
-            _presentationController.BeginAbilityTargeting(_debugAbility);
+            var ability = CurrentAbility;
+            if (ability == null)
+            {
+                return;
+            }
+
+            _presentationController.BeginAbilityTargeting(ability);
             Log.Info($"[MechStorm] 已选择 {AbilitySummary}，请选择范围内目标。");
         }
 
@@ -344,13 +374,42 @@ namespace MechStorm.Presentation
         {
             _unitPresenter.Refresh(result.ActorUnit);
             _unitPresenter.Refresh(result.TargetUnit);
+            var ability = FindAbility(result.ActorUnit.UnitId, result.AbilityId);
+            var abilityName = ability?.Name ?? $"Ability {result.AbilityId}";
             Log.Info(
                 $"[MechStorm] {result.ActorUnit.Pilot.Name} used " +
-                $"{_debugAbility.Name} on {result.TargetUnit.Pilot.Name}, " +
+                $"{abilityName} on {result.TargetUnit.Pilot.Name}, " +
                 $"AP={result.ActionPointBefore}->{result.ActionPointAfter}, " +
                 $"HP={result.DurabilityBefore}->{result.DurabilityAfter}/" +
                 $"{result.TargetUnit.Mech.MaxDurability}");
             LogDestroyedUnit(result.TargetUnit, result.DurabilityAfter.GetValueOrDefault());
+        }
+
+        private AbilityDefinition CurrentAbility
+        {
+            get
+            {
+                var currentUnitId = _battleSession.CurrentCombatUnit.UnitId;
+                return FindAbility(currentUnitId, null);
+            }
+        }
+
+        private AbilityDefinition FindAbility(int unitId, int? abilityId)
+        {
+            if (!_abilitiesByUnitId.TryGetValue(unitId, out var abilities))
+            {
+                return null;
+            }
+
+            foreach (var ability in abilities)
+            {
+                if (!abilityId.HasValue || ability.AbilityId == abilityId.Value)
+                {
+                    return ability;
+                }
+            }
+
+            return null;
         }
 
         private void LogDestroyedUnit(CombatUnit unit, int durability)

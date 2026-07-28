@@ -6,6 +6,12 @@ namespace MechStorm.Battle.Actions
     public enum BattleActionFailureReason
     {
         None,
+
+        /// <summary>
+        /// 目标不是当前阵营中存活且尚未行动的机兵。
+        /// </summary>
+        InvalidUnitSelection,
+
         InvalidMoveTarget,
         TargetOutOfRange,
         SameFactionTarget,
