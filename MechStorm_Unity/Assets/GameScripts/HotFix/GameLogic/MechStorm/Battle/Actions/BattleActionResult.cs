@@ -444,6 +444,33 @@ namespace MechStorm.Battle.Actions
         }
 
         /// <summary>
+        /// 创建基础攻击失败结果，并保留请求中的目标身份和失败后的对局结果。
+        /// </summary>
+        public static BattleActionResult AttackFailed(int sequence, CombatUnit actorUnit,
+            CombatUnit targetUnit, BattleActionFailureReason failureReason,
+            BattleOutcome outcome = null)
+        {
+            if (actorUnit == null)
+            {
+                throw new ArgumentNullException(nameof(actorUnit));
+            }
+
+            if (targetUnit == null)
+            {
+                throw new ArgumentNullException(nameof(targetUnit));
+            }
+
+            if (failureReason == BattleActionFailureReason.None)
+            {
+                throw new ArgumentException("A failed attack must provide a failure reason.",
+                    nameof(failureReason));
+            }
+
+            return new BattleActionResult(sequence, BattleActionType.Attack, failureReason, actorUnit,
+                targetUnit, null, _emptyChangeTypes, outcome: outcome);
+        }
+
+        /// <summary>
         /// 创建技能失败结果，并保留请求中的技能、目标身份和失败后的对局结果。
         /// </summary>
         public static BattleActionResult AbilityFailed(int sequence, CombatUnit actorUnit,
@@ -496,6 +523,13 @@ namespace MechStorm.Battle.Actions
             if (failureReason == BattleActionFailureReason.None)
             {
                 throw new ArgumentException("A failed action must provide a failure reason.", nameof(failureReason));
+            }
+
+            if (actionType == BattleActionType.Attack || actionType == BattleActionType.UseAbility)
+            {
+                throw new ArgumentException(
+                    "Targeted actions must use their dedicated failure result factory.",
+                    nameof(actionType));
             }
 
             return new BattleActionResult(sequence, actionType, failureReason, actorUnit, null, null,

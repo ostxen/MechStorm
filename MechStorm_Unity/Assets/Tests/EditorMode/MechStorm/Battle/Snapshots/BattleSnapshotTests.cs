@@ -129,7 +129,7 @@ namespace MechStorm.Battle.Tests.Snapshots
             var targetUnit = CreateCombatUnit(2);
             var result = BattleActionResult.AttackSucceeded(3, actorUnit, targetUnit, 80, 55);
 
-            var log = new BattleActionLog(result, actorUnit.UnitId, targetUnitId: targetUnit.UnitId);
+            var log = new BattleActionLog(result);
 
             Assert.AreEqual(3, log.Sequence);
             Assert.AreEqual(BattleActionType.Attack, log.ActionType);
@@ -153,7 +153,7 @@ namespace MechStorm.Battle.Tests.Snapshots
             var result = BattleActionResult.AbilitySucceeded(
                 4, actorUnit, targetUnit, 101, 10, 7, 80, 55);
 
-            var log = new BattleActionLog(result, actorUnit.UnitId, targetUnitId: targetUnit.UnitId);
+            var log = new BattleActionLog(result);
 
             Assert.AreEqual(BattleActionType.UseAbility, log.ActionType);
             Assert.AreEqual(101, log.AbilityId);
@@ -179,8 +179,7 @@ namespace MechStorm.Battle.Tests.Snapshots
             var result = BattleActionResult.AttackSucceeded(
                 4, actorUnit, targetUnit, 20, 0, outcome);
 
-            var log = new BattleActionLog(
-                result, actorUnit.UnitId, targetUnitId: targetUnit.UnitId);
+            var log = new BattleActionLog(result);
 
             Assert.AreSame(outcome, log.Outcome);
             CollectionAssert.Contains(
@@ -188,15 +187,16 @@ namespace MechStorm.Battle.Tests.Snapshots
         }
 
         [Test]
-        public void BattleActionLog_AbilityRequiresTargetUnitId()
+        public void BattleActionLog_CopiesFailedAbilityTarget()
         {
             var actorUnit = CreateCombatUnit(1);
             var targetUnit = CreateCombatUnit(2);
             var result = BattleActionResult.AbilityFailed(
                 4, actorUnit, targetUnit, 101, BattleActionFailureReason.TargetOutOfRange);
 
-            Assert.Throws<ArgumentException>(() =>
-                new BattleActionLog(result, actorUnit.UnitId));
+            var log = new BattleActionLog(result);
+
+            Assert.AreEqual(targetUnit.UnitId, log.TargetUnitId);
         }
 
         [Test]
@@ -211,18 +211,16 @@ namespace MechStorm.Battle.Tests.Snapshots
             };
             var snapshot = new BattleSnapshot(5, 4, 1, CombatFaction.TeamA, 1, unitSnapshots);
             var result = BattleActionResult.AttackSucceeded(1, actorUnit, targetUnit, 80, 55);
-            var actionLog = new BattleActionLog(result, actorUnit.UnitId, targetUnitId: targetUnit.UnitId);
-            var failedResult = BattleActionResult.Failed(2, BattleActionType.Attack, actorUnit,
+            var actionLog = new BattleActionLog(result);
+            var failedResult = BattleActionResult.AttackFailed(2, actorUnit, targetUnit,
                 BattleActionFailureReason.TargetOutOfRange);
-            var failedActionLog = new BattleActionLog(failedResult, actorUnit.UnitId, targetUnitId: targetUnit.UnitId);
+            var failedActionLog = new BattleActionLog(failedResult);
             var abilityResult = BattleActionResult.AbilitySucceeded(
                 3, actorUnit, targetUnit, 101, 10, 7, 80, 55);
-            var abilityActionLog = new BattleActionLog(
-                abilityResult, actorUnit.UnitId, targetUnitId: targetUnit.UnitId);
+            var abilityActionLog = new BattleActionLog(abilityResult);
             var failedAbilityResult = BattleActionResult.AbilityFailed(
                 4, actorUnit, targetUnit, 101, BattleActionFailureReason.InsufficientActionPoint);
-            var failedAbilityActionLog = new BattleActionLog(
-                failedAbilityResult, actorUnit.UnitId, targetUnitId: targetUnit.UnitId);
+            var failedAbilityActionLog = new BattleActionLog(failedAbilityResult);
 
             var json = BattleDebugJsonSerializer.Serialize(snapshot,
                 new[] { actionLog, failedActionLog, abilityActionLog, failedAbilityActionLog });
@@ -269,8 +267,7 @@ namespace MechStorm.Battle.Tests.Snapshots
                 outcome);
             var result = BattleActionResult.AttackSucceeded(
                 1, actorUnit, targetUnit, 20, 0, outcome);
-            var log = new BattleActionLog(
-                result, actorUnit.UnitId, targetUnitId: targetUnit.UnitId);
+            var log = new BattleActionLog(result);
 
             var json = BattleDebugJsonSerializer.Serialize(snapshot, new[] { log });
 

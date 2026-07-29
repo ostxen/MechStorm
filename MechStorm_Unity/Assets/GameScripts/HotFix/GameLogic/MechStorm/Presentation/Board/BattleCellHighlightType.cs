@@ -27,6 +27,9 @@ namespace MechStorm.Presentation.Board
         ValidAbilityTarget,
 
         /// <summary>已选择、等待确认释放的技能目标所在格。</summary>
-        SelectedAbilityTarget
+        SelectedAbilityTarget,
+
+        /// <summary>已选择、等待选择可用行动的目标所在格。</summary>
+        SelectedActionTarget
     }
 }

@@ -57,21 +57,21 @@ namespace MechStorm.Battle.Actions
         /// <summary>
         /// 将一次 Result 复制成只保留稳定 ID 和数值的日志，避免日志依赖后续变化的单位对象。
         /// </summary>
-        public BattleActionLog(BattleActionResult result, int actorUnitId, int? targetUnitId = null, int? nextUnitId = null)
+        public BattleActionLog(BattleActionResult result)
         {
             if (result == null)
             {
                 throw new ArgumentNullException(nameof(result));
             }
 
-            ValidateUnitIds(result, actorUnitId, targetUnitId, nextUnitId);
+            ValidateResult(result);
 
             Sequence = result.Sequence;
             ActionType = result.ActionType;
             FailureReason = result.FailureReason;
-            ActorUnitId = actorUnitId;
-            TargetUnitId = targetUnitId;
-            NextUnitId = nextUnitId;
+            ActorUnitId = result.ActorUnit.UnitId;
+            TargetUnitId = result.TargetUnit?.UnitId;
+            NextUnitId = result.NextCombatUnit?.UnitId;
             AbilityId = result.AbilityId;
             ChangeTypes = CopyChangeTypes(result.ChangeTypes);
             PositionBefore = result.PositionBefore;
@@ -87,26 +87,26 @@ namespace MechStorm.Battle.Actions
             Outcome = result.Outcome;
         }
 
-        private static void ValidateUnitIds(BattleActionResult result, int actorUnitId, int? targetUnitId, int? nextUnitId)
+        private static void ValidateResult(BattleActionResult result)
         {
             if (result.Sequence <= 0)
             {
                 throw new ArgumentOutOfRangeException(nameof(result), result.Sequence, "Action sequence must be greater than zero.");
             }
 
-            if (actorUnitId <= 0)
+            if (result.ActorUnit == null || result.ActorUnit.UnitId <= 0)
             {
-                throw new ArgumentOutOfRangeException(nameof(actorUnitId), actorUnitId, "Actor unit ID must be greater than zero.");
+                throw new ArgumentException("Result must provide a valid actor unit.", nameof(result));
             }
 
-            if (targetUnitId <= 0)
+            if (result.TargetUnit?.UnitId <= 0)
             {
-                throw new ArgumentOutOfRangeException(nameof(targetUnitId), targetUnitId, "Target unit ID must be greater than zero.");
+                throw new ArgumentException("Result target unit ID must be greater than zero.", nameof(result));
             }
 
-            if (nextUnitId <= 0)
+            if (result.NextCombatUnit?.UnitId <= 0)
             {
-                throw new ArgumentOutOfRangeException(nameof(nextUnitId), nextUnitId, "Next unit ID must be greater than zero.");
+                throw new ArgumentException("Result next unit ID must be greater than zero.", nameof(result));
             }
 
             if (result.AbilityId.HasValue && result.AbilityId.Value <= 0)
@@ -117,16 +117,16 @@ namespace MechStorm.Battle.Actions
 
             var requiresTargetUnit = result.ActionType == BattleActionType.Attack ||
                                      result.ActionType == BattleActionType.UseAbility;
-            if (requiresTargetUnit && targetUnitId == null)
+            if (requiresTargetUnit && result.TargetUnit == null)
             {
-                throw new ArgumentException("Attack and ability logs must provide a target unit ID.",
-                    nameof(targetUnitId));
+                throw new ArgumentException("Attack and ability results must provide a target unit.",
+                    nameof(result));
             }
 
-            if (!requiresTargetUnit && targetUnitId != null)
+            if (!requiresTargetUnit && result.TargetUnit != null)
             {
-                throw new ArgumentException("Only attack and ability logs can provide a target unit ID.",
-                    nameof(targetUnitId));
+                throw new ArgumentException("Only attack and ability results can provide a target unit.",
+                    nameof(result));
             }
 
             if (result.ActionType == BattleActionType.UseAbility && result.AbilityId == null)
@@ -144,16 +144,16 @@ namespace MechStorm.Battle.Actions
                                      result.ActionType == BattleActionType.EndUnitAction ||
                                      result.ActionType == BattleActionType.EndFactionTurn;
             var requiresNextUnit = result.IsSuccess && changesCurrentUnit;
-            if (requiresNextUnit && nextUnitId == null)
+            if (requiresNextUnit && result.NextCombatUnit == null)
             {
-                throw new ArgumentException("Successful current unit change log must provide the next unit ID.",
-                    nameof(nextUnitId));
+                throw new ArgumentException("Successful current unit change result must provide the next unit.",
+                    nameof(result));
             }
 
-            if ((!changesCurrentUnit || !result.IsSuccess) && nextUnitId != null)
+            if ((!changesCurrentUnit || !result.IsSuccess) && result.NextCombatUnit != null)
             {
-                throw new ArgumentException("Only successful current unit change logs can provide the next unit ID.",
-                    nameof(nextUnitId));
+                throw new ArgumentException("Only successful current unit change results can provide the next unit.",
+                    nameof(result));
             }
         }
 

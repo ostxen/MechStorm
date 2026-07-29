@@ -40,6 +40,7 @@ namespace MechStorm.Presentation
         private Button _endActionButton;
         private Button _endFactionTurnButton;
         private Button _attackButton;
+        private Button _cancelActionButton;
         private Button _abilityButton;
         private Button _targetingAbilityButton;
         private Button _cancelAbilityButton;
@@ -304,6 +305,10 @@ namespace MechStorm.Presentation
             _attackButton = CreateButton("快速普通攻击",
                 AttackButton, 64);
             _normalActionsRoot.Add(_attackButton);
+            _cancelActionButton = CreateButton("取消目标选择",
+                NeutralButton, 56);
+            _cancelActionButton.style.display = DisplayStyle.None;
+            _normalActionsRoot.Add(_cancelActionButton);
             _actionDock.Add(_normalActionsRoot);
 
             _targetingActionsRoot = new VisualElement();
@@ -404,6 +409,7 @@ namespace MechStorm.Presentation
             _endActionButton.clicked += OnEndActionClicked;
             _endFactionTurnButton.clicked += OnEndFactionTurnClicked;
             _attackButton.clicked += OnAttackClicked;
+            _cancelActionButton.clicked += OnCancelActionClicked;
             _abilityButton.clicked += OnAbilityClicked;
             _targetingAbilityButton.clicked += OnAbilityClicked;
             _cancelAbilityButton.clicked += OnCancelAbilityClicked;
@@ -423,6 +429,7 @@ namespace MechStorm.Presentation
             _endActionButton.clicked -= OnEndActionClicked;
             _endFactionTurnButton.clicked -= OnEndFactionTurnClicked;
             _attackButton.clicked -= OnAttackClicked;
+            _cancelActionButton.clicked -= OnCancelActionClicked;
             _abilityButton.clicked -= OnAbilityClicked;
             _targetingAbilityButton.clicked -= OnAbilityClicked;
             _cancelAbilityButton.clicked -= OnCancelAbilityClicked;
@@ -434,7 +441,7 @@ namespace MechStorm.Presentation
 
         private void Refresh()
         {
-            var ready = _actions != null && _actions.IsBattleReady;
+            var ready = _actions != null;
             var hasSelectedUnit = ready && _actions.IsCurrentUnitSelected;
             _unitCard.style.display = hasSelectedUnit ? DisplayStyle.Flex : DisplayStyle.None;
             _actionDock.style.display = hasSelectedUnit ? DisplayStyle.Flex : DisplayStyle.None;
@@ -479,6 +486,15 @@ namespace MechStorm.Presentation
                 ? "快速普通攻击 · 请选择目标"
                 : $"快速普通攻击 · 攻击 {selectedAttackTargetName}";
             _attackButton.SetEnabled(ready && _actions.CanConfirmBasicAttack);
+            _cancelActionButton.style.display =
+                ready && _actions.ShouldShowGenericActionCancel
+                    ? DisplayStyle.Flex
+                    : DisplayStyle.None;
+            var canUseUnlockedBattleInput =
+                ready && !_actions.IsBattleEnded && !_actions.IsActionInputLocked;
+            _endActionButton.SetEnabled(canUseUnlockedBattleInput);
+            _endFactionTurnButton.SetEnabled(canUseUnlockedBattleInput);
+            _damageButton.SetEnabled(canUseUnlockedBattleInput);
             if (ready)
             {
                 var unavailableReason = _actions.AbilityUnavailableReason;
@@ -507,6 +523,7 @@ namespace MechStorm.Presentation
             _endActionButton.SetEnabled(enabled);
             _endFactionTurnButton.SetEnabled(enabled);
             _attackButton.SetEnabled(enabled);
+            _cancelActionButton.SetEnabled(enabled);
             _abilityButton.SetEnabled(enabled);
             _targetingAbilityButton.SetEnabled(enabled);
             _cancelAbilityButton.SetEnabled(enabled);
@@ -523,6 +540,7 @@ namespace MechStorm.Presentation
             _endActionButton.SetEnabled(enabled);
             _endFactionTurnButton.SetEnabled(enabled);
             _attackButton.SetEnabled(enabled);
+            _cancelActionButton.SetEnabled(enabled);
             _abilityButton.SetEnabled(enabled);
             _targetingAbilityButton.SetEnabled(enabled);
             _cancelAbilityButton.SetEnabled(enabled);
@@ -544,6 +562,12 @@ namespace MechStorm.Presentation
         private void OnAttackClicked()
         {
             _actions?.ConfirmBasicAttack();
+            Refresh();
+        }
+
+        private void OnCancelActionClicked()
+        {
+            _actions?.CancelActionSelection();
             Refresh();
         }
 

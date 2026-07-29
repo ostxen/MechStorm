@@ -120,6 +120,20 @@ namespace MechStorm.Presentation.Board
             return highlights;
         }
 
+        public IReadOnlyDictionary<Vector2Int, BattleCellHighlightType> BuildSelectedActionTarget(
+            CombatUnit selectedTarget)
+        {
+            if (selectedTarget == null)
+            {
+                throw new ArgumentNullException(nameof(selectedTarget));
+            }
+
+            return new Dictionary<Vector2Int, BattleCellHighlightType>
+            {
+                [selectedTarget.Position] = BattleCellHighlightType.SelectedActionTarget,
+            };
+        }
+
         private static bool ContainsTarget(IReadOnlyList<CombatUnit> targets, CombatUnit selectedTarget)
         {
             foreach (var target in targets)

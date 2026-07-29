@@ -17,9 +17,7 @@ namespace MechStorm.Presentation.Controllers
         CurrentUnitSelected,
         CurrentUnitChanged,
         CurrentUnitMoved,
-        AttackTargetSelected,
-        AbilityTargetSelected,
-        TargetAbilityUsed,
+        TargetSelected,
         ActionRejected,
     }
 
@@ -31,49 +29,79 @@ namespace MechStorm.Presentation.Controllers
         private readonly BattleBoardInputter _battleBoardInputter;
         private readonly BattleRangeHighlightMapper _highlightMapper;
         private readonly BattleRangeHighlighter _rangeHighlighter;
+        private readonly BattleActionSelectionCoordinator _actionSelection;
 
         private CombatUnit _selectedCombatUnit;
-        private CombatUnit _selectedAttackTarget;
-        private AbilityDefinition _targetingAbility;
-        private CombatUnit _selectedAbilityTarget;
 
         public string LastRejectionReason { get; private set; }
 
         public BattleActionResult LastActionResult { get; private set; }
 
-        public bool IsAbilityTargeting => _targetingAbility != null;
+        public BattleActionSelectionState ActionSelectionState => _actionSelection.State;
 
-        public string TargetingAbilityName => _targetingAbility?.Name;
+        public BattleActionSelection SelectedAction => _actionSelection.SelectedAction;
 
-        public CombatUnit SelectedAbilityTarget => _selectedAbilityTarget;
+        public BattleActionTargetSelection SelectedTarget => _actionSelection.SelectedTarget;
 
-        public CombatUnit SelectedAttackTarget => _selectedAttackTarget;
+        public bool IsActionInputLocked => _actionSelection.IsInputLocked;
+
+        public bool CanConfirmSelectedAction => _actionSelection.CanConfirm;
+
+        public bool IsAbilityTargeting =>
+            SelectedAction?.Kind == BattleActionSelectionKind.ActiveAbility;
+
+        public string TargetingAbilityName => SelectedAction?.Ability?.Name;
+
+        public CombatUnit SelectedAbilityTarget =>
+            IsAbilityTargeting ? SelectedTarget?.Unit : null;
+
+        public CombatUnit SelectedAttackTarget =>
+            !IsAbilityTargeting ? SelectedTarget?.Unit : null;
 
         public bool IsCurrentUnitSelected =>
             ReferenceEquals(_selectedCombatUnit, _battleSession.CurrentCombatUnit);
 
         /// <summary>
-        /// 只有对局未结束且已经选择合法目标时才能确认普通攻击。
+        /// 临时 HUD 可在目标优先路径中直接选择并确认普通攻击。
         /// </summary>
         public bool CanConfirmBasicAttack =>
-            !_battleSession.IsBattleEnded && _selectedAttackTarget != null;
+            !_battleSession.IsBattleEnded &&
+            SelectedTarget?.Unit != null &&
+            (SelectedAction == null ||
+             SelectedAction.Kind == BattleActionSelectionKind.BasicAttack) &&
+            ContainsTarget(
+                _battleSession.GetCurrentCombatUnitBasicAttackTargets(),
+                SelectedTarget.Unit);
 
         /// <summary>
         /// 只有对局未结束、已选择技能并选中合法目标时才能确认技能。
         /// </summary>
         public bool CanConfirmAbilityTargeting =>
-            !_battleSession.IsBattleEnded &&
-            _targetingAbility != null &&
-            _selectedAbilityTarget != null;
+            IsAbilityTargeting &&
+            CanConfirmSelectedAction;
+
+        public IReadOnlyList<BattleActionSelection> GetAvailableActions()
+        {
+            return _actionSelection.GetAvailableActions();
+        }
+
+        public IReadOnlyList<BattleActionSelection> GetAvailableActionsForSelectedTarget()
+        {
+            return _actionSelection.GetAvailableActionsForSelectedTarget();
+        }
 
         public BattlePresentationController(BattleSession battleSession, IReadOnlyDictionary<CombatUnit, CombatUnitVisual> combatUnitVisuals,
-            BattleBoardInputter battleBoardInputter, BattleRangeHighlighter rangeHighlighter)
+            BattleBoardInputter battleBoardInputter, BattleRangeHighlighter rangeHighlighter,
+            IReadOnlyDictionary<int, IReadOnlyList<AbilityDefinition>> abilitiesByUnitId = null)
         {
             _battleSession = battleSession ?? throw new ArgumentNullException(nameof(battleSession));
             _combatUnitVisuals = combatUnitVisuals ?? throw new ArgumentNullException(nameof(combatUnitVisuals));
             _battleBoardInputter = battleBoardInputter ?? throw new ArgumentNullException(nameof(battleBoardInputter));
             _rangeHighlighter = rangeHighlighter ?? throw new ArgumentNullException(nameof(rangeHighlighter));
             _highlightMapper = new BattleRangeHighlightMapper();
+            _actionSelection = new BattleActionSelectionCoordinator(
+                battleSession,
+                abilitiesByUnitId);
         }
 
         /// <summary>
@@ -138,14 +166,7 @@ namespace MechStorm.Presentation.Controllers
                 return;
             }
 
-            if (_selectedAttackTarget != null &&
-                !ContainsTarget(
-                    _battleSession.GetCurrentCombatUnitBasicAttackTargets(),
-                    _selectedAttackTarget))
-            {
-                _selectedAttackTarget = null;
-            }
-
+            _actionSelection.Refresh();
             RefreshRangeHighlights();
         }
 
@@ -155,65 +176,61 @@ namespace MechStorm.Presentation.Controllers
         public void ClearSelection()
         {
             _selectedCombatUnit = null;
-            _selectedAttackTarget = null;
-            _targetingAbility = null;
-            _selectedAbilityTarget = null;
+            _actionSelection.Reset();
             _rangeHighlighter.Clear();
         }
 
         /// <summary>
-        /// 选中当前单位并进入指定技能的目标选择模式；对局结束后不允许重新进入。
+        /// 选择基础攻击；目标优先时保留合法目标并直接进入待确认。
         /// </summary>
-        public void BeginAbilityTargeting(AbilityDefinition ability)
+        public bool SelectBasicAttack()
+        {
+            return TrySelectAction(BattleActionSelection.ForBasicAttack());
+        }
+
+        /// <summary>
+        /// 选择主动技能；目标优先时保留合法目标并直接进入待确认。
+        /// </summary>
+        public bool SelectAbility(AbilityDefinition ability)
         {
             if (ability == null)
             {
                 throw new ArgumentNullException(nameof(ability));
             }
 
-            LastRejectionReason = null;
-            LastActionResult = null;
-            if (_battleSession.IsBattleEnded)
-            {
-                LastRejectionReason = GetFailureReason(
-                    BattleActionFailureReason.BattleAlreadyEnded,
-                    BattleActionType.UseAbility);
-                ClearSelection();
-                return;
-            }
-
-            _selectedCombatUnit = _battleSession.CurrentCombatUnit;
-            _selectedAttackTarget = null;
-            _targetingAbility = ability;
-            _selectedAbilityTarget = null;
-            RefreshRangeHighlights();
+            return TrySelectAction(BattleActionSelection.ForAbility(ability));
         }
 
         /// <summary>
-        /// 退出技能目标选择，并恢复普通移动与攻击高亮。
+        /// 兼容临时 HUD 的技能入口。
         /// </summary>
-        public void CancelAbilityTargeting()
+        public bool BeginAbilityTargeting(AbilityDefinition ability)
         {
-            _targetingAbility = null;
-            _selectedAbilityTarget = null;
+            return SelectAbility(ability);
+        }
+
+        /// <summary>
+        /// 取消当前行动选择，保留行动者站位并恢复移动与普通攻击范围。
+        /// </summary>
+        public void CancelActionSelection()
+        {
+            _actionSelection.Cancel();
             RefreshSelection();
         }
 
-        /// <summary>
-        /// 提交已选择的技能和目标；最后一击结束对局时清空选择和全部高亮。
-        /// </summary>
-        public BattleActionResult ConfirmAbilityTargeting()
+        public void CancelAbilityTargeting()
         {
-            if (_targetingAbility == null || _selectedAbilityTarget == null)
-            {
-                throw new InvalidOperationException(
-                    "Ability targeting requires a selected target before confirmation.");
-            }
+            CancelActionSelection();
+        }
 
+        /// <summary>
+        /// 提交已选择的通用行动与目标。
+        /// </summary>
+        public BattleActionResult ConfirmSelectedAction()
+        {
             LastRejectionReason = null;
-            LastActionResult = _battleSession.TryUseAbility(
-                _targetingAbility,
-                _selectedAbilityTarget);
+            LastActionResult = _actionSelection.Confirm();
+
             if (!LastActionResult.IsSuccess)
             {
                 LastRejectionReason = GetFailureReason(
@@ -225,42 +242,48 @@ namespace MechStorm.Presentation.Controllers
                 }
                 else
                 {
-                    RefreshRangeHighlights();
+                    RefreshSelection();
                 }
 
                 return LastActionResult;
             }
 
-            _targetingAbility = null;
-            _selectedAbilityTarget = null;
             ClearSelection();
             return LastActionResult;
         }
 
         /// <summary>
-        /// 提交已选择的普通攻击目标，并按最新胜负结果刷新或清空选择。
+        /// 兼容临时 HUD 的技能确认入口。
+        /// </summary>
+        public BattleActionResult ConfirmAbilityTargeting()
+        {
+            if (!IsAbilityTargeting)
+            {
+                throw new InvalidOperationException(
+                    "An active ability must be selected before confirmation.");
+            }
+
+            return ConfirmSelectedAction();
+        }
+
+        /// <summary>
+        /// 兼容临时 HUD 的普通攻击确认入口。
         /// </summary>
         public BattleActionResult ConfirmBasicAttack()
         {
-            if (_selectedAttackTarget == null)
+            if (SelectedAction == null && !SelectBasicAttack())
             {
                 throw new InvalidOperationException(
-                    "Basic attack requires a selected target before confirmation.");
+                    "Basic attack requires a compatible selected target.");
             }
 
-            LastRejectionReason = null;
-            LastActionResult = _battleSession.AttackTargetCombatUnit(_selectedAttackTarget);
-            if (!LastActionResult.IsSuccess)
+            if (SelectedAction.Kind != BattleActionSelectionKind.BasicAttack)
             {
-                LastRejectionReason = GetFailureReason(
-                    LastActionResult.FailureReason,
-                    LastActionResult.ActionType);
-                RefreshSelection();
-                return LastActionResult;
+                throw new InvalidOperationException(
+                    "The selected action is not a basic attack.");
             }
 
-            ClearSelection();
-            return LastActionResult;
+            return ConfirmSelectedAction();
         }
 
         /// <summary>
@@ -268,6 +291,7 @@ namespace MechStorm.Presentation.Controllers
         /// </summary>
         public BattleActionResult EndCurrentUnitAction()
         {
+            ThrowIfActionInputLocked();
             LastRejectionReason = null;
             LastActionResult = _battleSession.EndCurrentUnitAction();
             if (!LastActionResult.IsSuccess)
@@ -286,6 +310,7 @@ namespace MechStorm.Presentation.Controllers
         /// </summary>
         public BattleActionResult EndCurrentFactionTurn()
         {
+            ThrowIfActionInputLocked();
             LastRejectionReason = null;
             LastActionResult = _battleSession.EndCurrentFactionTurn();
             if (!LastActionResult.IsSuccess)
@@ -302,34 +327,18 @@ namespace MechStorm.Presentation.Controllers
 
         private BattleInputAction HandleCombatUnitClick(CombatUnit currentCombatUnit, CombatUnit clickedCombatUnit)
         {
-            if (_targetingAbility != null)
+            switch (_actionSelection.State)
             {
-                var validTargets = _battleSession.GetCurrentCombatUnitAbilityTargets(
-                    _targetingAbility);
-                var isValidTarget = false;
-                foreach (var validTarget in validTargets)
-                {
-                    if (ReferenceEquals(validTarget, clickedCombatUnit))
-                    {
-                        isValidTarget = true;
-                        break;
-                    }
-                }
-
-                if (!isValidTarget)
-                {
-                    LastRejectionReason = "Select a highlighted valid ability target.";
+                case BattleActionSelectionState.ActionSelected:
+                    return SelectTargetForCurrentAction(clickedCombatUnit);
+                case BattleActionSelectionState.TargetSelected:
+                    LastRejectionReason =
+                        "Select an available action or cancel the selected target.";
                     return BattleInputAction.ActionRejected;
-                }
-
-                _selectedAbilityTarget = clickedCombatUnit;
-                RefreshRangeHighlights();
-                return BattleInputAction.AbilityTargetSelected;
-            }
-
-            if (_selectedAttackTarget != null)
-            {
-                return SelectBasicAttackTarget(clickedCombatUnit);
+                case BattleActionSelectionState.AwaitingConfirmation:
+                    LastRejectionReason =
+                        "Confirm or cancel the selected action before changing input.";
+                    return BattleInputAction.ActionRejected;
             }
 
             if (ReferenceEquals(currentCombatUnit, clickedCombatUnit))
@@ -354,12 +363,12 @@ namespace MechStorm.Presentation.Controllers
 
                 RefreshActorPosition(LastActionResult);
                 _selectedCombatUnit = clickedCombatUnit;
-                _selectedAttackTarget = null;
+                _actionSelection.Reset();
                 RefreshSelection();
                 return BattleInputAction.CurrentUnitChanged;
             }
 
-            return SelectBasicAttackTarget(clickedCombatUnit);
+            return SelectTargetBeforeAction(clickedCombatUnit);
         }
 
         private BattleInputAction HandleGridClick(CombatUnit currentCombatUnit, Vector2Int targetGridPosition)
@@ -370,15 +379,10 @@ namespace MechStorm.Presentation.Controllers
                 return BattleInputAction.ActionRejected;
             }
 
-            if (_targetingAbility != null)
+            if (_actionSelection.IsInputLocked)
             {
-                LastRejectionReason = "Select a combat unit as the ability target.";
-                return BattleInputAction.ActionRejected;
-            }
-
-            if (_selectedAttackTarget != null)
-            {
-                LastRejectionReason = "Confirm or cancel the selected attack target before moving.";
+                LastRejectionReason =
+                    "Confirm or cancel the selected action before moving.";
                 return BattleInputAction.ActionRejected;
             }
 
@@ -400,20 +404,64 @@ namespace MechStorm.Presentation.Controllers
             return BattleInputAction.CurrentUnitMoved;
         }
 
-        private BattleInputAction SelectBasicAttackTarget(CombatUnit clickedCombatUnit)
+        private BattleInputAction SelectTargetForCurrentAction(CombatUnit clickedCombatUnit)
         {
-            if (!ContainsTarget(
-                    _battleSession.GetCurrentCombatUnitBasicAttackTargets(),
-                    clickedCombatUnit))
+            if (!_actionSelection.TrySelectUnitTarget(
+                    clickedCombatUnit,
+                    out var rejectionReason))
             {
-                LastRejectionReason = "Select a highlighted valid attack target.";
+                LastRejectionReason = rejectionReason;
                 return BattleInputAction.ActionRejected;
             }
 
             _selectedCombatUnit = _battleSession.CurrentCombatUnit;
-            _selectedAttackTarget = clickedCombatUnit;
             RefreshRangeHighlights();
-            return BattleInputAction.AttackTargetSelected;
+            return BattleInputAction.TargetSelected;
+        }
+
+        private BattleInputAction SelectTargetBeforeAction(CombatUnit clickedCombatUnit)
+        {
+            if (!_actionSelection.TrySelectUnitTarget(
+                    clickedCombatUnit,
+                    out var rejectionReason))
+            {
+                LastRejectionReason = rejectionReason;
+                return BattleInputAction.ActionRejected;
+            }
+
+            _selectedCombatUnit = _battleSession.CurrentCombatUnit;
+            RefreshRangeHighlights();
+            return BattleInputAction.TargetSelected;
+        }
+
+        private bool TrySelectAction(BattleActionSelection action)
+        {
+            LastRejectionReason = null;
+            LastActionResult = null;
+            if (_battleSession.IsBattleEnded)
+            {
+                LastRejectionReason = GetFailureReason(
+                    BattleActionFailureReason.BattleAlreadyEnded,
+                    GetActionType(action));
+                ClearSelection();
+                return false;
+            }
+
+            if (!ReferenceEquals(_selectedCombatUnit, _battleSession.CurrentCombatUnit))
+            {
+                LastRejectionReason =
+                    "Select the current combat unit before selecting an action.";
+                return false;
+            }
+
+            if (!_actionSelection.TrySelectAction(action, out var rejectionReason))
+            {
+                LastRejectionReason = rejectionReason;
+                return false;
+            }
+
+            RefreshRangeHighlights();
+            return true;
         }
 
         private void RefreshActorPosition(BattleActionResult result)
@@ -437,22 +485,52 @@ namespace MechStorm.Presentation.Controllers
         /// </summary>
         private void RefreshRangeHighlights()
         {
-            if (_targetingAbility != null)
+            var selectedAction = _actionSelection.SelectedAction;
+            if (selectedAction?.Kind == BattleActionSelectionKind.ActiveAbility)
             {
                 var abilityHighlights = _highlightMapper.BuildAbility(
-                    _battleSession.GetCurrentCombatUnitAbilityPositions(_targetingAbility),
-                    _battleSession.GetCurrentCombatUnitAbilityTargets(_targetingAbility),
-                    _selectedAbilityTarget);
+                    _battleSession.GetCurrentCombatUnitAbilityPositions(selectedAction.Ability),
+                    _battleSession.GetCurrentCombatUnitAbilityTargets(selectedAction.Ability),
+                    _actionSelection.SelectedTarget?.Unit);
                 _rangeHighlighter.Show(abilityHighlights);
                 return;
             }
 
+            if (_actionSelection.State == BattleActionSelectionState.TargetSelected)
+            {
+                var targetHighlights = _highlightMapper.BuildSelectedActionTarget(
+                    _actionSelection.SelectedTarget.Unit);
+                _rangeHighlighter.Show(targetHighlights);
+                return;
+            }
+
             var highlights = _highlightMapper.Build(
-                _battleSession.GetCurrentCombatUnitReachablePositions(),
+                _actionSelection.IsInputLocked
+                    ? Array.Empty<Vector2Int>()
+                    : _battleSession.GetCurrentCombatUnitReachablePositions(),
                 _battleSession.GetCurrentCombatUnitBasicAttackPositions(),
                 _battleSession.GetCurrentCombatUnitBasicAttackTargets(),
-                _selectedAttackTarget);
+                _actionSelection.SelectedTarget?.Unit);
             _rangeHighlighter.Show(highlights);
+        }
+
+        private static BattleActionType GetActionType(BattleActionSelection action)
+        {
+            return action.Kind == BattleActionSelectionKind.ActiveAbility
+                ? BattleActionType.UseAbility
+                : BattleActionType.Attack;
+        }
+
+        private void ThrowIfActionInputLocked()
+        {
+            if (!_actionSelection.IsInputLocked)
+            {
+                return;
+            }
+
+            LastRejectionReason =
+                "Confirm or cancel the selected action before ending the action or faction turn.";
+            throw new InvalidOperationException(LastRejectionReason);
         }
 
         private static bool ContainsTarget(IReadOnlyList<CombatUnit> targets, CombatUnit target)

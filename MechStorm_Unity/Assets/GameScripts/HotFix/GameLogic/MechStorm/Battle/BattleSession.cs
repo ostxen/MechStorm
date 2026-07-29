@@ -143,7 +143,7 @@ namespace MechStorm.Battle
             var result = BattleActionResult.UnitSelectionSucceeded(sequence, actorUnit,
                 combatUnit, positionBefore, actorUnit.Position, actionPointBefore,
                 combatUnit.PilotRuntime.CurrentActionPoint);
-            return RecordAction(result, nextUnitId: combatUnit.UnitId);
+            return RecordAction(result);
         }
 
         /// <summary>
@@ -185,18 +185,18 @@ namespace MechStorm.Battle
             var sequence = ++_actionSequence;
             if (IsBattleEnded)
             {
-                var endedResult = BattleActionResult.Failed(
-                    sequence, BattleActionType.Attack, attackerUnit,
+                var endedResult = BattleActionResult.AttackFailed(
+                    sequence, attackerUnit, targetUnit,
                     BattleActionFailureReason.BattleAlreadyEnded, _outcome);
-                return RecordAction(endedResult, targetUnitId: targetUnit.UnitId);
+                return RecordAction(endedResult);
             }
 
             var failureReason = GetBasicAttackFailureReason(attackerUnit, targetUnit);
             if (failureReason != BattleActionFailureReason.None)
             {
-                var result = BattleActionResult.Failed(sequence, BattleActionType.Attack, attackerUnit,
-                    failureReason);
-                return RecordAction(result, targetUnitId: targetUnit.UnitId);
+                var result = BattleActionResult.AttackFailed(
+                    sequence, attackerUnit, targetUnit, failureReason);
+                return RecordAction(result);
             }
 
             var durabilityBefore = targetUnit.MechRuntime.CurrentDurability;
@@ -209,7 +209,7 @@ namespace MechStorm.Battle
             UpdateOutcomeAfterDamage(targetUnit);
             var successResult = BattleActionResult.AttackSucceeded(sequence, attackerUnit, targetUnit,
                 durabilityBefore, targetUnit.MechRuntime.CurrentDurability, _outcome);
-            RecordAction(successResult, targetUnitId: targetUnit.UnitId);
+            RecordAction(successResult);
             if (!IsBattleEnded)
             {
                 EndCurrentUnitAction();
@@ -246,7 +246,7 @@ namespace MechStorm.Battle
                 var endedResult = BattleActionResult.AbilityFailed(
                     sequence, actorUnit, targetUnit, ability.AbilityId,
                     BattleActionFailureReason.BattleAlreadyEnded, _outcome);
-                return RecordAction(endedResult, targetUnitId: targetUnit.UnitId);
+                return RecordAction(endedResult);
             }
 
             var failureReason = GetAbilityFailureReason(ability, actorUnit, targetUnit);
@@ -254,7 +254,7 @@ namespace MechStorm.Battle
             {
                 var failedResult = BattleActionResult.AbilityFailed(sequence, actorUnit, targetUnit,
                     ability.AbilityId, failureReason);
-                return RecordAction(failedResult, targetUnitId: targetUnit.UnitId);
+                return RecordAction(failedResult);
             }
 
             var actionPointBefore = actorUnit.PilotRuntime.CurrentActionPoint;
@@ -269,7 +269,7 @@ namespace MechStorm.Battle
             var successResult = BattleActionResult.AbilitySucceeded(sequence, actorUnit, targetUnit,
                 ability.AbilityId, actionPointBefore, actorUnit.PilotRuntime.CurrentActionPoint,
                 durabilityBefore, targetUnit.MechRuntime.CurrentDurability, _outcome);
-            RecordAction(successResult, targetUnitId: targetUnit.UnitId);
+            RecordAction(successResult);
             if (!IsBattleEnded)
             {
                 EndCurrentUnitAction();
@@ -302,7 +302,7 @@ namespace MechStorm.Battle
             var result = BattleActionResult.ActionEnded(sequence, actorUnit, nextCombatUnit, roundNumberBefore,
                 CurrentRoundNumber, factionBefore, CurrentFaction, actionPointsBefore[nextCombatUnit.UnitId],
                 nextCombatUnit.PilotRuntime.CurrentActionPoint);
-            return RecordAction(result, nextUnitId: nextCombatUnit.UnitId);
+            return RecordAction(result);
         }
 
         /// <summary>
@@ -332,7 +332,7 @@ namespace MechStorm.Battle
                 sequence, actorUnit, nextCombatUnit, roundNumberBefore, CurrentRoundNumber,
                 factionBefore, CurrentFaction, actionPointsBefore[nextCombatUnit.UnitId],
                 nextCombatUnit.PilotRuntime.CurrentActionPoint, positionBefore, actorUnit.Position);
-            return RecordAction(result, nextUnitId: nextCombatUnit.UnitId);
+            return RecordAction(result);
         }
 
         public IReadOnlyList<CombatUnit> GetCurrentFactionCombatUnits()
@@ -530,9 +530,9 @@ namespace MechStorm.Battle
             return actionPoints;
         }
 
-        private BattleActionResult RecordAction(BattleActionResult result, int? targetUnitId = null, int? nextUnitId = null)
+        private BattleActionResult RecordAction(BattleActionResult result)
         {
-            _actionLogs.Add(new BattleActionLog(result, result.ActorUnit.UnitId, targetUnitId, nextUnitId));
+            _actionLogs.Add(new BattleActionLog(result));
             return result;
         }
 

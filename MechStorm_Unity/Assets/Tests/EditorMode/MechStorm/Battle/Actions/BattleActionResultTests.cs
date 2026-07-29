@@ -222,6 +222,22 @@ namespace MechStorm.Battle.Tests.Actions
         }
 
         [Test]
+        public void AttackFailed_PreservesTargetWithoutChanges()
+        {
+            var actorUnit = CreateCombatUnit(1);
+            var targetUnit = CreateCombatUnit(2);
+
+            var result = BattleActionResult.AttackFailed(
+                5, actorUnit, targetUnit, BattleActionFailureReason.TargetOutOfRange);
+
+            Assert.IsFalse(result.IsSuccess);
+            Assert.AreEqual(BattleActionType.Attack, result.ActionType);
+            Assert.AreEqual(BattleActionFailureReason.TargetOutOfRange, result.FailureReason);
+            Assert.AreSame(targetUnit, result.TargetUnit);
+            Assert.IsEmpty(result.ChangeTypes);
+        }
+
+        [Test]
         public void AbilitySucceeded_WithoutActionPointChange_DoesNotReportSpend()
         {
             var actorUnit = CreateCombatUnit(1);
@@ -274,6 +290,16 @@ namespace MechStorm.Battle.Tests.Actions
             Assert.IsFalse(result.IsSuccess);
             Assert.AreEqual(BattleActionFailureReason.InvalidMoveTarget, result.FailureReason);
             Assert.IsEmpty(result.ChangeTypes);
+        }
+
+        [Test]
+        public void Failed_ForTargetedAction_Throws()
+        {
+            var actorUnit = CreateCombatUnit(1);
+
+            Assert.Throws<ArgumentException>(() =>
+                BattleActionResult.Failed(4, BattleActionType.Attack, actorUnit,
+                    BattleActionFailureReason.TargetOutOfRange));
         }
 
         [Test]

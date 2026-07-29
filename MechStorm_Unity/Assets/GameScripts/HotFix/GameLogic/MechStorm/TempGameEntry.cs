@@ -265,7 +265,8 @@ namespace MechStorm.Presentation
             }
 
             _presentationController = new BattlePresentationController(
-                _battleSession, _combatUnitVisuals, _boardInputter, _rangeHighlighter);
+                _battleSession, _combatUnitVisuals, _boardInputter, _rangeHighlighter,
+                _scenarioBuildResult.AbilitiesByUnitId);
         }
 
         private void CreateDebugTools()

@@ -44,14 +44,18 @@ namespace MechStorm.Presentation
             _debugDamage = debugDamage;
         }
 
-        public bool IsBattleReady => _battleSession != null;
-
         /// <summary>
         /// HUD 使用该值统一禁用会改变战场或回合的按钮。
         /// </summary>
         public bool IsBattleEnded => _battleSession.IsBattleEnded;
 
         public bool IsCurrentUnitSelected => _presentationController.IsCurrentUnitSelected;
+
+        public bool IsActionInputLocked => _presentationController.IsActionInputLocked;
+
+        public bool ShouldShowGenericActionCancel =>
+            _presentationController.IsActionInputLocked &&
+            !_presentationController.IsAbilityTargeting;
 
         public int CurrentRoundNumber => _battleSession.CurrentRoundNumber;
 
@@ -85,13 +89,13 @@ namespace MechStorm.Presentation
         public int DebugDamage => _debugDamage;
 
         public bool IsAbilityTargeting =>
-            _presentationController?.IsAbilityTargeting ?? false;
+            _presentationController.IsAbilityTargeting;
 
         public bool CanConfirmAbilityTargeting =>
-            _presentationController?.CanConfirmAbilityTargeting ?? false;
+            _presentationController.CanConfirmAbilityTargeting;
 
         public string SelectedAbilityTargetName =>
-            _presentationController?.SelectedAbilityTarget?.Pilot.Name;
+            _presentationController.SelectedAbilityTarget?.Pilot.Name;
 
         public bool CanConfirmBasicAttack => _presentationController.CanConfirmBasicAttack;
 
@@ -105,11 +109,6 @@ namespace MechStorm.Presentation
         {
             get
             {
-                if (_presentationController == null)
-                {
-                    return "战斗尚未就绪";
-                }
-
                 if (_battleSession.IsBattleEnded)
                 {
                     return "对局已经结束";
@@ -133,9 +132,7 @@ namespace MechStorm.Presentation
                     return $"AP 不足：需要 {ability.ActionPointCost}，当前 {currentActionPoint}";
                 }
 
-                return _battleSession.GetCurrentCombatUnitAbilityTargets(ability).Count == 0
-                    ? "范围内没有可用目标"
-                    : null;
+                return null;
             }
         }
 
@@ -154,11 +151,6 @@ namespace MechStorm.Presentation
 
         public void Tick()
         {
-            if (_presentationController == null)
-            {
-                return;
-            }
-
             var inputAction = _presentationController.Tick(out var actionUnit);
             var actionResult = _presentationController.LastActionResult;
             switch (inputAction)
@@ -177,18 +169,10 @@ namespace MechStorm.Presentation
                         $"[MechStorm] {actionResult.ActorUnit.Pilot.Name} moved to " +
                         $"GridPosition: {actionResult.PositionAfter.Value}");
                     break;
-                case BattleInputAction.AttackTargetSelected:
+                case BattleInputAction.TargetSelected:
                     Log.Info(
-                        $"[MechStorm] Attack target selected: " +
-                        $"{_presentationController.SelectedAttackTarget.Pilot.Name}.");
-                    break;
-                case BattleInputAction.AbilityTargetSelected:
-                    Log.Info(
-                        $"[MechStorm] Ability target selected: " +
-                        $"{_presentationController.SelectedAbilityTarget.Pilot.Name}.");
-                    break;
-                case BattleInputAction.TargetAbilityUsed:
-                    RefreshAndLogAbility(actionResult);
+                        $"[MechStorm] Action target selected: " +
+                        $"{_presentationController.SelectedTarget.Unit.Pilot.Name}.");
                     break;
                 case BattleInputAction.ActionRejected:
                     Log.Warning(
@@ -266,13 +250,23 @@ namespace MechStorm.Presentation
                 return;
             }
 
-            _presentationController.BeginAbilityTargeting(ability);
-            Log.Info($"[MechStorm] 已选择 {AbilitySummary}，请选择范围内目标。");
+            if (!_presentationController.BeginAbilityTargeting(ability))
+            {
+                Log.Warning(
+                    $"[MechStorm] 无法选择 {ability.Name}：" +
+                    $"{_presentationController.LastRejectionReason}");
+                return;
+            }
+
+            Log.Info(_presentationController.CanConfirmAbilityTargeting
+                ? $"[MechStorm] 已为 {_presentationController.SelectedAbilityTarget.Pilot.Name} " +
+                  $"选择 {AbilitySummary}，请确认释放。"
+                : $"[MechStorm] 已选择 {AbilitySummary}，请选择范围内目标。");
         }
 
         public void CancelAbilityTargeting()
         {
-            if (_presentationController?.IsAbilityTargeting != true)
+            if (!_presentationController.IsAbilityTargeting)
             {
                 return;
             }
@@ -281,9 +275,20 @@ namespace MechStorm.Presentation
             Log.Info("[MechStorm] 已取消技能目标选择。");
         }
 
+        public void CancelActionSelection()
+        {
+            if (!_presentationController.IsActionInputLocked)
+            {
+                return;
+            }
+
+            _presentationController.CancelActionSelection();
+            Log.Info("[MechStorm] 已取消行动与目标选择。");
+        }
+
         public void ConfirmAbilityTargeting()
         {
-            if (_presentationController?.CanConfirmAbilityTargeting != true)
+            if (!_presentationController.CanConfirmAbilityTargeting)
             {
                 return;
             }
@@ -305,10 +310,14 @@ namespace MechStorm.Presentation
         /// </summary>
         public void EndCurrentUnitAction()
         {
+            if (IsActionInputLocked)
+            {
+                Log.Warning("[MechStorm] Confirm or cancel the selected action before waiting.");
+                return;
+            }
+
             LogCurrentBattleState("Before End Action");
-            var result = _presentationController != null
-                ? _presentationController.EndCurrentUnitAction()
-                : _battleSession.EndCurrentUnitAction();
+            var result = _presentationController.EndCurrentUnitAction();
             if (!result.IsSuccess)
             {
                 Log.Warning($"[MechStorm] End action rejected: {result.FailureReason}");
@@ -329,10 +338,14 @@ namespace MechStorm.Presentation
         /// </summary>
         public void EndCurrentFactionTurn()
         {
+            if (IsActionInputLocked)
+            {
+                Log.Warning("[MechStorm] Confirm or cancel the selected action before ending the faction turn.");
+                return;
+            }
+
             LogCurrentBattleState("Before End Faction Turn");
-            var result = _presentationController != null
-                ? _presentationController.EndCurrentFactionTurn()
-                : _battleSession.EndCurrentFactionTurn();
+            var result = _presentationController.EndCurrentFactionTurn();
             if (!result.IsSuccess)
             {
                 Log.Warning($"[MechStorm] End faction turn rejected: {result.FailureReason}");

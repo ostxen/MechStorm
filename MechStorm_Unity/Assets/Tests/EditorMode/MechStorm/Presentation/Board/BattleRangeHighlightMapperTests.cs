@@ -120,6 +120,22 @@ namespace MechStorm.Presentation.Tests.Board
         }
 
         [Test]
+        public void BuildSelectedActionTarget_UsesGenericSelectedTargetType()
+        {
+            var mapper = new BattleRangeHighlightMapper();
+            var target = CreateCombatUnit(1, new Vector2Int(2, 0));
+
+            var highlights = mapper.BuildSelectedActionTarget(target);
+
+            Assert.AreEqual(1, highlights.Count);
+            Assert.AreEqual(
+                BattleCellHighlightType.SelectedActionTarget,
+                highlights[target.Position]);
+            Assert.Throws<ArgumentNullException>(() =>
+                mapper.BuildSelectedActionTarget(null));
+        }
+
+        [Test]
         public void BuildAbility_WithInvalidInputs_Throws()
         {
             var mapper = new BattleRangeHighlightMapper();
