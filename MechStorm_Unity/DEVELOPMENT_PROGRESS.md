@@ -3,8 +3,8 @@
 ## 当前阶段
 
 - 当前里程碑：P1 / Sprint 4
-- 当前任务：无（等待初始化 Task 4.11）
-- 当前状态：Sprint 4 进行中；Task 4.1～4.10 及 Task 4.10 验收后纯 C# 逻辑重构已完成
+- 当前任务：无（等待初始化 Task 4.12）
+- 当前状态：Sprint 4 进行中；Task 4.1～4.11 已完成
 - 最后更新：2026-07-30
 
 ## 状态约定
@@ -220,10 +220,10 @@
     8. [x] Task 4.8 行动内位置调整与行动结束规则
     9. [x] Task 4.9 可扩展行动选择状态机、输入锁定与取消回退
     10. [x] Task 4.10 行动优先/目标优先双路径面板与默认基础武器入口
-    11. [ ] Task 4.11 独立四角地格选中框与焦点反馈
+    11. [x] Task 4.11 独立四角地格选中框与焦点反馈
     12. [ ] Task 4.12 固定 2v2 战斗实验场景与重新开始
   - 阶段后续：Task 4.11 与 Task 4.12 完成并验收后，优先接入 TEngine 正式战斗流程与 UGUI `BattleMainUI`，不直接进入 Sprint 5；具体迁移任务在 Sprint 4 收尾时拆分
-  - 当前验证：Unity EditMode 289 / 289 通过；Battle.Tests、Presentation.Tests、GameLogic 与 Editor 编译及源码与配置 `git diff --check` 通过；开发者已完成默认武器栏、目标优先默认基础武器技能与技能/目标切换、技能优先自身范围与锁定，以及重构后双路径 Play Mode 冒烟验收
+  - 当前验证：Unity EditMode 292 / 292 通过；Battle.Tests、Presentation.Tests、GameLogic 与 Editor 编译及源码与配置 `git diff --check` 通过；开发者已完成四角焦点框的机兵选择、普通地格点击、目标锁定、取消回退、行动结束隐藏、范围颜色保持和点击隔离 Play Mode 验收
   - Task 4.5 当前内容：Battle 提供无副作用的技能范围与合法目标查询，并增加区分单位行动结束与阵营回合结束的权威入口；Presentation 使用“选择技能 → 点击合法目标 → 确认释放”的两阶段技能交互，已选目标使用独立高亮；全部临时操作迁移到运行时 UI Toolkit 战斗 HUD，按“左上单位状态、顶部回合、右下行动、右上折叠诊断”组织；显式指定运行时字体，避免动态 `PanelSettings` 无主题时文字不可见；`TempGameEntry` 拆分启动编排、调试动作和单位状态表现；Inspector 改为 UI Toolkit 配置视图，不再承担运行时按钮；单位血条下方显示分段 AP 条（与血条等宽，按上限分格，有 AP 为黄、空缺为灰，技能扣除和行动/回合推进恢复时同步）；调试 JSON Schema 因新增 `EndFactionTurn` 升级为 4
   - Task 4.6 当前内容：新增不可变 `BattleOutcome` 与 `BattleEndReason`，由 `BattleSession` 在 TeamA / TeamB 最后一名机兵受到普通攻击或主动技能致死伤害后立即记录胜方、全灭方和结束原因，Neutral 不参与胜负；最后一击 Result 按伤害、死亡、阵营全灭、对局结束顺序记录变化，ActionLog、Snapshot 与 JSON 同步携带 Outcome，调试 JSON Schema 升级为 5；对局结束后移动、攻击、技能、结束单位行动和结束阵营回合统一返回 `BattleAlreadyEnded` 且不改变位置、耐久、AP 或回合，行动范围与候选目标查询返回空集合；Presentation 清理选择和高亮、拒绝后续棋盘输入，临时 HUD 禁用战斗交互按钮并保留日志与导出；已覆盖 TeamA / TeamB 获胜、非最后单位死亡、Neutral 死亡、结束后无副作用、变化顺序、Outcome 不变量和序列化测试，Play Mode 已验证最后一击、结束后输入拒绝与调试导出
   - Task 4.7 完成内容：新增 `TempBattleScenarioConfig` 聚合 SO 与 Unit、Pilot、Mech、基础攻击、主动技能配置 DTO，`Test.unity` 通过 Inspector 直接引用，不使用 `Resources.Load`；`TempBattleScenarioValidator` 一次性校验棋盘、固定 2v2 阵营数量、ID、枚举、越界、重复占格、空配置、数值与射程，`TempBattleScenarioBuilder` 仅在校验通过后创建全新的 Battle 静态数据、Runtime、四个 `CombatUnit`、单位技能映射和 `BattleSession`，运行中不回写 SO；`TempGameEntry` 移除棋盘、1v1 单位和调试技能硬编码，按构建结果创建 10x10 棋盘、四单位表现、碰撞输入、血条与当前单位首个技能 HUD，缺少或非法配置时明确报错并停止；配置资源固定双方各两台单位，初始位置为 `(2,3)`、`(2,4)`、`(7,7)`、`(7,8)`；新增 13 项 Validator / Builder 测试覆盖合法映射、全量错误、无部分结果、重复构建对象隔离、Runtime 修改不污染后续构建与 SO 不回写；本任务未拆分多套独立 SO，也未替代 Sprint 11 的 Luban 正式配置
@@ -236,6 +236,7 @@
   - Task 4.10 当前内容：新增纯 C# `TempBattleActionPanelState`，将 Task 4.9 状态、显式 `ActionFirst` / `TargetFirst` 路径和技能武器依赖映射为 HUD 区域显隐，不保存 HUD 平行选择状态；临时 UI Toolkit HUD 参考《钢岚》布局改为无外层说明面板的独立基础武器栏、右下横向技能图标与大号菱形待机，技能槽按“图标在上、AP 在下”排列并在悬停时显示说明；常态默认武器栏只表示当前装备选择，Sprint 4 无第二把武器时点击仅保留动效，不进入攻击范围或行动状态；目标优先选择武器范围内目标后隐藏常态武器栏，右上以统一技能项样式纵向列出独立的基础武器技能及依赖当前武器的技能，并默认选中基础武器技能，右下立即显示攻击/取消且允许继续切换技能；技能优先路径锁定已选技能，仅显示确认/取消，并只在 `RequiresBasicWeapon` 为真时显示右上依赖武器栏；任一路径进入待确认后，当前行动释放前仍可在其合法目标间切换，非法目标不修改原选择；`RequiresBasicWeapon` 只表达依赖条件和目标优先候选资格，`BattleActionSelection.RangeSource` 显式保证目标优先使用基础武器范围、技能优先使用技能自身配置范围，查询、高亮、确认与结算共用同一来源；当前场景八个技能均依赖基础武器；`BasicAttackData` 的配置 AP 消耗已统一接入查询、实际扣费、Result/ActionLog 与失败无副作用；左下全局控制只保留结束阵营回合
   - Task 4.10 验收后重构：`BattleActionSelection` 统一校验技能范围来源与基础武器依赖组合，并提供唯一行动身份比较；Coordinator 合并行动已选/待确认的目标校验分支并复用默认行动查询，StateMachine 在清除部分选择时同步规范化路径；Controller 将行动优先、目标优先和待确认目标点击合并到单一入口；临时 HUD 适配仅改为消费统一纯 C# 契约，没有调整 UI Toolkit 结构、布局或样式，为后续 UGUI 替换保留稳定逻辑边界
   - Task 4.11 计划范围：在 Presentation 增加独立于范围底色的地格焦点表现，使用四角开放式选中框而非完整闭环；选中机兵时定位到机兵格，普通地格点击时定位到所点地格，锁定攻击或技能目标时固定到目标格，取消时回到当前机兵格，结束行动或清除选择时隐藏；选中框不得覆盖移动、攻击、技能范围和合法目标颜色，不参与射线检测；首版使用高对比静态颜色，不加入脉冲动画、贴图资源或正式美术特效
+  - Task 4.11 完成内容：新增 `BattleGridFocusIndicator`，以独立程序化 MeshRenderer 绘制四个开放角（共 8 个矩形段），复用现有高亮材质但通过属性块使用独立高对比颜色，不修改范围底色；焦点对象无 Collider 且位于 Ignore Raycast 层；Presentation 在选中/切换机兵、普通地格点击、行动与目标锁定、取消、行动结束、清除选择和对局结束路径统一刷新或隐藏焦点；新增 3 项 EditMode 测试覆盖位置、显隐、网格结构、射线隔离与参数校验
   - Task 4.12 计划范围：使用 Task 4.7 的聚合场景 SO 将 `Test.unity` 从硬编码 1v1 调整为固定 2v2 战斗实验场景，双方机兵均可手动选择和操作，能够完整经历多机兵行动顺序、多轮阵营切换、移动、基础武器攻击、现有主动技能、死亡和一方全灭；HUD 显示胜负结果并提供重新开始，重新开始后机兵、耐久、AP、位置、回合、选择、高亮、日志和对局状态全部从同一 SO 恢复初始值；建立可供纯 C# 对局级回归测试使用的等价固定构建方式，但不把临时场景 SO 升级为正式关卡 Schema；本任务不接敌方 AI、TEngine Procedure、Luban、部署、关卡选择、剧情、掉落或正式结算 UI
   - Task 4.4 完成内容：扩展 UseAbility / InsufficientActionPoint / ActionPointSpent / ActionPointRestored；BattleActionResult 增加 AbilitySucceeded / AbilityFailed 与 AP 字段；BattleActionLog 与 BattleUnitSnapshot 同步技能身份与 AP；BattleSession.TryUseAbility 接入 AbilityResolver 并在结束行动时记录 AP 恢复；调试 JSON Schema 升级为 3；补齐 Result、Session、Snapshot 测试
   - Task 4.3 完成规则：
@@ -397,6 +398,6 @@
 
 ## 下一步
 
-1. 根据 Task 4.11 计划初始化独立四角地格选中框与焦点反馈任务工作台。
-2. 让焦点表现独立于移动、攻击、技能范围底色和合法目标高亮。
-3. 不提前引入动画、贴图资源或正式美术特效。
+1. 根据 Task 4.12 计划初始化固定 2v2 完整实验场景与重新开始任务工作台。
+2. 复核现有聚合场景 SO、胜负 HUD、临时对象生命周期和同配置重建边界。
+3. 完成对局级纯 C# 回归、运行时重新开始和 Play Mode 完整闭环验收。
