@@ -19,6 +19,7 @@ namespace MechStorm.Presentation.Tests.Controllers
             Assert.IsFalse(stateMachine.CanConfirm);
             Assert.IsNull(stateMachine.SelectedAction);
             Assert.IsNull(stateMachine.SelectedTarget);
+            Assert.AreEqual(BattleActionSelectionPath.None, stateMachine.Path);
         }
 
         [Test]
@@ -31,6 +32,7 @@ namespace MechStorm.Presentation.Tests.Controllers
             stateMachine.SelectAction(action);
 
             Assert.AreEqual(BattleActionSelectionState.ActionSelected, stateMachine.State);
+            Assert.AreEqual(BattleActionSelectionPath.ActionFirst, stateMachine.Path);
             Assert.IsTrue(stateMachine.IsInputLocked);
             Assert.IsFalse(stateMachine.CanConfirm);
 
@@ -38,6 +40,7 @@ namespace MechStorm.Presentation.Tests.Controllers
 
             Assert.AreEqual(BattleActionSelectionState.AwaitingConfirmation, stateMachine.State);
             Assert.IsTrue(stateMachine.CanConfirm);
+            Assert.AreEqual(BattleActionSelectionPath.ActionFirst, stateMachine.Path);
             Assert.AreSame(action, stateMachine.SelectedAction);
             Assert.AreSame(target, stateMachine.SelectedTarget);
         }
@@ -53,11 +56,13 @@ namespace MechStorm.Presentation.Tests.Controllers
 
             stateMachine.SelectTarget(target);
             Assert.AreEqual(BattleActionSelectionState.TargetSelected, stateMachine.State);
+            Assert.AreEqual(BattleActionSelectionPath.TargetFirst, stateMachine.Path);
 
             stateMachine.SelectAction(action);
 
             Assert.AreEqual(BattleActionSelectionState.AwaitingConfirmation, stateMachine.State);
             Assert.IsTrue(stateMachine.CanConfirm);
+            Assert.AreEqual(BattleActionSelectionPath.TargetFirst, stateMachine.Path);
             Assert.AreSame(ability, stateMachine.SelectedAction.Ability);
         }
 
@@ -71,10 +76,12 @@ namespace MechStorm.Presentation.Tests.Controllers
 
             stateMachine.ClearAction();
             Assert.AreEqual(BattleActionSelectionState.TargetSelected, stateMachine.State);
+            Assert.AreEqual(BattleActionSelectionPath.TargetFirst, stateMachine.Path);
 
             stateMachine.SelectAction(BattleActionSelection.ForBasicAttack());
             stateMachine.ClearTarget();
             Assert.AreEqual(BattleActionSelectionState.ActionSelected, stateMachine.State);
+            Assert.AreEqual(BattleActionSelectionPath.ActionFirst, stateMachine.Path);
         }
 
         [Test]
@@ -91,6 +98,7 @@ namespace MechStorm.Presentation.Tests.Controllers
             Assert.IsFalse(stateMachine.IsInputLocked);
             Assert.IsNull(stateMachine.SelectedAction);
             Assert.IsNull(stateMachine.SelectedTarget);
+            Assert.AreEqual(BattleActionSelectionPath.None, stateMachine.Path);
         }
 
         [Test]
@@ -136,7 +144,7 @@ namespace MechStorm.Presentation.Tests.Controllers
         public void ActionFactories_PreserveSourceAndTargetContracts()
         {
             var ability = new AbilityDefinition(
-                10, "Strike", 1, 2, 20, 1, TargetRule.EnemyUnit);
+                10, "Strike", 1, 2, 20, 1, TargetRule.EnemyUnit, true);
 
             var basicAttack = BattleActionSelection.ForBasicAttack();
             var activeAbility = BattleActionSelection.ForAbility(ability);
@@ -144,15 +152,61 @@ namespace MechStorm.Presentation.Tests.Controllers
             Assert.AreEqual(
                 BattleActionSelectionKind.BasicAttack,
                 basicAttack.Kind);
+            Assert.AreEqual(
+                AbilityTargetRangeSource.BasicWeapon,
+                basicAttack.RangeSource);
             Assert.AreEqual(BattleActionTargetKind.Unit, basicAttack.TargetKind);
             Assert.IsNull(basicAttack.Ability);
             Assert.AreEqual(
                 BattleActionSelectionKind.ActiveAbility,
                 activeAbility.Kind);
+            Assert.AreEqual(
+                AbilityTargetRangeSource.Ability,
+                activeAbility.RangeSource);
             Assert.AreEqual(BattleActionTargetKind.Unit, activeAbility.TargetKind);
             Assert.AreSame(ability, activeAbility.Ability);
+            Assert.AreEqual(
+                AbilityTargetRangeSource.BasicWeapon,
+                BattleActionSelection.ForAbility(
+                    ability,
+                    AbilityTargetRangeSource.BasicWeapon).RangeSource);
             Assert.Throws<ArgumentNullException>(() =>
                 BattleActionSelection.ForAbility(null));
+            Assert.Throws<ArgumentException>(() =>
+                BattleActionSelection.ForAbility(
+                    new AbilityDefinition(
+                        11, "Independent", 1, 2, 20, 1, TargetRule.EnemyUnit),
+                    AbilityTargetRangeSource.BasicWeapon));
+            Assert.Throws<ArgumentOutOfRangeException>(() =>
+                BattleActionSelection.ForAbility(
+                    ability,
+                    (AbilityTargetRangeSource)999));
+        }
+
+        [Test]
+        public void ActionIdentity_MatchesKindAbilityAndRangeSource()
+        {
+            var ability = new AbilityDefinition(
+                10, "Strike", 1, 2, 20, 1, TargetRule.EnemyUnit, true);
+            var otherAbility = new AbilityDefinition(
+                11, "Other", 1, 2, 20, 1, TargetRule.EnemyUnit, true);
+            var abilityAction = BattleActionSelection.ForAbility(ability);
+
+            Assert.IsTrue(
+                BattleActionSelection.ForBasicAttack().Matches(
+                    BattleActionSelection.ForBasicAttack()));
+            Assert.IsTrue(
+                abilityAction.Matches(
+                    BattleActionSelection.ForAbility(ability)));
+            Assert.IsFalse(
+                abilityAction.Matches(
+                    BattleActionSelection.ForAbility(
+                        ability,
+                        AbilityTargetRangeSource.BasicWeapon)));
+            Assert.IsFalse(
+                abilityAction.Matches(
+                    BattleActionSelection.ForAbility(otherAbility)));
+            Assert.IsFalse(abilityAction.Matches(null));
         }
 
         private static CombatUnit CreateCombatUnit(int unitId)

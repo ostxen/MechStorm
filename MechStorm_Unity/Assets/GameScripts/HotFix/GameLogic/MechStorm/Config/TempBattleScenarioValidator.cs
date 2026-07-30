@@ -224,6 +224,12 @@ namespace MechStorm.Presentation
                 errors.Add($"Unit {unitId} basic attack damage must be non-negative.");
             }
 
+            if (basicAttack.ActionPointCost < 0)
+            {
+                errors.Add(
+                    $"Unit {unitId} basic attack action point cost must be non-negative.");
+            }
+
             ValidateRange(
                 $"Unit {unitId} basic attack",
                 basicAttack.MinRange,

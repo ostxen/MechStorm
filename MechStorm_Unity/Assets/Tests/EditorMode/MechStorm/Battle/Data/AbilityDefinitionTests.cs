@@ -18,6 +18,16 @@ namespace MechStorm.Battle.Tests.Data
             Assert.AreEqual(25, ability.Damage);
             Assert.AreEqual(2, ability.ActionPointCost);
             Assert.AreEqual(TargetRule.EnemyUnit, ability.TargetRule);
+            Assert.IsFalse(ability.RequiresBasicWeapon);
+        }
+
+        [Test]
+        public void Constructor_WithBasicWeaponDependency_StoresDependency()
+        {
+            var ability = new AbilityDefinition(
+                101, "Weapon Ability", 2, 4, 25, 2, TargetRule.EnemyUnit, true);
+
+            Assert.IsTrue(ability.RequiresBasicWeapon);
         }
 
         [TestCase(0)]

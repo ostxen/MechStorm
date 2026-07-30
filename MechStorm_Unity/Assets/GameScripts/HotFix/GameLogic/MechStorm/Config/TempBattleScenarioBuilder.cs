@@ -81,7 +81,8 @@ namespace MechStorm.Presentation
             var basicAttack = new BasicAttackData(
                 config.BasicAttack.Damage,
                 config.BasicAttack.MinRange,
-                config.BasicAttack.MaxRange);
+                config.BasicAttack.MaxRange,
+                config.BasicAttack.ActionPointCost);
             return new MechData(
                 config.Id,
                 config.Name,
@@ -103,7 +104,8 @@ namespace MechStorm.Presentation
                     config.MaxRange,
                     config.Damage,
                     config.ActionPointCost,
-                    config.TargetRule));
+                    config.TargetRule,
+                    config.RequiresBasicWeapon));
             }
 
             return abilities.AsReadOnly();

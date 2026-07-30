@@ -53,9 +53,11 @@ namespace MechStorm.Presentation
 
         public bool IsActionInputLocked => _presentationController.IsActionInputLocked;
 
-        public bool ShouldShowGenericActionCancel =>
-            _presentationController.IsActionInputLocked &&
-            !_presentationController.IsAbilityTargeting;
+        public BattleActionSelectionState ActionSelectionState =>
+            _presentationController.ActionSelectionState;
+
+        public BattleActionSelectionPath ActionSelectionPath =>
+            _presentationController.ActionSelectionPath;
 
         public int CurrentRoundNumber => _battleSession.CurrentRoundNumber;
 
@@ -80,73 +82,79 @@ namespace MechStorm.Presentation
         public int CurrentUnitMaxDurability =>
             _battleSession.CurrentCombatUnit.Mech.MaxDurability;
 
-        public string AbilityName => CurrentAbility?.Name ?? "无主动技能";
-
-        public int AbilityActionPointCost => CurrentAbility?.ActionPointCost ?? 0;
-
-        public int AbilityDamage => CurrentAbility?.Damage ?? 0;
+        public int CurrentUnitId => _battleSession.CurrentCombatUnit.UnitId;
 
         public int DebugDamage => _debugDamage;
 
-        public bool IsAbilityTargeting =>
-            _presentationController.IsAbilityTargeting;
+        public string SelectedActionName =>
+            GetActionName(_presentationController.SelectedAction);
 
-        public bool CanConfirmAbilityTargeting =>
-            _presentationController.CanConfirmAbilityTargeting;
+        public string SelectedTargetName =>
+            _presentationController.SelectedTarget?.Unit?.Pilot.Name;
 
-        public string SelectedAbilityTargetName =>
-            _presentationController.SelectedAbilityTarget?.Pilot.Name;
+        public TempBattleActionPanelState ActionPanelState =>
+            TempBattleActionPanelState.Create(
+                IsCurrentUnitSelected,
+                IsBattleEnded,
+                ActionSelectionState,
+                ActionSelectionPath,
+                _presentationController.SelectedAction?.Ability?.RequiresBasicWeapon == true,
+                _presentationController.CanConfirmSelectedAction,
+                SelectedActionName,
+                SelectedTargetName);
 
-        public bool CanConfirmBasicAttack => _presentationController.CanConfirmBasicAttack;
-
-        public string SelectedAttackTargetName =>
-            _presentationController.SelectedAttackTarget?.Pilot.Name;
-
-        /// <summary>
-        /// 返回临时技能按钮当前不可用的首要原因；返回 null 表示可以开始选择目标。
-        /// </summary>
-        public string AbilityUnavailableReason
+        public IReadOnlyList<TempBattleActionOption> GetActionCatalog()
         {
-            get
+            var availableActions = _presentationController.GetAvailableActions();
+            var selectedAction = _presentationController.SelectedAction;
+            var basicAttackSelection = BattleActionSelection.ForBasicAttack();
+            var availableBasicAttack =
+                FindAction(availableActions, basicAttackSelection);
+            var basicAttackAction = availableBasicAttack ?? basicAttackSelection;
+            var options = new List<TempBattleActionOption>
             {
-                if (_battleSession.IsBattleEnded)
-                {
-                    return "对局已经结束";
-                }
+                CreateActionOption(
+                    basicAttackAction,
+                    availableBasicAttack != null,
+                    basicAttackAction.Matches(selectedAction)),
+            };
 
-                var ability = CurrentAbility;
-                if (ability == null)
-                {
-                    return "当前单位没有主动技能";
-                }
-
-                var currentUnit = _battleSession.CurrentCombatUnit;
-                if (currentUnit.IsDead())
-                {
-                    return "当前单位无法行动";
-                }
-
-                var currentActionPoint = currentUnit.PilotRuntime.CurrentActionPoint;
-                if (currentActionPoint < ability.ActionPointCost)
-                {
-                    return $"AP 不足：需要 {ability.ActionPointCost}，当前 {currentActionPoint}";
-                }
-
-                return null;
+            foreach (var ability in GetCurrentCombatUnitAbilities())
+            {
+                var abilitySelection = BattleActionSelection.ForAbility(ability);
+                var availableAction = FindAction(availableActions, abilitySelection);
+                var action = availableAction ?? abilitySelection;
+                options.Add(CreateActionOption(
+                    action,
+                    availableAction != null,
+                    action.Matches(selectedAction)));
             }
+
+            return options;
         }
 
-        public string AbilitySummary
+        public IReadOnlyList<TempBattleActionOption> GetActionsForSelectedTarget()
         {
-            get
+            var actions = _presentationController.GetAvailableActionsForSelectedTarget();
+            var options = new List<TempBattleActionOption>(actions.Count);
+            foreach (var action in actions)
             {
-                var ability = CurrentAbility;
-                return ability == null
-                    ? "当前单位没有主动技能"
-                    : $"{ability.Name}（AP {ability.ActionPointCost}，" +
-                      $"射程 {ability.MinRange}-{ability.MaxRange}，" +
-                      $"伤害 {ability.Damage}）";
+                options.Add(CreateActionOption(
+                    action,
+                    true,
+                    action.Matches(_presentationController.SelectedAction),
+                    action.Kind == BattleActionSelectionKind.BasicAttack));
             }
+
+            return options;
+        }
+
+        public TempBattleActionOption GetSelectedAction()
+        {
+            var selectedAction = _presentationController.SelectedAction;
+            return selectedAction == null
+                ? null
+                : CreateActionOption(selectedAction, true, true);
         }
 
         public void Tick()
@@ -213,66 +221,63 @@ namespace MechStorm.Presentation
                 $"{_debugDamageTarget.Mech.MaxDurability}");
         }
 
-        public void ConfirmBasicAttack()
+        public void SelectAction(TempBattleActionOption option)
         {
-            if (!_presentationController.CanConfirmBasicAttack)
+            if (option == null)
+            {
+                throw new ArgumentNullException(nameof(option));
+            }
+
+            if (!option.IsAvailable)
             {
                 return;
             }
 
-            var result = _presentationController.ConfirmBasicAttack();
-            if (!result.IsSuccess)
+            var selected = option.Selection.Kind switch
             {
-                Log.Warning($"[MechStorm] Basic attack rejected: {result.FailureReason}");
-                return;
-            }
-
-            RefreshAndLogAttack(result);
-        }
-
-        public void BeginAbilityTargeting()
-        {
-            var unavailableReason = AbilityUnavailableReason;
-            if (!string.IsNullOrEmpty(unavailableReason))
-            {
-                Log.Warning($"[MechStorm] 无法使用 {AbilityName}：{unavailableReason}。");
-                return;
-            }
-
-            if (_presentationController.IsAbilityTargeting)
-            {
-                return;
-            }
-
-            var ability = CurrentAbility;
-            if (ability == null)
-            {
-                return;
-            }
-
-            if (!_presentationController.BeginAbilityTargeting(ability))
+                BattleActionSelectionKind.BasicAttack =>
+                    _presentationController.SelectBasicAttack(),
+                BattleActionSelectionKind.ActiveAbility =>
+                    _presentationController.SelectAbility(
+                        option.Selection.Ability,
+                        option.Selection.RangeSource),
+                _ => throw new ArgumentOutOfRangeException(),
+            };
+            if (!selected)
             {
                 Log.Warning(
-                    $"[MechStorm] 无法选择 {ability.Name}：" +
+                    $"[MechStorm] 无法选择 {option.Title}：" +
                     $"{_presentationController.LastRejectionReason}");
                 return;
             }
 
-            Log.Info(_presentationController.CanConfirmAbilityTargeting
-                ? $"[MechStorm] 已为 {_presentationController.SelectedAbilityTarget.Pilot.Name} " +
-                  $"选择 {AbilitySummary}，请确认释放。"
-                : $"[MechStorm] 已选择 {AbilitySummary}，请选择范围内目标。");
+            Log.Info(_presentationController.CanConfirmSelectedAction
+                ? $"[MechStorm] 已为 {SelectedTargetName} 选择 {option.Title}，请确认。"
+                : $"[MechStorm] 已选择 {option.Title}，请选择范围内目标。");
         }
 
-        public void CancelAbilityTargeting()
+        public void ConfirmSelectedAction()
         {
-            if (!_presentationController.IsAbilityTargeting)
+            if (!_presentationController.CanConfirmSelectedAction)
             {
                 return;
             }
 
-            _presentationController.CancelAbilityTargeting();
-            Log.Info("[MechStorm] 已取消技能目标选择。");
+            var result = _presentationController.ConfirmSelectedAction();
+            if (!result.IsSuccess)
+            {
+                Log.Warning(
+                    $"[MechStorm] 行动执行失败：{result.FailureReason}");
+                return;
+            }
+
+            if (result.ActionType == BattleActionType.Attack)
+            {
+                RefreshAndLogAttack(result);
+                return;
+            }
+
+            RefreshAndLogAbility(result);
         }
 
         public void CancelActionSelection()
@@ -284,25 +289,6 @@ namespace MechStorm.Presentation
 
             _presentationController.CancelActionSelection();
             Log.Info("[MechStorm] 已取消行动与目标选择。");
-        }
-
-        public void ConfirmAbilityTargeting()
-        {
-            if (!_presentationController.CanConfirmAbilityTargeting)
-            {
-                return;
-            }
-
-            var result = _presentationController.ConfirmAbilityTargeting();
-            if (!result.IsSuccess)
-            {
-                Log.Warning(
-                    $"[MechStorm] 技能释放失败：" +
-                    $"{result.FailureReason}");
-                return;
-            }
-
-            RefreshAndLogAbility(result);
         }
 
         /// <summary>
@@ -378,6 +364,7 @@ namespace MechStorm.Presentation
             Log.Info(
                 $"[MechStorm] {result.ActorUnit.Pilot.Name} attacked " +
                 $"{result.TargetUnit.Pilot.Name}, " +
+                $"AP={result.ActionPointBefore}->{result.ActionPointAfter}, " +
                 $"HP={result.DurabilityBefore}->{result.DurabilityAfter}/" +
                 $"{result.TargetUnit.Mech.MaxDurability}");
             LogDestroyedUnit(result.TargetUnit, result.DurabilityAfter.GetValueOrDefault());
@@ -398,13 +385,78 @@ namespace MechStorm.Presentation
             LogDestroyedUnit(result.TargetUnit, result.DurabilityAfter.GetValueOrDefault());
         }
 
-        private AbilityDefinition CurrentAbility
+        private IReadOnlyList<AbilityDefinition> GetCurrentCombatUnitAbilities()
         {
-            get
+            return _abilitiesByUnitId.TryGetValue(
+                _battleSession.CurrentCombatUnit.UnitId,
+                out var abilities)
+                ? abilities
+                : Array.Empty<AbilityDefinition>();
+        }
+
+        private TempBattleActionOption CreateActionOption(
+            BattleActionSelection action,
+            bool isAvailable,
+            bool isSelected,
+            bool showAsWeaponSkill = false)
+        {
+            if (action.Kind == BattleActionSelectionKind.BasicAttack)
             {
-                var currentUnitId = _battleSession.CurrentCombatUnit.UnitId;
-                return FindAbility(currentUnitId, null);
+                var basicAttack = _battleSession.CurrentCombatUnit.Mech.BasicAttack;
+                return new TempBattleActionOption(
+                    action,
+                    showAsWeaponSkill ? "基础武器技能" : "默认基础武器",
+                    $"射程 {basicAttack.MinRange}-{basicAttack.MaxRange} · 伤害 {basicAttack.Damage}",
+                    basicAttack.ActionPointCost,
+                    isAvailable,
+                    isSelected);
             }
+
+            var ability = action.Ability;
+            var weaponData = _battleSession.CurrentCombatUnit.Mech.BasicAttack;
+            var useWeaponRange =
+                action.RangeSource == AbilityTargetRangeSource.BasicWeapon;
+            var minRange = useWeaponRange
+                ? weaponData.MinRange
+                : ability.MinRange;
+            var maxRange = useWeaponRange
+                ? weaponData.MaxRange
+                : ability.MaxRange;
+            return new TempBattleActionOption(
+                action,
+                ability.Name,
+                $"AP {ability.ActionPointCost} · 射程 {minRange}-{maxRange} · " +
+                $"伤害 {ability.Damage}",
+                ability.ActionPointCost,
+                isAvailable,
+                isSelected);
+        }
+
+        private static string GetActionName(BattleActionSelection action)
+        {
+            if (action == null)
+            {
+                return null;
+            }
+
+            return action.Kind == BattleActionSelectionKind.BasicAttack
+                ? "基础武器技能"
+                : action.Ability.Name;
+        }
+
+        private static BattleActionSelection FindAction(
+            IReadOnlyList<BattleActionSelection> actions,
+            BattleActionSelection selection)
+        {
+            foreach (var action in actions)
+            {
+                if (action.Matches(selection))
+                {
+                    return action;
+                }
+            }
+
+            return null;
         }
 
         private AbilityDefinition FindAbility(int unitId, int? abilityId)

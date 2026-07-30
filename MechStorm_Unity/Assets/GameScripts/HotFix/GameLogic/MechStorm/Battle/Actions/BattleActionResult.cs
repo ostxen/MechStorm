@@ -82,12 +82,12 @@ namespace MechStorm.Battle.Actions
         public int? DurabilityAfter { get; }
 
         /// <summary>
-        /// 技能 Actor 消耗前或 NextCombatUnit 恢复前的 AP，其他操作为 null。
+        /// 攻击/技能 Actor 消耗前或 NextCombatUnit 恢复前的 AP，其他操作为 null。
         /// </summary>
         public int? ActionPointBefore { get; }
 
         /// <summary>
-        /// 技能 Actor 消耗后或 NextCombatUnit 恢复后的 AP，其他操作为 null。
+        /// 攻击/技能 Actor 消耗后或 NextCombatUnit 恢复后的 AP，其他操作为 null。
         /// </summary>
         public int? ActionPointAfter { get; }
 
@@ -219,6 +219,18 @@ namespace MechStorm.Battle.Actions
             CombatUnit targetUnit, int durabilityBefore, int durabilityAfter,
             BattleOutcome outcome = null)
         {
+            var actionPoint = actorUnit?.PilotRuntime.CurrentActionPoint ?? 0;
+            return AttackSucceeded(sequence, actorUnit, targetUnit,
+                actionPoint, actionPoint, durabilityBefore, durabilityAfter, outcome);
+        }
+
+        /// <summary>
+        /// 创建带配置 AP 消耗的攻击成功结果，并按 AP、伤害、死亡和对局结束顺序记录变化。
+        /// </summary>
+        public static BattleActionResult AttackSucceeded(int sequence, CombatUnit actorUnit,
+            CombatUnit targetUnit, int actionPointBefore, int actionPointAfter,
+            int durabilityBefore, int durabilityAfter, BattleOutcome outcome = null)
+        {
             if (actorUnit == null)
             {
                 throw new ArgumentNullException(nameof(actorUnit));
@@ -229,20 +241,39 @@ namespace MechStorm.Battle.Actions
                 throw new ArgumentNullException(nameof(targetUnit));
             }
 
-            var changeTypes = new List<BattleActionChangeType>
+            if (actionPointBefore < 0)
             {
-                BattleActionChangeType.DamageApplied
-            };
-            if (durabilityAfter <= 0)
+                throw new ArgumentOutOfRangeException(nameof(actionPointBefore), actionPointBefore,
+                    "Action point before attack must be non-negative.");
+            }
+
+            if (actionPointAfter < 0 || actionPointAfter > actionPointBefore)
             {
-                changeTypes.Add(BattleActionChangeType.UnitDied);
+                throw new ArgumentOutOfRangeException(nameof(actionPointAfter), actionPointAfter,
+                    "Action point after attack must be between zero and the previous value.");
+            }
+
+            var changeTypes = new List<BattleActionChangeType>();
+            if (actionPointBefore != actionPointAfter)
+            {
+                changeTypes.Add(BattleActionChangeType.ActionPointSpent);
+            }
+
+            if (durabilityBefore != durabilityAfter)
+            {
+                changeTypes.Add(BattleActionChangeType.DamageApplied);
+                if (durabilityAfter <= 0)
+                {
+                    changeTypes.Add(BattleActionChangeType.UnitDied);
+                }
             }
 
             AppendBattleOutcomeChanges(changeTypes, outcome);
 
             return new BattleActionResult(sequence, BattleActionType.Attack, BattleActionFailureReason.None, actorUnit, targetUnit,
                 null, changeTypes.ToArray(), durabilityBefore: durabilityBefore,
-                durabilityAfter: durabilityAfter, outcome: outcome);
+                durabilityAfter: durabilityAfter, actionPointBefore: actionPointBefore,
+                actionPointAfter: actionPointAfter, outcome: outcome);
         }
 
         /// <summary>

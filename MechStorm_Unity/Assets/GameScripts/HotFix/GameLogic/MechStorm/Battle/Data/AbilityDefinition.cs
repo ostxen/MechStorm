@@ -3,6 +3,15 @@ using System;
 namespace MechStorm.Battle.Data
 {
     /// <summary>
+    /// 指定本次技能选择采用自身范围还是已验证的基础武器目标范围。
+    /// </summary>
+    public enum AbilityTargetRangeSource
+    {
+        Ability,
+        BasicWeapon,
+    }
+
+    /// <summary>
     /// 描述主动技能的静态配置。
     /// </summary>
     public sealed class AbilityDefinition
@@ -21,7 +30,13 @@ namespace MechStorm.Battle.Data
 
         public TargetRule TargetRule { get; }
 
-        public AbilityDefinition(int abilityId, string name, int minRange, int maxRange, int damage, int actionPointCost, TargetRule targetRule)
+        /// <summary>
+        /// 表示技能需要基础武器条件，不覆盖技能自身配置的使用范围。
+        /// </summary>
+        public bool RequiresBasicWeapon { get; }
+
+        public AbilityDefinition(int abilityId, string name, int minRange, int maxRange, int damage,
+            int actionPointCost, TargetRule targetRule, bool requiresBasicWeapon = false)
         {
             if (abilityId <= 0)
             {
@@ -76,6 +91,7 @@ namespace MechStorm.Battle.Data
             Damage = damage;
             ActionPointCost = actionPointCost;
             TargetRule = targetRule;
+            RequiresBasicWeapon = requiresBasicWeapon;
         }
     }
 }

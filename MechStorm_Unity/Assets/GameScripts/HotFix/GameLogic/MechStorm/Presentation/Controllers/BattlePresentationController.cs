@@ -43,42 +43,14 @@ namespace MechStorm.Presentation.Controllers
 
         public BattleActionTargetSelection SelectedTarget => _actionSelection.SelectedTarget;
 
+        public BattleActionSelectionPath ActionSelectionPath => _actionSelection.Path;
+
         public bool IsActionInputLocked => _actionSelection.IsInputLocked;
 
         public bool CanConfirmSelectedAction => _actionSelection.CanConfirm;
 
-        public bool IsAbilityTargeting =>
-            SelectedAction?.Kind == BattleActionSelectionKind.ActiveAbility;
-
-        public string TargetingAbilityName => SelectedAction?.Ability?.Name;
-
-        public CombatUnit SelectedAbilityTarget =>
-            IsAbilityTargeting ? SelectedTarget?.Unit : null;
-
-        public CombatUnit SelectedAttackTarget =>
-            !IsAbilityTargeting ? SelectedTarget?.Unit : null;
-
         public bool IsCurrentUnitSelected =>
             ReferenceEquals(_selectedCombatUnit, _battleSession.CurrentCombatUnit);
-
-        /// <summary>
-        /// 临时 HUD 可在目标优先路径中直接选择并确认普通攻击。
-        /// </summary>
-        public bool CanConfirmBasicAttack =>
-            !_battleSession.IsBattleEnded &&
-            SelectedTarget?.Unit != null &&
-            (SelectedAction == null ||
-             SelectedAction.Kind == BattleActionSelectionKind.BasicAttack) &&
-            ContainsTarget(
-                _battleSession.GetCurrentCombatUnitBasicAttackTargets(),
-                SelectedTarget.Unit);
-
-        /// <summary>
-        /// 只有对局未结束、已选择技能并选中合法目标时才能确认技能。
-        /// </summary>
-        public bool CanConfirmAbilityTargeting =>
-            IsAbilityTargeting &&
-            CanConfirmSelectedAction;
 
         public IReadOnlyList<BattleActionSelection> GetAvailableActions()
         {
@@ -191,22 +163,15 @@ namespace MechStorm.Presentation.Controllers
         /// <summary>
         /// 选择主动技能；目标优先时保留合法目标并直接进入待确认。
         /// </summary>
-        public bool SelectAbility(AbilityDefinition ability)
+        public bool SelectAbility(AbilityDefinition ability,
+            AbilityTargetRangeSource rangeSource = AbilityTargetRangeSource.Ability)
         {
             if (ability == null)
             {
                 throw new ArgumentNullException(nameof(ability));
             }
 
-            return TrySelectAction(BattleActionSelection.ForAbility(ability));
-        }
-
-        /// <summary>
-        /// 兼容临时 HUD 的技能入口。
-        /// </summary>
-        public bool BeginAbilityTargeting(AbilityDefinition ability)
-        {
-            return SelectAbility(ability);
+            return TrySelectAction(BattleActionSelection.ForAbility(ability, rangeSource));
         }
 
         /// <summary>
@@ -216,11 +181,6 @@ namespace MechStorm.Presentation.Controllers
         {
             _actionSelection.Cancel();
             RefreshSelection();
-        }
-
-        public void CancelAbilityTargeting()
-        {
-            CancelActionSelection();
         }
 
         /// <summary>
@@ -250,40 +210,6 @@ namespace MechStorm.Presentation.Controllers
 
             ClearSelection();
             return LastActionResult;
-        }
-
-        /// <summary>
-        /// 兼容临时 HUD 的技能确认入口。
-        /// </summary>
-        public BattleActionResult ConfirmAbilityTargeting()
-        {
-            if (!IsAbilityTargeting)
-            {
-                throw new InvalidOperationException(
-                    "An active ability must be selected before confirmation.");
-            }
-
-            return ConfirmSelectedAction();
-        }
-
-        /// <summary>
-        /// 兼容临时 HUD 的普通攻击确认入口。
-        /// </summary>
-        public BattleActionResult ConfirmBasicAttack()
-        {
-            if (SelectedAction == null && !SelectBasicAttack())
-            {
-                throw new InvalidOperationException(
-                    "Basic attack requires a compatible selected target.");
-            }
-
-            if (SelectedAction.Kind != BattleActionSelectionKind.BasicAttack)
-            {
-                throw new InvalidOperationException(
-                    "The selected action is not a basic attack.");
-            }
-
-            return ConfirmSelectedAction();
         }
 
         /// <summary>
@@ -330,14 +256,11 @@ namespace MechStorm.Presentation.Controllers
             switch (_actionSelection.State)
             {
                 case BattleActionSelectionState.ActionSelected:
-                    return SelectTargetForCurrentAction(clickedCombatUnit);
+                case BattleActionSelectionState.AwaitingConfirmation:
+                    return SelectActionTarget(clickedCombatUnit);
                 case BattleActionSelectionState.TargetSelected:
                     LastRejectionReason =
                         "Select an available action or cancel the selected target.";
-                    return BattleInputAction.ActionRejected;
-                case BattleActionSelectionState.AwaitingConfirmation:
-                    LastRejectionReason =
-                        "Confirm or cancel the selected action before changing input.";
                     return BattleInputAction.ActionRejected;
             }
 
@@ -368,7 +291,7 @@ namespace MechStorm.Presentation.Controllers
                 return BattleInputAction.CurrentUnitChanged;
             }
 
-            return SelectTargetBeforeAction(clickedCombatUnit);
+            return SelectActionTarget(clickedCombatUnit);
         }
 
         private BattleInputAction HandleGridClick(CombatUnit currentCombatUnit, Vector2Int targetGridPosition)
@@ -404,22 +327,7 @@ namespace MechStorm.Presentation.Controllers
             return BattleInputAction.CurrentUnitMoved;
         }
 
-        private BattleInputAction SelectTargetForCurrentAction(CombatUnit clickedCombatUnit)
-        {
-            if (!_actionSelection.TrySelectUnitTarget(
-                    clickedCombatUnit,
-                    out var rejectionReason))
-            {
-                LastRejectionReason = rejectionReason;
-                return BattleInputAction.ActionRejected;
-            }
-
-            _selectedCombatUnit = _battleSession.CurrentCombatUnit;
-            RefreshRangeHighlights();
-            return BattleInputAction.TargetSelected;
-        }
-
-        private BattleInputAction SelectTargetBeforeAction(CombatUnit clickedCombatUnit)
+        private BattleInputAction SelectActionTarget(CombatUnit clickedCombatUnit)
         {
             if (!_actionSelection.TrySelectUnitTarget(
                     clickedCombatUnit,
@@ -489,8 +397,12 @@ namespace MechStorm.Presentation.Controllers
             if (selectedAction?.Kind == BattleActionSelectionKind.ActiveAbility)
             {
                 var abilityHighlights = _highlightMapper.BuildAbility(
-                    _battleSession.GetCurrentCombatUnitAbilityPositions(selectedAction.Ability),
-                    _battleSession.GetCurrentCombatUnitAbilityTargets(selectedAction.Ability),
+                    _battleSession.GetCurrentCombatUnitAbilityPositions(
+                        selectedAction.Ability,
+                        selectedAction.RangeSource),
+                    _battleSession.GetCurrentCombatUnitAbilityTargets(
+                        selectedAction.Ability,
+                        selectedAction.RangeSource),
                     _actionSelection.SelectedTarget?.Unit);
                 _rangeHighlighter.Show(abilityHighlights);
                 return;
@@ -531,19 +443,6 @@ namespace MechStorm.Presentation.Controllers
             LastRejectionReason =
                 "Confirm or cancel the selected action before ending the action or faction turn.";
             throw new InvalidOperationException(LastRejectionReason);
-        }
-
-        private static bool ContainsTarget(IReadOnlyList<CombatUnit> targets, CombatUnit target)
-        {
-            foreach (var candidate in targets)
-            {
-                if (ReferenceEquals(candidate, target))
-                {
-                    return true;
-                }
-            }
-
-            return false;
         }
 
         private static string GetFailureReason(

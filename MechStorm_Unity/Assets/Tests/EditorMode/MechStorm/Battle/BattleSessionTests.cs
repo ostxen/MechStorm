@@ -324,6 +324,41 @@ namespace MechStorm.Battle.Tests
         }
 
         [Test]
+        public void AbilityQueriesAndExecutionUseExplicitRangeSource()
+        {
+            var playerUnit = CreateCombatUnit(
+                1,
+                new Vector2Int(0, 0),
+                minAttackRange: 2,
+                maxAttackRange: 2);
+            var validEnemy = CreateCombatUnit(2, new Vector2Int(2, 0));
+            var abilityRangeEnemy = CreateCombatUnit(3, new Vector2Int(1, 0));
+            var session = CreateBattleSession(
+                new[] { playerUnit },
+                new[] { validEnemy, abilityRangeEnemy });
+            var ability = CreateAbility(
+                minRange: 1,
+                maxRange: 1,
+                requiresBasicWeapon: true);
+
+            CollectionAssert.AreEqual(
+                new[] { abilityRangeEnemy },
+                session.GetCurrentCombatUnitAbilityTargets(ability));
+            CollectionAssert.AreEqual(
+                new[] { validEnemy },
+                session.GetCurrentCombatUnitAbilityTargets(
+                    ability,
+                    AbilityTargetRangeSource.BasicWeapon));
+
+            var result = session.TryUseAbility(
+                ability,
+                validEnemy,
+                AbilityTargetRangeSource.BasicWeapon);
+
+            Assert.IsTrue(result.IsSuccess);
+        }
+
+        [Test]
         public void CurrentCombatUnitQueries_DoNotMutateBattleState()
         {
             var playerUnit = CreateCombatUnit(1, new Vector2Int(0, 0), moveRange: 4,
@@ -360,6 +395,53 @@ namespace MechStorm.Battle.Tests
             Assert.AreEqual(55, result.DurabilityAfter);
             CollectionAssert.AreEqual(new[] { BattleActionChangeType.DamageApplied }, result.ChangeTypes);
             Assert.AreEqual(55, enemyUnit.MechRuntime.CurrentDurability);
+        }
+
+        [Test]
+        public void AttackTargetCombatUnit_WithConfiguredActionPointCost_SpendsAndRecordsActionPoint()
+        {
+            var playerUnit = CreateCombatUnit(
+                1, new Vector2Int(1, 1), attack: 25,
+                basicAttackActionPointCost: 3);
+            var enemyUnit = CreateCombatUnit(2, new Vector2Int(2, 1), durability: 80);
+            var session = CreateBattleSession(playerUnit, enemyUnit);
+
+            var result = session.AttackTargetCombatUnit(enemyUnit);
+
+            Assert.IsTrue(result.IsSuccess);
+            Assert.AreEqual(10, result.ActionPointBefore);
+            Assert.AreEqual(7, result.ActionPointAfter);
+            Assert.AreEqual(7, playerUnit.PilotRuntime.CurrentActionPoint);
+            CollectionAssert.AreEqual(
+                new[]
+                {
+                    BattleActionChangeType.ActionPointSpent,
+                    BattleActionChangeType.DamageApplied
+                },
+                result.ChangeTypes);
+            Assert.AreEqual(10, session.ActionLogs[0].ActionPointBefore);
+            Assert.AreEqual(7, session.ActionLogs[0].ActionPointAfter);
+        }
+
+        [Test]
+        public void AttackTargetCombatUnit_WithoutEnoughActionPoint_FailsWithoutSideEffects()
+        {
+            var playerUnit = CreateCombatUnit(
+                1, new Vector2Int(1, 1), attack: 25,
+                basicAttackActionPointCost: 11);
+            var enemyUnit = CreateCombatUnit(2, new Vector2Int(2, 1), durability: 80);
+            var session = CreateBattleSession(playerUnit, enemyUnit);
+
+            var result = session.AttackTargetCombatUnit(enemyUnit);
+
+            Assert.IsFalse(result.IsSuccess);
+            Assert.AreEqual(
+                BattleActionFailureReason.InsufficientActionPoint,
+                result.FailureReason);
+            Assert.AreEqual(10, playerUnit.PilotRuntime.CurrentActionPoint);
+            Assert.AreEqual(80, enemyUnit.MechRuntime.CurrentDurability);
+            Assert.AreSame(playerUnit, session.CurrentCombatUnit);
+            Assert.IsEmpty(session.GetCurrentCombatUnitBasicAttackTargets());
         }
 
         [Test]
@@ -1170,10 +1252,10 @@ namespace MechStorm.Battle.Tests
         }
 
         private static AbilityDefinition CreateAbility(int damage = 25, int minRange = 1,
-            int maxRange = 3, int actionPointCost = 3)
+            int maxRange = 3, int actionPointCost = 3, bool requiresBasicWeapon = false)
         {
             return new AbilityDefinition(101, "Test Ability", minRange, maxRange, damage,
-                actionPointCost, TargetRule.EnemyUnit);
+                actionPointCost, TargetRule.EnemyUnit, requiresBasicWeapon);
         }
 
         private static CombatUnit CreateCombatUnit(
@@ -1183,10 +1265,15 @@ namespace MechStorm.Battle.Tests
             int durability = 100,
             int moveRange = 3,
             int minAttackRange = 1,
-            int maxAttackRange = 1)
+            int maxAttackRange = 1,
+            int basicAttackActionPointCost = 0)
         {
             var pilot = new PilotData(id, $"Pilot {id}", 10);
-            var basicAttack = new BasicAttackData(attack, minAttackRange, maxAttackRange);
+            var basicAttack = new BasicAttackData(
+                attack,
+                minAttackRange,
+                maxAttackRange,
+                basicAttackActionPointCost);
             var mech = new MechData(id, $"Mech {id}", basicAttack, durability, moveRange);
             var factory = new CombatUnitFactory();
 

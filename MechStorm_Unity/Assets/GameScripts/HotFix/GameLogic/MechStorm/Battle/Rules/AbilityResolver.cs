@@ -24,7 +24,8 @@ namespace MechStorm.Battle.Rules
         /// <summary>
         /// 判断技能是否可对目标使用，不修改战斗状态。
         /// </summary>
-        public bool CanUseAbility(AbilityDefinition ability, CombatUnit source, CombatUnit target)
+        public bool CanUseAbility(AbilityDefinition ability, CombatUnit source, CombatUnit target,
+            AbilityTargetRangeSource rangeSource = AbilityTargetRangeSource.Ability)
         {
             ValidateArguments(ability, source, target);
 
@@ -43,11 +44,13 @@ namespace MechStorm.Battle.Rules
                 return false;
             }
 
-            return IsPositionInRange(ability, source, target.Position) &&
+            return IsPositionInRange(ability, source, target.Position, rangeSource) &&
                    source.PilotRuntime.HasEnoughActionPoint(ability.ActionPointCost);
         }
 
-        public bool IsPositionInRange(AbilityDefinition ability, CombatUnit source, Vector2Int targetPosition)
+        public bool IsPositionInRange(AbilityDefinition ability, CombatUnit source,
+            Vector2Int targetPosition,
+            AbilityTargetRangeSource rangeSource = AbilityTargetRangeSource.Ability)
         {
             ValidateSource(ability, source);
 
@@ -57,10 +60,13 @@ namespace MechStorm.Battle.Rules
             }
 
             var distance = _squareGrid.GetManhattanDistance(source.Position, targetPosition);
-            return distance >= ability.MinRange && distance <= ability.MaxRange;
+            GetRange(ability, source, rangeSource, out var minRange, out var maxRange);
+            return distance >= minRange && distance <= maxRange;
         }
 
-        public IReadOnlyList<Vector2Int> GetPositionsInRange(AbilityDefinition ability, CombatUnit source)
+        public IReadOnlyList<Vector2Int> GetPositionsInRange(AbilityDefinition ability,
+            CombatUnit source,
+            AbilityTargetRangeSource rangeSource = AbilityTargetRangeSource.Ability)
         {
             ValidateSource(ability, source);
 
@@ -70,7 +76,7 @@ namespace MechStorm.Battle.Rules
                 for (var y = 0; y < _squareGrid.Height; y++)
                 {
                     var position = new Vector2Int(x, y);
-                    if (IsPositionInRange(ability, source, position))
+                    if (IsPositionInRange(ability, source, position, rangeSource))
                     {
                         positions.Add(position);
                     }
@@ -83,9 +89,11 @@ namespace MechStorm.Battle.Rules
         /// <summary>
         /// 对合法目标支付固定 AP 并结算固定伤害。
         /// </summary>
-        public bool TryResolveAbility(AbilityDefinition ability, CombatUnit source, CombatUnit target)
+        public bool TryResolveAbility(AbilityDefinition ability, CombatUnit source,
+            CombatUnit target,
+            AbilityTargetRangeSource rangeSource = AbilityTargetRangeSource.Ability)
         {
-            if (!CanUseAbility(ability, source, target))
+            if (!CanUseAbility(ability, source, target, rangeSource))
             {
                 return false;
             }
@@ -130,6 +138,31 @@ namespace MechStorm.Battle.Rules
             if (!_unitRegistry.Contains(source))
             {
                 throw new ArgumentException("Source unit does not belong to this battle registry.", nameof(source));
+            }
+        }
+
+        private static void GetRange(AbilityDefinition ability, CombatUnit source,
+            AbilityTargetRangeSource rangeSource, out int minRange, out int maxRange)
+        {
+            switch (rangeSource)
+            {
+                case AbilityTargetRangeSource.Ability:
+                    minRange = ability.MinRange;
+                    maxRange = ability.MaxRange;
+                    return;
+                case AbilityTargetRangeSource.BasicWeapon:
+                    if (!ability.RequiresBasicWeapon)
+                    {
+                        throw new ArgumentException(
+                            "Ability must require the basic weapon to use its range.",
+                            nameof(rangeSource));
+                    }
+
+                    minRange = source.Mech.BasicAttack.MinRange;
+                    maxRange = source.Mech.BasicAttack.MaxRange;
+                    return;
+                default:
+                    throw new ArgumentOutOfRangeException(nameof(rangeSource), rangeSource, null);
             }
         }
 

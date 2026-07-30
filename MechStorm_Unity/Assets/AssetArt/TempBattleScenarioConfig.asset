@@ -28,6 +28,7 @@ MonoBehaviour:
       _maxDurability: 1000
       _moveRange: 5
       _basicAttack:
+        _actionPointCost: 1
         _damage: 100
         _minRange: 1
         _maxRange: 2
@@ -39,6 +40,7 @@ MonoBehaviour:
       _minRange: 1
       _maxRange: 1
       _targetRule: 0
+      _requiresBasicWeapon: 1
     - _abilityId: 2
       _name: "\u955C\u5FC3"
       _actionPointCost: 3
@@ -46,6 +48,7 @@ MonoBehaviour:
       _minRange: 2
       _maxRange: 3
       _targetRule: 0
+      _requiresBasicWeapon: 1
   - _unitId: 2
     _faction: 0
     _initialPosition: {x: 2, y: 4}
@@ -59,6 +62,7 @@ MonoBehaviour:
       _maxDurability: 1000
       _moveRange: 4
       _basicAttack:
+        _actionPointCost: 1
         _damage: 100
         _minRange: 2
         _maxRange: 3
@@ -70,6 +74,7 @@ MonoBehaviour:
       _minRange: 1
       _maxRange: 2
       _targetRule: 0
+      _requiresBasicWeapon: 1
     - _abilityId: 4
       _name: "\u590D\u4EC7"
       _actionPointCost: 4
@@ -77,6 +82,7 @@ MonoBehaviour:
       _minRange: 2
       _maxRange: 3
       _targetRule: 0
+      _requiresBasicWeapon: 1
   - _unitId: 3
     _faction: 1
     _initialPosition: {x: 7, y: 7}
@@ -90,6 +96,7 @@ MonoBehaviour:
       _maxDurability: 1000
       _moveRange: 5
       _basicAttack:
+        _actionPointCost: 1
         _damage: 100
         _minRange: 1
         _maxRange: 2
@@ -101,6 +108,7 @@ MonoBehaviour:
       _minRange: 1
       _maxRange: 2
       _targetRule: 0
+      _requiresBasicWeapon: 1
     - _abilityId: 6
       _name: "\u65A9\u8F89"
       _actionPointCost: 3
@@ -108,6 +116,7 @@ MonoBehaviour:
       _minRange: 2
       _maxRange: 3
       _targetRule: 0
+      _requiresBasicWeapon: 1
   - _unitId: 4
     _faction: 1
     _initialPosition: {x: 7, y: 8}
@@ -121,6 +130,7 @@ MonoBehaviour:
       _maxDurability: 1000
       _moveRange: 5
       _basicAttack:
+        _actionPointCost: 1
         _damage: 100
         _minRange: 1
         _maxRange: 2
@@ -132,6 +142,7 @@ MonoBehaviour:
       _minRange: 1
       _maxRange: 1
       _targetRule: 0
+      _requiresBasicWeapon: 1
     - _abilityId: 9
       _name: "\u65A9\u5195"
       _actionPointCost: 3
@@ -139,3 +150,4 @@ MonoBehaviour:
       _minRange: 2
       _maxRange: 3
       _targetRule: 0
+      _requiresBasicWeapon: 1

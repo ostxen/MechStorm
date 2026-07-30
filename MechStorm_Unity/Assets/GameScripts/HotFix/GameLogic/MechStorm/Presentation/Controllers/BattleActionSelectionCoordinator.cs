@@ -31,6 +31,8 @@ namespace MechStorm.Presentation.Controllers
 
         public BattleActionTargetSelection SelectedTarget => _stateMachine.SelectedTarget;
 
+        public BattleActionSelectionPath Path => _stateMachine.Path;
+
         public bool IsInputLocked => _stateMachine.IsInputLocked;
 
         public bool CanConfirm =>
@@ -88,7 +90,8 @@ namespace MechStorm.Presentation.Controllers
                 return false;
             }
 
-            if (SelectedAction != null)
+            if (SelectedAction != null &&
+                Path != BattleActionSelectionPath.TargetFirst)
             {
                 rejectionReason =
                     "Confirm or cancel the selected action before choosing another action.";
@@ -101,11 +104,27 @@ namespace MechStorm.Presentation.Controllers
                 return false;
             }
 
+            if (Path == BattleActionSelectionPath.TargetFirst &&
+                action.Kind == BattleActionSelectionKind.ActiveAbility &&
+                action.RangeSource != AbilityTargetRangeSource.BasicWeapon)
+            {
+                rejectionReason =
+                    "The selected ability is not available through the current basic weapon target.";
+                return false;
+            }
+
             if (SelectedTarget != null && !IsValidTarget(action, SelectedTarget))
             {
                 rejectionReason =
                     "The selected action cannot use the currently selected target.";
                 return false;
+            }
+
+            if (SelectedAction != null &&
+                SelectedAction.Matches(action))
+            {
+                rejectionReason = null;
+                return true;
             }
 
             _stateMachine.SelectAction(action);
@@ -124,18 +143,22 @@ namespace MechStorm.Presentation.Controllers
             }
 
             var target = BattleActionTargetSelection.ForUnit(targetUnit);
+            BattleActionSelection defaultAction = null;
             switch (State)
             {
                 case BattleActionSelectionState.ActionList:
-                    if (!CanUseAnyActionOnTarget(target))
+                    var actions = GetAvailableActionsForTarget(target);
+                    if (actions.Count == 0)
                     {
                         rejectionReason =
                             "No available action can target the selected combat unit.";
                         return false;
                     }
 
+                    defaultAction = actions[0];
                     break;
                 case BattleActionSelectionState.ActionSelected:
+                case BattleActionSelectionState.AwaitingConfirmation:
                     if (!IsValidTarget(SelectedAction, target))
                     {
                         rejectionReason = "Select a highlighted valid action target.";
@@ -147,15 +170,16 @@ namespace MechStorm.Presentation.Controllers
                     rejectionReason =
                         "Select an available action or cancel the selected target.";
                     return false;
-                case BattleActionSelectionState.AwaitingConfirmation:
-                    rejectionReason =
-                        "Confirm or cancel the selected action before changing input.";
-                    return false;
                 default:
                     throw new ArgumentOutOfRangeException();
             }
 
             _stateMachine.SelectTarget(target);
+            if (defaultAction != null)
+            {
+                _stateMachine.SelectAction(defaultAction);
+            }
+
             rejectionReason = null;
             return true;
         }
@@ -178,7 +202,8 @@ namespace MechStorm.Presentation.Controllers
                 BattleActionSelectionKind.ActiveAbility =>
                     _battleSession.TryUseAbility(
                         SelectedAction.Ability,
-                        SelectedTarget.Unit),
+                        SelectedTarget.Unit,
+                        SelectedAction.RangeSource),
                 _ => throw new ArgumentOutOfRangeException(),
             };
 
@@ -199,13 +224,10 @@ namespace MechStorm.Presentation.Controllers
         /// </summary>
         public void Refresh()
         {
-            if (SelectedTarget != null && !CanUseAnyActionOnTarget(SelectedTarget))
-            {
-                _stateMachine.ClearTarget();
-            }
-
-            if (_stateMachine.CanConfirm &&
-                !IsValidTarget(SelectedAction, SelectedTarget))
+            if (SelectedTarget != null &&
+                (SelectedAction != null
+                    ? !IsValidTarget(SelectedAction, SelectedTarget)
+                    : !CanUseAnyActionOnTarget(SelectedTarget)))
             {
                 _stateMachine.ClearTarget();
             }
@@ -233,7 +255,14 @@ namespace MechStorm.Presentation.Controllers
 
             foreach (var ability in GetCurrentCombatUnitAbilities())
             {
-                var abilityAction = BattleActionSelection.ForAbility(ability);
+                if (!ability.RequiresBasicWeapon)
+                {
+                    continue;
+                }
+
+                var abilityAction = BattleActionSelection.ForAbility(
+                    ability,
+                    AbilityTargetRangeSource.BasicWeapon);
                 if (IsValidTarget(abilityAction, target))
                 {
                     actions.Add(abilityAction);
@@ -268,7 +297,8 @@ namespace MechStorm.Presentation.Controllers
             switch (action.Kind)
             {
                 case BattleActionSelectionKind.BasicAttack:
-                    return true;
+                    return currentUnit.PilotRuntime.HasEnoughActionPoint(
+                        currentUnit.Mech.BasicAttack.ActionPointCost);
                 case BattleActionSelectionKind.ActiveAbility:
                     foreach (var ability in GetCurrentCombatUnitAbilities())
                     {
@@ -304,7 +334,9 @@ namespace MechStorm.Presentation.Controllers
                         target.Unit),
                 BattleActionSelectionKind.ActiveAbility =>
                     ContainsTarget(
-                        _battleSession.GetCurrentCombatUnitAbilityTargets(action.Ability),
+                        _battleSession.GetCurrentCombatUnitAbilityTargets(
+                            action.Ability,
+                            action.RangeSource),
                         target.Unit),
                 _ => throw new ArgumentOutOfRangeException(),
             };
@@ -324,5 +356,6 @@ namespace MechStorm.Presentation.Controllers
 
             return false;
         }
+
     }
 }

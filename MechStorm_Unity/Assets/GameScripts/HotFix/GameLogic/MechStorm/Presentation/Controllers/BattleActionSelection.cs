@@ -31,11 +31,12 @@ namespace MechStorm.Presentation.Controllers
     public sealed class BattleActionSelection
     {
         private BattleActionSelection(BattleActionSelectionKind kind, BattleActionTargetKind targetKind,
-            AbilityDefinition ability)
+            AbilityDefinition ability, AbilityTargetRangeSource rangeSource)
         {
             Kind = kind;
             TargetKind = targetKind;
             Ability = ability;
+            RangeSource = rangeSource;
         }
 
         public BattleActionSelectionKind Kind { get; }
@@ -44,25 +45,61 @@ namespace MechStorm.Presentation.Controllers
 
         public AbilityDefinition Ability { get; }
 
+        /// <summary>
+        /// 固化本次选择的范围来源，保证查询、高亮和确认使用同一规则。
+        /// </summary>
+        public AbilityTargetRangeSource RangeSource { get; }
+
         public static BattleActionSelection ForBasicAttack()
         {
             return new BattleActionSelection(
                 BattleActionSelectionKind.BasicAttack,
                 BattleActionTargetKind.Unit,
-                null);
+                null,
+                AbilityTargetRangeSource.BasicWeapon);
         }
 
-        public static BattleActionSelection ForAbility(AbilityDefinition ability)
+        public static BattleActionSelection ForAbility(AbilityDefinition ability,
+            AbilityTargetRangeSource rangeSource = AbilityTargetRangeSource.Ability)
         {
             if (ability == null)
             {
                 throw new ArgumentNullException(nameof(ability));
             }
 
+            if (!Enum.IsDefined(typeof(AbilityTargetRangeSource), rangeSource))
+            {
+                throw new ArgumentOutOfRangeException(
+                    nameof(rangeSource),
+                    rangeSource,
+                    "Ability range source must be defined.");
+            }
+
+            if (rangeSource == AbilityTargetRangeSource.BasicWeapon &&
+                !ability.RequiresBasicWeapon)
+            {
+                throw new ArgumentException(
+                    "Ability must require the basic weapon to use its range.",
+                    nameof(rangeSource));
+            }
+
             return new BattleActionSelection(
                 BattleActionSelectionKind.ActiveAbility,
                 BattleActionTargetKind.Unit,
-                ability);
+                ability,
+                rangeSource);
+        }
+
+        public bool Matches(BattleActionSelection other)
+        {
+            if (other == null || Kind != other.Kind)
+            {
+                return false;
+            }
+
+            return Kind != BattleActionSelectionKind.ActiveAbility ||
+                   (ReferenceEquals(Ability, other.Ability) &&
+                    RangeSource == other.RangeSource);
         }
     }
 

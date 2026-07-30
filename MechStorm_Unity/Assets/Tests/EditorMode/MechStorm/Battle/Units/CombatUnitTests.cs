@@ -121,7 +121,7 @@ namespace MechStorm.Battle.Tests.Units
         [Test]
         public void MechData_StoresStaticValues()
         {
-            var basicAttack = new BasicAttackData(25, 1, 3);
+            var basicAttack = new BasicAttackData(25, 1, 3, 2);
             var mech = new MechData(101, "Test Mech", basicAttack, 120, 5);
 
             Assert.AreEqual(101, mech.Id);
@@ -130,6 +130,7 @@ namespace MechStorm.Battle.Tests.Units
             Assert.AreEqual(25, mech.BasicAttack.Damage);
             Assert.AreEqual(1, mech.BasicAttack.MinRange);
             Assert.AreEqual(3, mech.BasicAttack.MaxRange);
+            Assert.AreEqual(2, mech.BasicAttack.ActionPointCost);
             Assert.AreEqual(120, mech.MaxDurability);
             Assert.AreEqual(5, mech.MoveRange);
         }
@@ -140,6 +141,7 @@ namespace MechStorm.Battle.Tests.Units
             Assert.Throws<ArgumentOutOfRangeException>(() => new BasicAttackData(-1, 1, 1));
             Assert.Throws<ArgumentOutOfRangeException>(() => new BasicAttackData(10, 0, 1));
             Assert.Throws<ArgumentOutOfRangeException>(() => new BasicAttackData(10, 3, 2));
+            Assert.Throws<ArgumentOutOfRangeException>(() => new BasicAttackData(10, 1, 1, -1));
         }
 
         [Test]

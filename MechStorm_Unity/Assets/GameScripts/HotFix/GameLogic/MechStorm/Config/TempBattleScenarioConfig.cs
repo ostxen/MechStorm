@@ -84,10 +84,12 @@ namespace MechStorm.Presentation
     [Serializable]
     public sealed class TempBasicAttackConfig
     {
+        [SerializeField] private int _actionPointCost;
         [SerializeField] private int _damage;
         [SerializeField] private int _minRange = 1;
         [SerializeField] private int _maxRange = 1;
 
+        public int ActionPointCost => _actionPointCost;
         public int Damage => _damage;
         public int MinRange => _minRange;
         public int MaxRange => _maxRange;
@@ -106,6 +108,7 @@ namespace MechStorm.Presentation
         [SerializeField] private int _minRange = 1;
         [SerializeField] private int _maxRange = 1;
         [SerializeField] private TargetRule _targetRule = TargetRule.EnemyUnit;
+        [SerializeField] private bool _requiresBasicWeapon;
 
         public int AbilityId => _abilityId;
         public string Name => _name;
@@ -114,5 +117,6 @@ namespace MechStorm.Presentation
         public int MinRange => _minRange;
         public int MaxRange => _maxRange;
         public TargetRule TargetRule => _targetRule;
+        public bool RequiresBasicWeapon => _requiresBasicWeapon;
     }
 }

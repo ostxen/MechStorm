@@ -60,6 +60,7 @@ namespace MechStorm.Presentation.Tests
             Assert.AreEqual(100, unit.Mech.MaxDurability);
             Assert.AreEqual(100, unit.MechRuntime.CurrentDurability);
             Assert.AreEqual(4, unit.Mech.MoveRange);
+            Assert.AreEqual(1, unit.Mech.BasicAttack.ActionPointCost);
             Assert.AreEqual(20, unit.Mech.BasicAttack.Damage);
             Assert.AreEqual(1, unit.Mech.BasicAttack.MinRange);
             Assert.AreEqual(2, unit.Mech.BasicAttack.MaxRange);
@@ -72,6 +73,7 @@ namespace MechStorm.Presentation.Tests
             Assert.AreEqual(1, ability.MinRange);
             Assert.AreEqual(3, ability.MaxRange);
             Assert.AreEqual(TargetRule.EnemyUnit, ability.TargetRule);
+            Assert.IsTrue(ability.RequiresBasicWeapon);
             Assert.IsEmpty(buildResult.GetAbilitiesForUnit(999));
         }
 

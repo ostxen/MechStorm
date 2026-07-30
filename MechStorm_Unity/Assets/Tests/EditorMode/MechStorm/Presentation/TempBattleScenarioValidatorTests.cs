@@ -109,6 +109,7 @@ namespace MechStorm.Presentation.Tests
             SetPrivateField(unit.Pilot, "_maxActionPoint", -1);
             SetPrivateField(unit.Mech, "_maxDurability", 0);
             SetPrivateField(unit.Mech, "_moveRange", -1);
+            SetPrivateField(unit.Mech.BasicAttack, "_actionPointCost", -1);
             SetPrivateField(unit.Mech.BasicAttack, "_damage", -1);
             SetPrivateField(unit.Mech.BasicAttack, "_minRange", 0);
             SetPrivateField(unit.Mech.BasicAttack, "_maxRange", -1);
@@ -127,6 +128,9 @@ namespace MechStorm.Presentation.Tests
             StringAssert.Contains("maximum action point must be non-negative", result.ErrorMessage);
             StringAssert.Contains("maximum durability must be greater than zero", result.ErrorMessage);
             StringAssert.Contains("move range must be non-negative", result.ErrorMessage);
+            StringAssert.Contains(
+                "basic attack action point cost must be non-negative",
+                result.ErrorMessage);
             StringAssert.Contains("basic attack damage must be non-negative", result.ErrorMessage);
             StringAssert.Contains("basic attack minimum range must be at least one", result.ErrorMessage);
             StringAssert.Contains("basic attack maximum range must be greater", result.ErrorMessage);

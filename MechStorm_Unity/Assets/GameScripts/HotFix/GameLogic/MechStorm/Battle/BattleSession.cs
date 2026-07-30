@@ -199,6 +199,7 @@ namespace MechStorm.Battle
                 return RecordAction(result);
             }
 
+            var actionPointBefore = attackerUnit.PilotRuntime.CurrentActionPoint;
             var durabilityBefore = targetUnit.MechRuntime.CurrentDurability;
             if (!_attackResolver.TryAttack(attackerUnit, targetUnit))
             {
@@ -208,6 +209,7 @@ namespace MechStorm.Battle
             // 伤害提交后立即判定全灭，使最后一击结果同时携带死亡与对局结束事实。
             UpdateOutcomeAfterDamage(targetUnit);
             var successResult = BattleActionResult.AttackSucceeded(sequence, attackerUnit, targetUnit,
+                actionPointBefore, attackerUnit.PilotRuntime.CurrentActionPoint,
                 durabilityBefore, targetUnit.MechRuntime.CurrentDurability, _outcome);
             RecordAction(successResult);
             if (!IsBattleEnded)
@@ -221,7 +223,8 @@ namespace MechStorm.Battle
         /// <summary>
         /// 尝试释放单体技能，并在 AP 与伤害结算后检查目标阵营是否全灭。
         /// </summary>
-        public BattleActionResult TryUseAbility(AbilityDefinition ability, CombatUnit targetUnit)
+        public BattleActionResult TryUseAbility(AbilityDefinition ability, CombatUnit targetUnit,
+            AbilityTargetRangeSource rangeSource = AbilityTargetRangeSource.Ability)
         {
             if (ability == null)
             {
@@ -249,7 +252,11 @@ namespace MechStorm.Battle
                 return RecordAction(endedResult);
             }
 
-            var failureReason = GetAbilityFailureReason(ability, actorUnit, targetUnit);
+            var failureReason = GetAbilityFailureReason(
+                ability,
+                actorUnit,
+                targetUnit,
+                rangeSource);
             if (failureReason != BattleActionFailureReason.None)
             {
                 var failedResult = BattleActionResult.AbilityFailed(sequence, actorUnit, targetUnit,
@@ -259,7 +266,11 @@ namespace MechStorm.Battle
 
             var actionPointBefore = actorUnit.PilotRuntime.CurrentActionPoint;
             var durabilityBefore = targetUnit.MechRuntime.CurrentDurability;
-            if (!_abilityResolver.TryResolveAbility(ability, actorUnit, targetUnit))
+            if (!_abilityResolver.TryResolveAbility(
+                    ability,
+                    actorUnit,
+                    targetUnit,
+                    rangeSource))
             {
                 throw new InvalidOperationException("Validated ability could not be executed.");
             }
@@ -413,7 +424,9 @@ namespace MechStorm.Battle
         /// <summary>
         /// 查询技能覆盖格；对局结束后返回空集合以移除技能高亮。
         /// </summary>
-        public IReadOnlyList<Vector2Int> GetCurrentCombatUnitAbilityPositions(AbilityDefinition ability)
+        public IReadOnlyList<Vector2Int> GetCurrentCombatUnitAbilityPositions(
+            AbilityDefinition ability,
+            AbilityTargetRangeSource rangeSource = AbilityTargetRangeSource.Ability)
         {
             if (ability == null)
             {
@@ -425,13 +438,18 @@ namespace MechStorm.Battle
                 return Array.Empty<Vector2Int>();
             }
 
-            return _abilityResolver.GetPositionsInRange(ability, CurrentCombatUnit);
+            return _abilityResolver.GetPositionsInRange(
+                ability,
+                CurrentCombatUnit,
+                rangeSource);
         }
 
         /// <summary>
         /// 查询技能合法目标；对局结束后返回空集合。
         /// </summary>
-        public IReadOnlyList<CombatUnit> GetCurrentCombatUnitAbilityTargets(AbilityDefinition ability)
+        public IReadOnlyList<CombatUnit> GetCurrentCombatUnitAbilityTargets(
+            AbilityDefinition ability,
+            AbilityTargetRangeSource rangeSource = AbilityTargetRangeSource.Ability)
         {
             if (ability == null)
             {
@@ -447,7 +465,11 @@ namespace MechStorm.Battle
             var sourceUnit = CurrentCombatUnit;
             foreach (var targetUnit in CombatUnits)
             {
-                if (_abilityResolver.CanUseAbility(ability, sourceUnit, targetUnit))
+                if (_abilityResolver.CanUseAbility(
+                        ability,
+                        sourceUnit,
+                        targetUnit,
+                        rangeSource))
                 {
                     targets.Add(targetUnit);
                 }
@@ -548,13 +570,20 @@ namespace MechStorm.Battle
                 return BattleActionFailureReason.TargetAlreadyDead;
             }
 
-            return _attackResolver.IsPositionInRange(attackerUnit, targetUnit.Position)
+            if (!_attackResolver.IsPositionInRange(attackerUnit, targetUnit.Position))
+            {
+                return BattleActionFailureReason.TargetOutOfRange;
+            }
+
+            return attackerUnit.PilotRuntime.HasEnoughActionPoint(
+                attackerUnit.Mech.BasicAttack.ActionPointCost)
                 ? BattleActionFailureReason.None
-                : BattleActionFailureReason.TargetOutOfRange;
+                : BattleActionFailureReason.InsufficientActionPoint;
         }
 
         private BattleActionFailureReason GetAbilityFailureReason(AbilityDefinition ability,
-            CombatUnit sourceUnit, CombatUnit targetUnit)
+            CombatUnit sourceUnit, CombatUnit targetUnit,
+            AbilityTargetRangeSource rangeSource)
         {
             if (targetUnit.IsDead())
             {
@@ -566,7 +595,11 @@ namespace MechStorm.Battle
                 return BattleActionFailureReason.SameFactionTarget;
             }
 
-            if (!_abilityResolver.IsPositionInRange(ability, sourceUnit, targetUnit.Position))
+            if (!_abilityResolver.IsPositionInRange(
+                    ability,
+                    sourceUnit,
+                    targetUnit.Position,
+                    rangeSource))
             {
                 return BattleActionFailureReason.TargetOutOfRange;
             }

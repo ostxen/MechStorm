@@ -78,6 +78,26 @@ namespace MechStorm.Battle.Tests.Actions
         }
 
         [Test]
+        public void AttackSucceeded_WithActionPointCost_OrdersCostBeforeDamage()
+        {
+            var actorUnit = CreateCombatUnit(1);
+            var targetUnit = CreateCombatUnit(2);
+
+            var result = BattleActionResult.AttackSucceeded(
+                2, actorUnit, targetUnit, 10, 7, 30, 20);
+
+            Assert.AreEqual(10, result.ActionPointBefore);
+            Assert.AreEqual(7, result.ActionPointAfter);
+            CollectionAssert.AreEqual(
+                new[]
+                {
+                    BattleActionChangeType.ActionPointSpent,
+                    BattleActionChangeType.DamageApplied
+                },
+                result.ChangeTypes);
+        }
+
+        [Test]
         public void AttackSucceeded_WithCompletedOutcome_OrdersBattleEndAfterDeath()
         {
             var actorUnit = CreateCombatUnit(1);

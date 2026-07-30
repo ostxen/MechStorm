@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using MechStorm.Presentation.Controllers;
 using UnityEngine;
 using UnityEngine.UIElements;
 
@@ -13,6 +14,7 @@ namespace MechStorm.Presentation
     {
         private const int UnitPanelWidth = 390;
         private const int ActionPanelWidth = 460;
+        private const int WeaponPanelWidth = 330;
         private const string RuntimeThemeResourcePath = "MechStorm/TempBattleRuntimeTheme";
 
         private UIDocument _document;
@@ -23,27 +25,31 @@ namespace MechStorm.Presentation
         private VisualElement _durabilityFill;
         private VisualElement _actionPointSegmentsRoot;
         private VisualElement _diagnosticsDrawer;
-        private VisualElement _targetingPrompt;
         private VisualElement _unitCard;
+        private VisualElement _weaponDock;
         private VisualElement _actionDock;
         private VisualElement _turnControlDock;
-        private VisualElement _normalActionsRoot;
-        private VisualElement _targetingActionsRoot;
+        private VisualElement _actionCatalogRoot;
+        private VisualElement _basicWeaponRoot;
+        private VisualElement _selectedWeaponRoot;
+        private VisualElement _skillListRoot;
+        private VisualElement _selectedActionRoot;
+        private VisualElement _targetActionRoot;
+        private VisualElement _targetActionListRoot;
+        private VisualElement _selectionControlsRoot;
+        private VisualElement _actionTooltip;
         private Label _roundLabel;
         private Label _factionLabel;
         private Label _unitLabel;
         private Label _durabilityLabel;
         private Label _actionPointLabel;
-        private Label _messageLabel;
-        private Label _selectedTargetLabel;
-        private Label _selectedAttackTargetLabel;
-        private Button _endActionButton;
+        private Label _tooltipTitleLabel;
+        private Label _tooltipDetailLabel;
+        private Label _confirmCaptionLabel;
         private Button _endFactionTurnButton;
-        private Button _attackButton;
-        private Button _cancelActionButton;
-        private Button _abilityButton;
-        private Button _targetingAbilityButton;
-        private Button _cancelAbilityButton;
+        private Button _waitButton;
+        private Button _confirmButton;
+        private Button _cancelSelectionButton;
         private Button _damageButton;
         private Button _logButton;
         private Button _exportButton;
@@ -54,6 +60,7 @@ namespace MechStorm.Presentation
         private Font _runtimeFont;
         private bool _ownsRuntimeFont;
         private bool _diagnosticsVisible;
+        private string _actionContentSignature;
 
         private Color PanelBackground =>
             _theme != null ? _theme.PanelBackground : new Color(0.045f, 0.07f, 0.09f, 0.92f);
@@ -133,6 +140,7 @@ namespace MechStorm.Presentation
         public void Bind(TempBattleDebugActions actions)
         {
             _actions = actions;
+            _actionContentSignature = null;
             Refresh();
         }
 
@@ -154,6 +162,7 @@ namespace MechStorm.Presentation
             _document.rootVisualElement.Clear();
             _panel = null;
             _actionPointSegments.Clear();
+            _actionContentSignature = null;
             BuildVisualTree();
             Refresh();
             _refreshSchedule = _panel.schedule.Execute(Refresh).Every(100);
@@ -278,60 +287,88 @@ namespace MechStorm.Presentation
             _unitCard.Add(_actionPointSegmentsRoot);
             _panel.Add(_unitCard);
 
-            _actionDock = CreateHudCard(ActionPanelWidth);
+            _weaponDock = new VisualElement();
+            _weaponDock.style.width = WeaponPanelWidth;
+            _weaponDock.style.position = Position.Absolute;
+            _weaponDock.style.right = 22;
+            _weaponDock.style.top = 92;
+            _weaponDock.style.display = DisplayStyle.None;
+            _basicWeaponRoot = new VisualElement();
+            _weaponDock.Add(_basicWeaponRoot);
+            _selectedWeaponRoot = new VisualElement();
+            _selectedWeaponRoot.style.display = DisplayStyle.None;
+            _weaponDock.Add(_selectedWeaponRoot);
+            _targetActionRoot = new VisualElement();
+            _targetActionRoot.style.display = DisplayStyle.None;
+            _targetActionListRoot = new VisualElement();
+            _targetActionRoot.Add(_targetActionListRoot);
+            _weaponDock.Add(_targetActionRoot);
+            _panel.Add(_weaponDock);
+
+            _actionDock = new VisualElement();
+            _actionDock.style.width = ActionPanelWidth;
             _actionDock.style.position = Position.Absolute;
             _actionDock.style.right = 22;
             _actionDock.style.bottom = 22;
             _actionDock.style.display = DisplayStyle.None;
-            var actionEyebrow = CreateLabel("行动指令", 18, AccentText,
-                FontStyle.Bold);
-            _actionDock.Add(actionEyebrow);
-            var actionHint = CreateLabel("点击格子移动\n点击敌方机兵选择普通攻击目标", 20, SecondaryText,
-                FontStyle.Bold);
-            actionHint.style.marginTop = 5;
-            actionHint.style.marginBottom = 14;
-            _actionDock.Add(actionHint);
 
-            _normalActionsRoot = new VisualElement();
-            _normalActionsRoot.Add(CreateCommandSectionLabel("技能"));
-            _abilityButton = CreateButton("强袭炮击 · AP 2 · 伤害 20",
-                AbilityButton, 72);
-            _normalActionsRoot.Add(_abilityButton);
+            _actionCatalogRoot = new VisualElement();
+            var commandRow = new VisualElement();
+            commandRow.style.flexDirection = FlexDirection.Row;
+            commandRow.style.alignItems = Align.FlexEnd;
+            _skillListRoot = new VisualElement();
+            _skillListRoot.style.flexDirection = FlexDirection.Row;
+            _skillListRoot.style.flexGrow = 1;
+            commandRow.Add(_skillListRoot);
+            _waitButton = CreateLargeCommandButton(
+                "待机",
+                "▼",
+                EndActionButton,
+                220,
+                out _);
+            _waitButton.style.width = 220;
+            _waitButton.style.marginLeft = 10;
+            _waitButton.style.marginBottom = 0;
+            commandRow.Add(_waitButton);
+            _actionCatalogRoot.Add(commandRow);
+            _actionDock.Add(_actionCatalogRoot);
 
-            _normalActionsRoot.Add(CreateCommandSectionLabel("直接攻击"));
-            _selectedAttackTargetLabel = CreateLabel("目标 · 尚未选择", 20, TargetText, FontStyle.Bold);
-            _selectedAttackTargetLabel.style.marginBottom = 8;
-            _normalActionsRoot.Add(_selectedAttackTargetLabel);
-            _attackButton = CreateButton("快速普通攻击",
-                AttackButton, 64);
-            _normalActionsRoot.Add(_attackButton);
-            _cancelActionButton = CreateButton("取消目标选择",
-                NeutralButton, 56);
-            _cancelActionButton.style.display = DisplayStyle.None;
-            _normalActionsRoot.Add(_cancelActionButton);
-            _actionDock.Add(_normalActionsRoot);
+            _selectedActionRoot = new VisualElement();
+            _selectedActionRoot.style.display = DisplayStyle.None;
+            _actionDock.Add(_selectedActionRoot);
 
-            _targetingActionsRoot = new VisualElement();
-            _targetingActionsRoot.style.display = DisplayStyle.None;
-            _targetingActionsRoot.Add(CreateCommandSectionLabel("技能目标选择"));
-            _selectedTargetLabel = CreateLabel("目标 · 尚未选择", 20, TargetText, FontStyle.Bold);
-            _selectedTargetLabel.style.marginBottom = 10;
-            var targetingButtonRow = new VisualElement();
-            targetingButtonRow.style.flexDirection = FlexDirection.Row;
-            _targetingAbilityButton = CreateButton("强袭炮击 · 请选择目标",
-                AbilityButton, 72);
-            _targetingAbilityButton.style.flexGrow = 1;
-            _cancelAbilityButton = CreateButton("取消",
-                NeutralButton, 64);
-            _cancelAbilityButton.style.width = 96;
-            _cancelAbilityButton.style.height = 72;
-            _cancelAbilityButton.style.marginLeft = 8;
-            _targetingActionsRoot.Add(_selectedTargetLabel);
-            targetingButtonRow.Add(_targetingAbilityButton);
-            targetingButtonRow.Add(_cancelAbilityButton);
-            _targetingActionsRoot.Add(targetingButtonRow);
-            _actionDock.Add(_targetingActionsRoot);
+            _selectionControlsRoot = new VisualElement();
+            _selectionControlsRoot.style.display = DisplayStyle.None;
+            var selectionButtonRow = new VisualElement();
+            selectionButtonRow.style.flexDirection = FlexDirection.Row;
+            _cancelSelectionButton = CreateButton("取消", NeutralButton, 70);
+            _cancelSelectionButton.style.width = 132;
+            _confirmButton = CreateLargeCommandButton(
+                "确认",
+                "✓",
+                AttackButton,
+                140,
+                out _confirmCaptionLabel);
+            _confirmButton.style.width = 140;
+            _confirmButton.style.marginLeft = 10;
+            selectionButtonRow.Add(_cancelSelectionButton);
+            selectionButtonRow.Add(_confirmButton);
+            _selectionControlsRoot.Add(selectionButtonRow);
+            _actionDock.Add(_selectionControlsRoot);
             _panel.Add(_actionDock);
+
+            _actionTooltip = CreateHudCard(360);
+            _actionTooltip.style.position = Position.Absolute;
+            _actionTooltip.style.right = 154;
+            _actionTooltip.style.bottom = 250;
+            _actionTooltip.style.display = DisplayStyle.None;
+            _tooltipTitleLabel = CreateLabel("行动说明", 20, PrimaryText, FontStyle.Bold);
+            _tooltipDetailLabel = CreateLabel(string.Empty, 18, SecondaryText);
+            _tooltipDetailLabel.style.marginTop = 6;
+            _tooltipDetailLabel.style.whiteSpace = WhiteSpace.Normal;
+            _actionTooltip.Add(_tooltipTitleLabel);
+            _actionTooltip.Add(_tooltipDetailLabel);
+            _panel.Add(_actionTooltip);
 
             _turnControlDock = CreateHudCard(UnitPanelWidth);
             _turnControlDock.style.position = Position.Absolute;
@@ -339,14 +376,12 @@ namespace MechStorm.Presentation
             _turnControlDock.style.bottom = 22;
             _turnControlDock.style.display = DisplayStyle.None;
             var turnControlTitle = CreateLabel("回合控制", 18, AccentText, FontStyle.Bold);
-            var turnControlHint = CreateLabel("无需选中机兵，可直接推进战斗流程", 19, SecondaryText);
+            var turnControlHint = CreateLabel("全局控制，不结束单台机兵行动", 19, SecondaryText);
             turnControlHint.style.marginTop = 5;
             turnControlHint.style.marginBottom = 14;
-            _endActionButton = CreateButton("结束当前机兵行动", EndActionButton, 68);
             _endFactionTurnButton = CreateButton("结束当前阵营回合", EndTurnButton, 64);
             _turnControlDock.Add(turnControlTitle);
             _turnControlDock.Add(turnControlHint);
-            _turnControlDock.Add(_endActionButton);
             _turnControlDock.Add(_endFactionTurnButton);
             _panel.Add(_turnControlDock);
 
@@ -359,8 +394,8 @@ namespace MechStorm.Presentation
 
             _diagnosticsDrawer = CreateHudCard(320);
             _diagnosticsDrawer.style.position = Position.Absolute;
-            _diagnosticsDrawer.style.right = 22;
-            _diagnosticsDrawer.style.top = 74;
+            _diagnosticsDrawer.style.right = ActionPanelWidth + 38;
+            _diagnosticsDrawer.style.top = 22;
             _diagnosticsDrawer.style.display = DisplayStyle.None;
             var diagnosticsTitle = CreateLabel("调试工具", 21, PrimaryText, FontStyle.Bold);
             diagnosticsTitle.style.marginBottom = 10;
@@ -375,19 +410,6 @@ namespace MechStorm.Presentation
             _diagnosticsDrawer.Add(_logButton);
             _diagnosticsDrawer.Add(_exportButton);
             _panel.Add(_diagnosticsDrawer);
-
-            _targetingPrompt = CreateHudCard(540);
-            _targetingPrompt.style.position = Position.Absolute;
-            _targetingPrompt.style.left = new Length(50, LengthUnit.Percent);
-            _targetingPrompt.style.bottom = 24;
-            _targetingPrompt.style.marginLeft = -270;
-            _targetingPrompt.style.display = DisplayStyle.None;
-            _targetingPrompt.style.borderTopColor = AccentText;
-            _messageLabel = CreateLabel("请选择技能范围内的高亮目标",
-                20, PrimaryText, FontStyle.Bold);
-            _messageLabel.style.unityTextAlign = TextAnchor.MiddleCenter;
-            _targetingPrompt.Add(_messageLabel);
-            _panel.Add(_targetingPrompt);
 
             RegisterCallbacks();
             documentRoot.Add(_panel);
@@ -406,13 +428,10 @@ namespace MechStorm.Presentation
 
         private void RegisterCallbacks()
         {
-            _endActionButton.clicked += OnEndActionClicked;
             _endFactionTurnButton.clicked += OnEndFactionTurnClicked;
-            _attackButton.clicked += OnAttackClicked;
-            _cancelActionButton.clicked += OnCancelActionClicked;
-            _abilityButton.clicked += OnAbilityClicked;
-            _targetingAbilityButton.clicked += OnAbilityClicked;
-            _cancelAbilityButton.clicked += OnCancelAbilityClicked;
+            _waitButton.clicked += OnWaitClicked;
+            _confirmButton.clicked += OnConfirmClicked;
+            _cancelSelectionButton.clicked += OnCancelSelectionClicked;
             _damageButton.clicked += OnDamageClicked;
             _logButton.clicked += OnLogClicked;
             _exportButton.clicked += OnExportClicked;
@@ -421,18 +440,15 @@ namespace MechStorm.Presentation
 
         private void UnregisterCallbacks()
         {
-            if (_endActionButton == null)
+            if (_endFactionTurnButton == null)
             {
                 return;
             }
 
-            _endActionButton.clicked -= OnEndActionClicked;
             _endFactionTurnButton.clicked -= OnEndFactionTurnClicked;
-            _attackButton.clicked -= OnAttackClicked;
-            _cancelActionButton.clicked -= OnCancelActionClicked;
-            _abilityButton.clicked -= OnAbilityClicked;
-            _targetingAbilityButton.clicked -= OnAbilityClicked;
-            _cancelAbilityButton.clicked -= OnCancelAbilityClicked;
+            _waitButton.clicked -= OnWaitClicked;
+            _confirmButton.clicked -= OnConfirmClicked;
+            _cancelSelectionButton.clicked -= OnCancelSelectionClicked;
             _damageButton.clicked -= OnDamageClicked;
             _logButton.clicked -= OnLogClicked;
             _exportButton.clicked -= OnExportClicked;
@@ -443,8 +459,8 @@ namespace MechStorm.Presentation
         {
             var ready = _actions != null;
             var hasSelectedUnit = ready && _actions.IsCurrentUnitSelected;
+            var actionPanelState = ready ? _actions.ActionPanelState : null;
             _unitCard.style.display = hasSelectedUnit ? DisplayStyle.Flex : DisplayStyle.None;
-            _actionDock.style.display = hasSelectedUnit ? DisplayStyle.Flex : DisplayStyle.None;
             _turnControlDock.style.display = ready ? DisplayStyle.Flex : DisplayStyle.None;
             _roundLabel.text = ready ? $"第 {_actions.CurrentRoundNumber} 回合" : "第 -- 回合";
             _factionLabel.text = ready ? _actions.CurrentFactionName : "阵营 --";
@@ -465,129 +481,342 @@ namespace MechStorm.Presentation
                 ready ? _actions.CurrentUnitActionPoint : 0,
                 ready ? _actions.CurrentUnitMaxActionPoint : 0);
 
-            var targeting = ready && _actions.IsAbilityTargeting;
-            _targetingPrompt.style.display = targeting ? DisplayStyle.Flex : DisplayStyle.None;
-            _normalActionsRoot.style.display = targeting ? DisplayStyle.None : DisplayStyle.Flex;
-            _targetingActionsRoot.style.display = targeting ? DisplayStyle.Flex : DisplayStyle.None;
-            SetButtonsEnabled(ready);
-            if (ready && _actions.IsBattleEnded)
-            {
-                // 胜负产生后保留日志与 JSON 导出，只关闭会修改战场或推进回合的按钮。
-                SetBattleInteractionButtonsEnabled(false);
-            }
-
-            var selectedAttackTargetName = ready
-                ? _actions.SelectedAttackTargetName
-                : null;
-            _selectedAttackTargetLabel.text = string.IsNullOrEmpty(selectedAttackTargetName)
-                ? "目标 · 尚未选择"
-                : $"目标 · {selectedAttackTargetName}";
-            _attackButton.text = string.IsNullOrEmpty(selectedAttackTargetName)
-                ? "快速普通攻击 · 请选择目标"
-                : $"快速普通攻击 · 攻击 {selectedAttackTargetName}";
-            _attackButton.SetEnabled(ready && _actions.CanConfirmBasicAttack);
-            _cancelActionButton.style.display =
-                ready && _actions.ShouldShowGenericActionCancel
+            var selectedAction = ready ? _actions.GetSelectedAction() : null;
+            var showSelectedWeapon = actionPanelState?.ShowSelectedAction == true &&
+                selectedAction?.Selection.Kind == BattleActionSelectionKind.BasicAttack;
+            var showSelectedSkill = actionPanelState?.ShowSelectedAction == true &&
+                selectedAction?.Selection.Kind == BattleActionSelectionKind.ActiveAbility;
+            var showActionDock = actionPanelState != null &&
+                (actionPanelState.ShowActionCatalog ||
+                 showSelectedSkill ||
+                 actionPanelState.ShowSelectionControls);
+            _weaponDock.style.display =
+                actionPanelState?.ShowBasicWeapon == true ||
+                actionPanelState?.ShowTargetActions == true ||
+                showSelectedWeapon
                     ? DisplayStyle.Flex
                     : DisplayStyle.None;
+            _actionDock.style.display = showActionDock
+                ? DisplayStyle.Flex
+                : DisplayStyle.None;
+            _actionCatalogRoot.style.display =
+                actionPanelState?.ShowActionCatalog == true
+                    ? DisplayStyle.Flex
+                    : DisplayStyle.None;
+            _basicWeaponRoot.style.display =
+                actionPanelState?.ShowBasicWeapon == true
+                    ? DisplayStyle.Flex
+                    : DisplayStyle.None;
+            _selectedWeaponRoot.style.display = showSelectedWeapon
+                ? DisplayStyle.Flex
+                : DisplayStyle.None;
+            _selectedActionRoot.style.display =
+                showSelectedSkill
+                    ? DisplayStyle.Flex
+                    : DisplayStyle.None;
+            _targetActionRoot.style.display =
+                actionPanelState?.ShowTargetActions == true
+                    ? DisplayStyle.Flex
+                    : DisplayStyle.None;
+            _selectionControlsRoot.style.display =
+                actionPanelState?.ShowSelectionControls == true
+                    ? DisplayStyle.Flex
+                    : DisplayStyle.None;
+            _confirmButton.style.display =
+                actionPanelState?.ShowConfirm == true
+                    ? DisplayStyle.Flex
+                    : DisplayStyle.None;
+            RefreshActionButtons(actionPanelState);
             var canUseUnlockedBattleInput =
                 ready && !_actions.IsBattleEnded && !_actions.IsActionInputLocked;
-            _endActionButton.SetEnabled(canUseUnlockedBattleInput);
+            _waitButton.SetEnabled(canUseUnlockedBattleInput);
             _endFactionTurnButton.SetEnabled(canUseUnlockedBattleInput);
             _damageButton.SetEnabled(canUseUnlockedBattleInput);
+            _confirmButton.SetEnabled(actionPanelState?.CanConfirm == true);
+            _cancelSelectionButton.SetEnabled(
+                actionPanelState?.ShowSelectionControls == true);
+            _logButton.SetEnabled(ready);
+            _exportButton.SetEnabled(ready);
             if (ready)
             {
-                var unavailableReason = _actions.AbilityUnavailableReason;
-                _abilityButton.text = string.IsNullOrEmpty(unavailableReason)
-                    ? $"{_actions.AbilityName} · AP {_actions.AbilityActionPointCost} · " +
-                      $"伤害 {_actions.AbilityDamage}"
-                    : $"{_actions.AbilityName} · 不可使用\n{unavailableReason}";
-                _abilityButton.SetEnabled(string.IsNullOrEmpty(unavailableReason));
                 _damageButton.text = $"对我方机兵造成 {_actions.DebugDamage} 点伤害";
-                var selectedTargetName = _actions.SelectedAbilityTargetName;
-                _selectedTargetLabel.text = string.IsNullOrEmpty(selectedTargetName)
-                    ? "目标 · 尚未选择"
-                    : $"目标 · {selectedTargetName}";
-                _targetingAbilityButton.text = string.IsNullOrEmpty(selectedTargetName)
-                    ? $"{_actions.AbilityName} · 请选择目标"
-                    : $"{_actions.AbilityName} · 再次点击确认";
-                _targetingAbilityButton.SetEnabled(_actions.CanConfirmAbilityTargeting);
-                _messageLabel.text = string.IsNullOrEmpty(selectedTargetName)
-                    ? "请选择技能范围内的高亮目标"
-                    : $"已选择 {selectedTargetName}，再次点击技能确认释放";
+                _confirmCaptionLabel.text =
+                    _actions.ActionSelectionState ==
+                    BattleActionSelectionState.AwaitingConfirmation
+                        ? $"确认 · {_actions.SelectedActionName}"
+                        : "确认";
             }
         }
 
-        private void SetButtonsEnabled(bool enabled)
+        private void RefreshActionButtons(TempBattleActionPanelState panelState)
         {
-            _endActionButton.SetEnabled(enabled);
-            _endFactionTurnButton.SetEnabled(enabled);
-            _attackButton.SetEnabled(enabled);
-            _cancelActionButton.SetEnabled(enabled);
-            _abilityButton.SetEnabled(enabled);
-            _targetingAbilityButton.SetEnabled(enabled);
-            _cancelAbilityButton.SetEnabled(enabled);
-            _damageButton.SetEnabled(enabled);
-            _logButton.SetEnabled(enabled);
-            _exportButton.SetEnabled(enabled);
+            if (_actions == null || panelState == null)
+            {
+                return;
+            }
+
+            var signature =
+                $"{_actions.CurrentUnitId}:{_actions.CurrentUnitActionPoint}:" +
+                $"{_actions.ActionSelectionState}:{_actions.ActionSelectionPath}:" +
+                $"{_actions.SelectedActionName}:" +
+                $"{_actions.SelectedTargetName}:{_actions.IsBattleEnded}";
+            if (string.Equals(_actionContentSignature, signature, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            _actionContentSignature = signature;
+            RebuildActionCatalog(_actions.GetActionCatalog());
+            RebuildSelectedAction(_actions.GetSelectedAction());
+            if (panelState.ShowTargetActions)
+            {
+                RebuildTargetActions(_actions.GetActionsForSelectedTarget());
+            }
+            else
+            {
+                _targetActionListRoot.Clear();
+            }
+            HideActionTooltip();
         }
 
-        /// <summary>
-        /// 统一控制所有会改变战场或目标选择的按钮，诊断按钮不受影响。
-        /// </summary>
-        private void SetBattleInteractionButtonsEnabled(bool enabled)
+        private void RebuildActionCatalog(IReadOnlyList<TempBattleActionOption> actions)
         {
-            _endActionButton.SetEnabled(enabled);
-            _endFactionTurnButton.SetEnabled(enabled);
-            _attackButton.SetEnabled(enabled);
-            _cancelActionButton.SetEnabled(enabled);
-            _abilityButton.SetEnabled(enabled);
-            _targetingAbilityButton.SetEnabled(enabled);
-            _cancelAbilityButton.SetEnabled(enabled);
-            _damageButton.SetEnabled(enabled);
+            _basicWeaponRoot.Clear();
+            _skillListRoot.Clear();
+            foreach (var action in actions)
+            {
+                if (action.Selection.Kind == BattleActionSelectionKind.BasicAttack)
+                {
+                    var weaponButton = CreateActionButton(
+                        action,
+                        compact: false,
+                        renderBasicAsSkill: false,
+                        selectsAction: false);
+                    ApplySelectedActionBorder(weaponButton);
+                    _basicWeaponRoot.Add(weaponButton);
+                }
+                else
+                {
+                    _skillListRoot.Add(CreateActionButton(action, true));
+                }
+            }
+
+            if (_skillListRoot.childCount == 0)
+            {
+                _skillListRoot.Add(CreateLabel(
+                    "当前机兵没有主动技能",
+                    18,
+                    SecondaryText));
+            }
         }
 
-        private void OnEndActionClicked()
+        private void RebuildTargetActions(IReadOnlyList<TempBattleActionOption> actions)
+        {
+            _targetActionListRoot.Clear();
+            foreach (var action in actions)
+            {
+                _targetActionListRoot.Add(CreateActionButton(
+                    action,
+                    false,
+                    action.Selection.Kind == BattleActionSelectionKind.BasicAttack));
+            }
+        }
+
+        private void RebuildSelectedAction(TempBattleActionOption action)
+        {
+            _selectedWeaponRoot.Clear();
+            _selectedActionRoot.Clear();
+
+            if (action?.Selection.Kind == BattleActionSelectionKind.BasicAttack)
+            {
+                _selectedWeaponRoot.Add(CreateActionButton(action, false));
+            }
+            else if (action != null)
+            {
+                _selectedActionRoot.Add(CreateActionButton(action, true));
+            }
+        }
+
+        private Button CreateActionButton(TempBattleActionOption option, bool compact,
+            bool renderBasicAsSkill = false, bool selectsAction = true)
+        {
+            var isBasicAttack =
+                option.Selection.Kind == BattleActionSelectionKind.BasicAttack;
+            var useSkillLayout = !isBasicAttack || renderBasicAsSkill;
+            var background = isBasicAttack
+                ? AttackButton
+                : AbilityButton;
+            var button = CreateButton(
+                string.Empty,
+                background,
+                compact ? 104 : useSkillLayout ? 78 : 108);
+            button.style.alignItems = Align.Center;
+            button.style.justifyContent = Justify.SpaceBetween;
+            button.SetEnabled(option.IsAvailable);
+
+            if (compact)
+            {
+                button.style.width = 88;
+                button.style.flexDirection = FlexDirection.Column;
+                button.style.paddingLeft = 5;
+                button.style.paddingRight = 5;
+                button.style.paddingTop = 5;
+                button.style.paddingBottom = 4;
+                button.style.marginRight = 8;
+                button.style.marginBottom = 0;
+                button.Add(CreateActionIcon(option, 64));
+                var costLabel = CreateLabel(
+                    $"AP {option.ActionPointCost}",
+                    15,
+                    TargetText,
+                    FontStyle.Bold);
+                costLabel.style.unityTextAlign = TextAnchor.MiddleCenter;
+                costLabel.style.marginTop = 3;
+                button.Add(costLabel);
+            }
+            else
+            {
+                button.style.flexDirection = FlexDirection.Row;
+                button.style.paddingLeft = 12;
+                button.style.paddingRight = 12;
+                if (useSkillLayout)
+                {
+                    var actionPointBadge = new VisualElement();
+                    actionPointBadge.style.width = 44;
+                    actionPointBadge.style.height = 54;
+                    actionPointBadge.style.justifyContent = Justify.Center;
+                    actionPointBadge.style.backgroundColor = NeutralButton;
+                    var actionPointLabel = CreateLabel(
+                        $"{option.ActionPointCost}\nAP",
+                        15,
+                        TargetText,
+                        FontStyle.Bold);
+                    actionPointLabel.style.unityTextAlign = TextAnchor.MiddleCenter;
+                    actionPointBadge.Add(actionPointLabel);
+                    button.Add(actionPointBadge);
+                }
+
+                var textColumn = new VisualElement();
+                textColumn.style.flexGrow = 1;
+                textColumn.style.marginLeft = useSkillLayout ? 10 : 2;
+                textColumn.style.marginRight = 10;
+                textColumn.Add(CreateLabel(
+                    option.Title,
+                    useSkillLayout ? 18 : 21,
+                    PrimaryText,
+                    FontStyle.Bold));
+                textColumn.Add(CreateLabel(
+                    option.Detail,
+                    useSkillLayout ? 14 : 19,
+                    SecondaryText,
+                    useSkillLayout ? FontStyle.Normal : FontStyle.Bold));
+                button.Add(textColumn);
+                button.Add(CreateActionIcon(option, useSkillLayout ? 54 : 76));
+            }
+
+            if (option.IsSelected)
+            {
+                ApplySelectedActionBorder(button);
+            }
+
+            if (!option.IsAvailable)
+            {
+                button.style.opacity = 0.45f;
+            }
+
+            button.RegisterCallback<PointerEnterEvent>(_ => ShowActionTooltip(option));
+            button.RegisterCallback<PointerLeaveEvent>(_ => HideActionTooltip());
+            button.clicked += () =>
+            {
+                if (selectsAction)
+                {
+                    _actions?.SelectAction(option);
+                    _actionContentSignature = null;
+                }
+
+                HideActionTooltip();
+                Refresh();
+            };
+            return button;
+        }
+
+        private void ApplySelectedActionBorder(VisualElement element)
+        {
+            element.style.borderTopWidth = 3;
+            element.style.borderRightWidth = 3;
+            element.style.borderBottomWidth = 3;
+            element.style.borderLeftWidth = 3;
+            element.style.borderTopColor = TargetText;
+            element.style.borderRightColor = TargetText;
+            element.style.borderBottomColor = TargetText;
+            element.style.borderLeftColor = TargetText;
+        }
+
+        private VisualElement CreateActionIcon(TempBattleActionOption option, float size)
+        {
+            var iconFrame = new VisualElement();
+            iconFrame.style.width = size;
+            iconFrame.style.height = size;
+            iconFrame.style.justifyContent = Justify.Center;
+            iconFrame.style.alignItems = Align.Center;
+            iconFrame.style.backgroundColor =
+                option.Selection.Kind == BattleActionSelectionKind.BasicAttack
+                    ? new Color(0.62f, 0.25f, 0.19f)
+                    : new Color(0.32f, 0.19f, 0.48f);
+            iconFrame.style.borderTopWidth = 2;
+            iconFrame.style.borderRightWidth = 2;
+            iconFrame.style.borderBottomWidth = 2;
+            iconFrame.style.borderLeftWidth = 2;
+            iconFrame.style.borderTopColor = PrimaryText;
+            iconFrame.style.borderRightColor = PrimaryText;
+            iconFrame.style.borderBottomColor = PrimaryText;
+            iconFrame.style.borderLeftColor = PrimaryText;
+            var glyph = option.Selection.Kind == BattleActionSelectionKind.BasicAttack
+                ? "武"
+                : option.Title.Substring(0, 1);
+            var glyphLabel = CreateLabel(glyph, size >= 64 ? 30 : 25, PrimaryText, FontStyle.Bold);
+            glyphLabel.style.unityTextAlign = TextAnchor.MiddleCenter;
+            iconFrame.Add(glyphLabel);
+            return iconFrame;
+        }
+
+        private void ShowActionTooltip(TempBattleActionOption option)
+        {
+            _tooltipTitleLabel.text = option.Title;
+            _tooltipDetailLabel.text = option.Detail;
+            _actionTooltip.style.display = DisplayStyle.Flex;
+        }
+
+        private void HideActionTooltip()
+        {
+            _actionTooltip.style.display = DisplayStyle.None;
+        }
+
+        private void OnWaitClicked()
         {
             _actions?.EndCurrentUnitAction();
+            _actionContentSignature = null;
             Refresh();
         }
 
         private void OnEndFactionTurnClicked()
         {
             _actions?.EndCurrentFactionTurn();
+            _actionContentSignature = null;
             Refresh();
         }
 
-        private void OnAttackClicked()
+        private void OnConfirmClicked()
         {
-            _actions?.ConfirmBasicAttack();
+            _actions?.ConfirmSelectedAction();
+            _actionContentSignature = null;
             Refresh();
         }
 
-        private void OnCancelActionClicked()
+        private void OnCancelSelectionClicked()
         {
             _actions?.CancelActionSelection();
-            Refresh();
-        }
-
-        private void OnAbilityClicked()
-        {
-            if (_actions?.IsAbilityTargeting == true)
-            {
-                _actions.ConfirmAbilityTargeting();
-            }
-            else
-            {
-                _actions?.BeginAbilityTargeting();
-            }
-
-            Refresh();
-        }
-
-        private void OnCancelAbilityClicked()
-        {
-            _actions?.CancelAbilityTargeting();
+            _actionContentSignature = null;
             Refresh();
         }
 
@@ -677,14 +906,6 @@ namespace MechStorm.Presentation
             return row;
         }
 
-        private Label CreateCommandSectionLabel(string text)
-        {
-            var label = CreateLabel(text, 16, SecondaryText, FontStyle.Bold);
-            label.style.marginTop = 5;
-            label.style.marginBottom = 5;
-            return label;
-        }
-
         private Label CreateLabel(string text, int fontSize, Color color, FontStyle fontStyle = FontStyle.Normal)
         {
             var label = new Label(text);
@@ -717,6 +938,103 @@ namespace MechStorm.Presentation
             button.style.borderBottomLeftRadius = 2;
             button.style.borderBottomRightRadius = 2;
             return button;
+        }
+
+        private Button CreateLargeCommandButton(string caption, string glyph,
+            Color backgroundColor, float height, out Label captionLabel)
+        {
+            var size = Mathf.Max(height, 96f);
+            var button = CreateButton(string.Empty, backgroundColor, size);
+            button.style.width = size;
+            button.style.minWidth = size;
+            button.style.maxWidth = size;
+            button.style.minHeight = size;
+            button.style.maxHeight = size;
+            button.style.flexGrow = 0;
+            button.style.flexShrink = 0;
+            button.style.paddingLeft = 0;
+            button.style.paddingRight = 0;
+            button.style.paddingTop = 0;
+            button.style.paddingBottom = 0;
+            button.style.overflow = Overflow.Visible;
+            button.style.backgroundColor = Color.clear;
+            button.style.borderTopWidth = 0;
+            button.style.borderRightWidth = 0;
+            button.style.borderBottomWidth = 0;
+            button.style.borderLeftWidth = 0;
+            button.style.flexDirection = FlexDirection.Column;
+            button.style.alignItems = Align.Center;
+            button.style.justifyContent = Justify.Center;
+
+            var diamond = new VisualElement
+            {
+                pickingMode = PickingMode.Ignore,
+            };
+            diamond.style.position = Position.Absolute;
+            diamond.style.left = 0;
+            diamond.style.top = 0;
+            diamond.style.width = new Length(100, LengthUnit.Percent);
+            diamond.style.height = new Length(100, LengthUnit.Percent);
+            diamond.generateVisualContent += context =>
+                DrawDiamond(context, diamond.contentRect, backgroundColor);
+            button.Add(diamond);
+
+            var glyphLabel = CreateLabel(glyph, size >= 160f ? 42 : 34, PrimaryText, FontStyle.Bold);
+            glyphLabel.style.unityTextAlign = TextAnchor.MiddleCenter;
+            glyphLabel.style.width = size * 0.72f;
+            glyphLabel.style.flexShrink = 0;
+            glyphLabel.pickingMode = PickingMode.Ignore;
+            captionLabel = CreateLabel(caption, size >= 160f ? 25 : 22, ButtonText, FontStyle.Bold);
+            captionLabel.style.unityTextAlign = TextAnchor.MiddleCenter;
+            captionLabel.style.width = size * 0.72f;
+            captionLabel.style.flexShrink = 0;
+            captionLabel.pickingMode = PickingMode.Ignore;
+            button.Add(glyphLabel);
+            button.Add(captionLabel);
+            return button;
+        }
+
+        private static void DrawDiamond(
+            MeshGenerationContext context,
+            Rect rect,
+            Color color)
+        {
+            if (rect.width <= 0f || rect.height <= 0f)
+            {
+                return;
+            }
+
+            var size = Mathf.Min(rect.width, rect.height);
+            var center = rect.center;
+            var halfSize = size * 0.5f;
+            var mesh = context.Allocate(4, 6);
+            var tint = (Color32)color;
+            mesh.SetNextVertex(new Vertex
+            {
+                position = new Vector3(center.x, center.y - halfSize, Vertex.nearZ),
+                tint = tint,
+            });
+            mesh.SetNextVertex(new Vertex
+            {
+                position = new Vector3(center.x + halfSize, center.y, Vertex.nearZ),
+                tint = tint,
+            });
+            mesh.SetNextVertex(new Vertex
+            {
+                position = new Vector3(center.x, center.y + halfSize, Vertex.nearZ),
+                tint = tint,
+            });
+            mesh.SetNextVertex(new Vertex
+            {
+                position = new Vector3(center.x - halfSize, center.y, Vertex.nearZ),
+                tint = tint,
+            });
+            mesh.SetNextIndex(0);
+            mesh.SetNextIndex(1);
+            mesh.SetNextIndex(2);
+            mesh.SetNextIndex(2);
+            mesh.SetNextIndex(3);
+            mesh.SetNextIndex(0);
         }
     }
 }

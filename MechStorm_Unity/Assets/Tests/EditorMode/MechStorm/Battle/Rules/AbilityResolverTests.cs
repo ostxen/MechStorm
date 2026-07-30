@@ -210,6 +210,49 @@ namespace MechStorm.Battle.Tests.Rules
         }
 
         [Test]
+        public void IsPositionInRange_UsesExplicitRangeSource()
+        {
+            var source = CreateCombatUnit(1, 80, new Vector2Int(0, 0));
+            var target = CreateCombatUnit(2, 80, new Vector2Int(4, 4));
+            var resolver = new AbilityResolver(
+                new SquareGrid(5, 5),
+                CreateRegistry(source, target));
+            var ability = new AbilityDefinition(
+                101, "Weapon Ability", 2, 3, 25, 3, TargetRule.EnemyUnit, true);
+
+            Assert.IsFalse(
+                resolver.IsPositionInRange(ability, source, new Vector2Int(1, 0)));
+            Assert.IsTrue(
+                resolver.IsPositionInRange(ability, source, new Vector2Int(2, 0)));
+            Assert.IsTrue(resolver.IsPositionInRange(
+                ability,
+                source,
+                new Vector2Int(1, 0),
+                AbilityTargetRangeSource.BasicWeapon));
+            Assert.IsFalse(resolver.IsPositionInRange(
+                ability,
+                source,
+                new Vector2Int(2, 0),
+                AbilityTargetRangeSource.BasicWeapon));
+        }
+
+        [Test]
+        public void IsPositionInRange_BasicWeaponSourceRequiresWeaponDependency()
+        {
+            var source = CreateCombatUnit(1, 80, new Vector2Int(0, 0));
+            var target = CreateCombatUnit(2, 80, new Vector2Int(4, 4));
+            var resolver = new AbilityResolver(
+                new SquareGrid(5, 5),
+                CreateRegistry(source, target));
+
+            Assert.Throws<ArgumentException>(() => resolver.IsPositionInRange(
+                CreateAbility(),
+                source,
+                new Vector2Int(1, 0),
+                AbilityTargetRangeSource.BasicWeapon));
+        }
+
+        [Test]
         public void TryResolveAbility_WithLethalDamage_ClampsDurabilityToZero()
         {
             var source = CreateCombatUnit(1, 80, new Vector2Int(0, 0));
