@@ -49,6 +49,13 @@ namespace MechStorm.Presentation
         /// </summary>
         public bool IsBattleEnded => _battleSession.IsBattleEnded;
 
+        public string BattleOutcomeText => _battleSession.Outcome.WinningFaction switch
+        {
+            CombatFaction.TeamA => "我方胜利",
+            CombatFaction.TeamB => "敌方胜利",
+            _ => "对局结束",
+        };
+
         public bool IsCurrentUnitSelected => _presentationController.IsCurrentUnitSelected;
 
         public bool IsActionInputLocked => _presentationController.IsActionInputLocked;

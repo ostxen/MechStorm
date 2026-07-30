@@ -38,6 +38,7 @@ namespace MechStorm.Presentation
         private VisualElement _targetActionListRoot;
         private VisualElement _selectionControlsRoot;
         private VisualElement _actionTooltip;
+        private VisualElement _battleOutcomeRoot;
         private Label _roundLabel;
         private Label _factionLabel;
         private Label _unitLabel;
@@ -46,6 +47,7 @@ namespace MechStorm.Presentation
         private Label _tooltipTitleLabel;
         private Label _tooltipDetailLabel;
         private Label _confirmCaptionLabel;
+        private Label _battleOutcomeLabel;
         private Button _endFactionTurnButton;
         private Button _waitButton;
         private Button _confirmButton;
@@ -54,8 +56,10 @@ namespace MechStorm.Presentation
         private Button _logButton;
         private Button _exportButton;
         private Button _diagnosticsButton;
+        private Button _restartButton;
         private readonly List<VisualElement> _actionPointSegments = new List<VisualElement>();
         private TempBattleDebugActions _actions;
+        private Action _restartBattle;
         private IVisualElementScheduledItem _refreshSchedule;
         private Font _runtimeFont;
         private bool _ownsRuntimeFont;
@@ -137,9 +141,10 @@ namespace MechStorm.Presentation
             }
         }
 
-        public void Bind(TempBattleDebugActions actions)
+        public void Bind(TempBattleDebugActions actions, Action restartBattle = null)
         {
             _actions = actions;
+            _restartBattle = restartBattle;
             _actionContentSignature = null;
             Refresh();
         }
@@ -251,6 +256,25 @@ namespace MechStorm.Presentation
             turnBanner.Add(_roundLabel);
             turnBanner.Add(_factionLabel);
             _panel.Add(turnBanner);
+
+            _battleOutcomeRoot = CreateHudCard(420);
+            _battleOutcomeRoot.style.position = Position.Absolute;
+            _battleOutcomeRoot.style.left = new Length(50, LengthUnit.Percent);
+            _battleOutcomeRoot.style.top = new Length(50, LengthUnit.Percent);
+            _battleOutcomeRoot.style.marginLeft = -210;
+            _battleOutcomeRoot.style.marginTop = -90;
+            _battleOutcomeRoot.style.alignItems = Align.Center;
+            _battleOutcomeRoot.style.display = DisplayStyle.None;
+            var outcomeTitle = CreateLabel("战斗结束", 22, AccentText, FontStyle.Bold);
+            _battleOutcomeLabel = CreateLabel("对局结束", 38, TargetText, FontStyle.Bold);
+            _battleOutcomeLabel.style.marginTop = 8;
+            _battleOutcomeLabel.style.marginBottom = 18;
+            _restartButton = CreateButton("重新开始", EndActionButton, 64);
+            _restartButton.style.width = 220;
+            _battleOutcomeRoot.Add(outcomeTitle);
+            _battleOutcomeRoot.Add(_battleOutcomeLabel);
+            _battleOutcomeRoot.Add(_restartButton);
+            _panel.Add(_battleOutcomeRoot);
 
             _unitCard = CreateHudCard(UnitPanelWidth);
             _unitCard.style.position = Position.Absolute;
@@ -436,6 +460,7 @@ namespace MechStorm.Presentation
             _logButton.clicked += OnLogClicked;
             _exportButton.clicked += OnExportClicked;
             _diagnosticsButton.clicked += OnDiagnosticsClicked;
+            _restartButton.clicked += OnRestartClicked;
         }
 
         private void UnregisterCallbacks()
@@ -453,6 +478,7 @@ namespace MechStorm.Presentation
             _logButton.clicked -= OnLogClicked;
             _exportButton.clicked -= OnExportClicked;
             _diagnosticsButton.clicked -= OnDiagnosticsClicked;
+            _restartButton.clicked -= OnRestartClicked;
         }
 
         private void Refresh()
@@ -460,6 +486,14 @@ namespace MechStorm.Presentation
             var ready = _actions != null;
             var hasSelectedUnit = ready && _actions.IsCurrentUnitSelected;
             var actionPanelState = ready ? _actions.ActionPanelState : null;
+            var showBattleOutcome = ready && _actions.IsBattleEnded;
+            _battleOutcomeRoot.style.display = showBattleOutcome
+                ? DisplayStyle.Flex
+                : DisplayStyle.None;
+            _battleOutcomeLabel.text = showBattleOutcome
+                ? _actions.BattleOutcomeText
+                : "对局结束";
+            _restartButton.SetEnabled(showBattleOutcome && _restartBattle != null);
             _unitCard.style.display = hasSelectedUnit ? DisplayStyle.Flex : DisplayStyle.None;
             _turnControlDock.style.display = ready ? DisplayStyle.Flex : DisplayStyle.None;
             _roundLabel.text = ready ? $"第 {_actions.CurrentRoundNumber} 回合" : "第 -- 回合";
@@ -844,6 +878,13 @@ namespace MechStorm.Presentation
             _diagnosticsDrawer.style.display = _diagnosticsVisible
                 ? DisplayStyle.Flex
                 : DisplayStyle.None;
+        }
+
+        private void OnRestartClicked()
+        {
+            _restartBattle?.Invoke();
+            _actionContentSignature = null;
+            Refresh();
         }
 
         private void RefreshActionPointSegments(int currentActionPoint, int maxActionPoint)

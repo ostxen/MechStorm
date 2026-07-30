@@ -47,6 +47,7 @@ namespace MechStorm.Presentation
         private readonly Dictionary<Collider, CombatUnit> _combatUnitColliders = new();
         private readonly Dictionary<CombatUnit, Transform> _healthBarAnchors = new();
 
+        private Transform _combatUnitRoot;
         private int _boardWidth;
         private int _boardHeight;
         private GridCoordinateConverter _coordConverter;
@@ -79,21 +80,13 @@ namespace MechStorm.Presentation
                 return;
             }
 
-            var scenarioBuilder = new TempBattleScenarioBuilder();
-            if (!scenarioBuilder.TryBuild(
-                    _scenarioConfig,
-                    out _scenarioBuildResult,
-                    out var validationResult))
+            if (!TryBuildScenario())
             {
-                Log.Error(
-                    $"[MechStorm] TempBattleScenarioConfig is invalid:" +
-                    $"{System.Environment.NewLine}{validationResult.ErrorMessage}");
                 return;
             }
 
             _boardWidth = _scenarioConfig.BoardWidth;
             _boardHeight = _scenarioConfig.BoardHeight;
-            _battleSession = _scenarioBuildResult.BattleSession;
             EnsureDebugPanel();
             _debugPanel.SetTheme(_hudTheme);
             CreateBoard();
@@ -101,6 +94,11 @@ namespace MechStorm.Presentation
             CreateGridFocusIndicator();
             LogBoardValidation();
             CreateDebugMarkers();
+            CreateBattleRuntime();
+        }
+
+        private void CreateBattleRuntime()
+        {
             CreateCombatUnitVisuals();
             CreateBoardInputter();
             CreatePresentationController();
@@ -115,8 +113,33 @@ namespace MechStorm.Presentation
 
         void OnDestroy()
         {
+            if (_combatUnitRoot != null)
+            {
+                Destroy(_combatUnitRoot.gameObject);
+            }
+
             _gridFocusIndicator?.Dispose();
             _rangeHighlighter?.Dispose();
+        }
+
+        private bool TryBuildScenario()
+        {
+            var scenarioBuilder = new TempBattleScenarioBuilder();
+            if (scenarioBuilder.TryBuild(
+                    _scenarioConfig,
+                    out _scenarioBuildResult,
+                    out var validationResult))
+            {
+                _battleSession = _scenarioBuildResult.BattleSession;
+                return true;
+            }
+
+            Log.Error(
+                $"[MechStorm] TempBattleScenarioConfig is invalid:" +
+                $"{System.Environment.NewLine}{validationResult.ErrorMessage}");
+            _scenarioBuildResult = null;
+            _battleSession = null;
+            return false;
         }
 
         private void EnsureDebugPanel()
@@ -192,10 +215,12 @@ namespace MechStorm.Presentation
 
         private void CreateCombatUnitVisuals()
         {
+            _combatUnitRoot = new GameObject("BattleCombatUnits").transform;
             foreach (var combatUnit in _scenarioBuildResult.Units)
             {
                 var unitObject = GameObject.CreatePrimitive(PrimitiveType.Cube);
                 unitObject.name = $"BattleUnit_{combatUnit.UnitId}_{combatUnit.Pilot.Name}";
+                unitObject.transform.SetParent(_combatUnitRoot, false);
                 unitObject.transform.localScale = new Vector3(
                     _cellSize * 0.6f,
                     _cellSize,
@@ -303,13 +328,46 @@ namespace MechStorm.Presentation
                 _scenarioBuildResult.AbilitiesByUnitId,
                 _unitPresenter,
                 _debugDamage);
-            _debugPanel?.Bind(_debugActions);
+            _debugPanel?.Bind(_debugActions, RestartBattle);
             var currentUnit = _battleSession.CurrentCombatUnit;
             Log.Info(
                 $"[MechStorm] Battle Started: " +
                 $"Round={_battleSession.CurrentRoundNumber}, " +
                 $"Faction={_battleSession.CurrentFaction}, " +
                 $"Unit={currentUnit.Pilot.Name}/{currentUnit.Mech.Name}");
+        }
+
+        private void RestartBattle()
+        {
+            ReleaseBattleRuntime();
+            if (!TryBuildScenario())
+            {
+                return;
+            }
+
+            CreateBattleRuntime();
+            Log.Info("[MechStorm] Battle restarted from TempBattleScenarioConfig.");
+        }
+
+        private void ReleaseBattleRuntime()
+        {
+            _debugPanel?.Bind(null);
+            _presentationController?.ClearSelection();
+            if (_combatUnitRoot != null)
+            {
+                Destroy(_combatUnitRoot.gameObject);
+                _combatUnitRoot = null;
+            }
+
+            _combatUnitVisuals.Clear();
+            _combatUnitColliders.Clear();
+            _healthBarAnchors.Clear();
+            _debugActions = null;
+            _unitPresenter = null;
+            _presentationController = null;
+            _boardInputter = null;
+            _battleSession = null;
+            _scenarioBuildResult = null;
         }
     }
 }
