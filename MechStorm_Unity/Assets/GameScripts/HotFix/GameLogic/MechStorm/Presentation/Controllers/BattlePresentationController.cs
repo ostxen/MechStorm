@@ -29,6 +29,7 @@ namespace MechStorm.Presentation.Controllers
         private readonly BattleBoardInputter _battleBoardInputter;
         private readonly BattleRangeHighlightMapper _highlightMapper;
         private readonly BattleRangeHighlighter _rangeHighlighter;
+        private readonly BattleGridFocusIndicator _gridFocusIndicator;
         private readonly BattleActionSelectionCoordinator _actionSelection;
 
         private CombatUnit _selectedCombatUnit;
@@ -62,14 +63,18 @@ namespace MechStorm.Presentation.Controllers
             return _actionSelection.GetAvailableActionsForSelectedTarget();
         }
 
-        public BattlePresentationController(BattleSession battleSession, IReadOnlyDictionary<CombatUnit, CombatUnitVisual> combatUnitVisuals,
+        public BattlePresentationController(BattleSession battleSession,
+            IReadOnlyDictionary<CombatUnit, CombatUnitVisual> combatUnitVisuals,
             BattleBoardInputter battleBoardInputter, BattleRangeHighlighter rangeHighlighter,
+            BattleGridFocusIndicator gridFocusIndicator,
             IReadOnlyDictionary<int, IReadOnlyList<AbilityDefinition>> abilitiesByUnitId = null)
         {
             _battleSession = battleSession ?? throw new ArgumentNullException(nameof(battleSession));
             _combatUnitVisuals = combatUnitVisuals ?? throw new ArgumentNullException(nameof(combatUnitVisuals));
             _battleBoardInputter = battleBoardInputter ?? throw new ArgumentNullException(nameof(battleBoardInputter));
             _rangeHighlighter = rangeHighlighter ?? throw new ArgumentNullException(nameof(rangeHighlighter));
+            _gridFocusIndicator = gridFocusIndicator ??
+                throw new ArgumentNullException(nameof(gridFocusIndicator));
             _highlightMapper = new BattleRangeHighlightMapper();
             _actionSelection = new BattleActionSelectionCoordinator(
                 battleSession,
@@ -117,7 +122,7 @@ namespace MechStorm.Presentation.Controllers
             return HandleGridClick(currentCombatUnit, targetGridPosition);
         }
         /// <summary>
-        /// 保持当前单位选中，并按最新战斗数据刷新范围；对局结束时直接清空选择。
+        /// 保持当前单位选中，并按最新战斗数据刷新范围和焦点；对局结束时直接清空选择。
         /// </summary>
         public void RefreshSelection()
         {
@@ -139,17 +144,18 @@ namespace MechStorm.Presentation.Controllers
             }
 
             _actionSelection.Refresh();
-            RefreshRangeHighlights();
+            RefreshBoardFeedback();
         }
 
         /// <summary>
-        /// 清除当前选择并恢复棋盘格默认颜色。
+        /// 清除当前选择、恢复棋盘格默认颜色并隐藏焦点。
         /// </summary>
         public void ClearSelection()
         {
             _selectedCombatUnit = null;
             _actionSelection.Reset();
             _rangeHighlighter.Clear();
+            _gridFocusIndicator.Hide();
         }
 
         /// <summary>
@@ -309,6 +315,7 @@ namespace MechStorm.Presentation.Controllers
                 return BattleInputAction.ActionRejected;
             }
 
+            _gridFocusIndicator.Show(targetGridPosition);
             if (!_combatUnitVisuals.TryGetValue(currentCombatUnit, out var currentUnitVisual))
             {
                 throw new InvalidOperationException("Current combat unit does not have a presentation visual.");
@@ -338,7 +345,7 @@ namespace MechStorm.Presentation.Controllers
             }
 
             _selectedCombatUnit = _battleSession.CurrentCombatUnit;
-            RefreshRangeHighlights();
+            RefreshBoardFeedback();
             return BattleInputAction.TargetSelected;
         }
 
@@ -368,7 +375,7 @@ namespace MechStorm.Presentation.Controllers
                 return false;
             }
 
-            RefreshRangeHighlights();
+            RefreshBoardFeedback();
             return true;
         }
 
@@ -424,6 +431,14 @@ namespace MechStorm.Presentation.Controllers
                 _battleSession.GetCurrentCombatUnitBasicAttackTargets(),
                 _actionSelection.SelectedTarget?.Unit);
             _rangeHighlighter.Show(highlights);
+        }
+
+        private void RefreshBoardFeedback()
+        {
+            RefreshRangeHighlights();
+            var focusPosition = _actionSelection.SelectedTarget?.Unit.Position ??
+                _selectedCombatUnit.Position;
+            _gridFocusIndicator.Show(focusPosition);
         }
 
         private static BattleActionType GetActionType(BattleActionSelection action)

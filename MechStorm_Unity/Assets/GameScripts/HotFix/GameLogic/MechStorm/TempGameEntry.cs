@@ -28,6 +28,8 @@ namespace MechStorm.Presentation
         [SerializeField]
         private Color _gridCellColor = new Color(0.2f, 0.23f, 0.26f);
         [SerializeField]
+        private Color _gridFocusColor = new Color(1f, 0.85f, 0.1f);
+        [SerializeField]
         private bool _showBoardDebugMarkers = true;
 
         [SerializeField]
@@ -49,6 +51,7 @@ namespace MechStorm.Presentation
         private int _boardHeight;
         private GridCoordinateConverter _coordConverter;
         private BattleRangeHighlighter _rangeHighlighter;
+        private BattleGridFocusIndicator _gridFocusIndicator;
         private BattleBoardInputter _boardInputter;
         private BattlePresentationController _presentationController;
         private BattleSession _battleSession;
@@ -95,6 +98,7 @@ namespace MechStorm.Presentation
             _debugPanel.SetTheme(_hudTheme);
             CreateBoard();
             CreateRangeHighlighter();
+            CreateGridFocusIndicator();
             LogBoardValidation();
             CreateDebugMarkers();
             CreateCombatUnitVisuals();
@@ -111,6 +115,7 @@ namespace MechStorm.Presentation
 
         void OnDestroy()
         {
+            _gridFocusIndicator?.Dispose();
             _rangeHighlighter?.Dispose();
         }
 
@@ -133,6 +138,13 @@ namespace MechStorm.Presentation
         {
             _rangeHighlighter = new BattleRangeHighlighter(_boardWidth, _boardHeight, _cellSize, _coordConverter,
                 _rangeHighlightTemplate, _gridCellColor);
+        }
+
+        private void CreateGridFocusIndicator()
+        {
+            var focusMaterial = _rangeHighlightTemplate.GetComponent<Renderer>().sharedMaterial;
+            _gridFocusIndicator = new BattleGridFocusIndicator(
+                _cellSize, _coordConverter, focusMaterial, _gridFocusColor);
         }
 
         private void LogBoardValidation()
@@ -258,14 +270,15 @@ namespace MechStorm.Presentation
             if (_battleSession == null ||
                 _combatUnitVisuals.Count != _scenarioBuildResult.Units.Count ||
                 _boardInputter == null ||
-                _rangeHighlighter == null)
+                _rangeHighlighter == null ||
+                _gridFocusIndicator == null)
             {
                 Log.Error("[MechStorm] BattlePresentationController dependencies are not ready.");
                 return;
             }
 
             _presentationController = new BattlePresentationController(
-                _battleSession, _combatUnitVisuals, _boardInputter, _rangeHighlighter,
+                _battleSession, _combatUnitVisuals, _boardInputter, _rangeHighlighter, _gridFocusIndicator,
                 _scenarioBuildResult.AbilitiesByUnitId);
         }
 
