@@ -10,7 +10,9 @@ namespace MechStorm.Battle.Data
 
         public int MaxRange { get; }
 
-        public BasicAttackData(int damage, int minRange, int maxRange)
+        public int ActionPointCost { get; }
+
+        public BasicAttackData(int damage, int minRange, int maxRange, int actionPointCost = 0)
         {
             if (damage < 0)
             {
@@ -28,9 +30,16 @@ namespace MechStorm.Battle.Data
                     "Maximum range must be greater than or equal to minimum range.");
             }
 
+            if (actionPointCost < 0)
+            {
+                throw new ArgumentOutOfRangeException(nameof(actionPointCost), actionPointCost,
+                    "Action point cost must be non-negative.");
+            }
+
             Damage = damage;
             MinRange = minRange;
             MaxRange = maxRange;
+            ActionPointCost = actionPointCost;
         }
     }
 }

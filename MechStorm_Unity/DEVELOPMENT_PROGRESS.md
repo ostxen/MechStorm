@@ -2,10 +2,10 @@
 
 ## 当前阶段
 
-- 当前里程碑：P1 / Sprint 4
-- 当前任务：Task 4.1 最小 `AbilityDefinition` 与 `TargetRule`
-- 当前状态：Sprint 3 已完成；Sprint 4 待开始
-- 最后更新：2026-07-19
+- 当前里程碑：P1 / Sprint 4（已完成）
+- 当前任务：无（等待拆分并初始化 TEngine 正式战斗流程与 UGUI 迁移）
+- 当前状态：Sprint 4 的 Task 4.1～4.12 已全部完成并验收
+- 最后更新：2026-07-30
 
 ## 状态约定
 
@@ -205,17 +205,122 @@
   - 验证方式：`BattleRangeHighlightMapperTests` 覆盖移动、攻击、范围重叠、合法目标优先级、重复位置、空输入、非法输入和查询集合不变；纯 C# NUnit 隔离运行 123 / 123 通过；Battle、Battle.Tests、Presentation、Presentation.Tests、GameLogic 与 Editor 项目编译通过；开发者已在 Unity Play Mode 验证范围、颜色、坐标、持续选中和手动结束行动流程
   - 备注：Presentation 通过 `BattleSession` 权威查询生成高亮映射，`BattleRangeHighlighter` 缓存场景模板实例并使用 `MaterialPropertyBlock` 刷新颜色；移动或攻击后保持当前单位选中并刷新范围，结束行动或单位切换后恢复默认网格颜色；Test 场景与材质已随提交 `e8a8de6` 保存，不接正式 TEngine `BattleMainUI`
 
-- [ ] Sprint 4：最小主动技能闭环
-  - 状态：未开始
-  - 总目标：在 Sprint 3 的范围和目标规则上增加第一个可操作、可测试、可记录的单体主动技能
-  - 完成标准：技能具备定义、目标规则、固定 AP 消耗和直接伤害；AP 不足或目标非法时不消耗资源；成功结果能驱动表现并进入 ActionLog / Snapshot / JSON 调试导出
-  - 计划任务：
-    1. Task 4.1 最小 `AbilityDefinition` 与 `TargetRule`
-    2. Task 4.2 `AbilityResolver` 与单体直接伤害技能
-    3. Task 4.3 仅服务首个主动技能的固定 AP 消耗与回合恢复
-    4. Task 4.4 技能 Result、ActionLog、Snapshot 与 JSON 诊断
-    5. Task 4.5 临时技能按钮、目标选择和技能范围高亮
+- [x] Sprint 4：最小主动技能闭环
+  - 状态：已完成
+  - 总目标：在 Sprint 3 的范围和目标规则上增加第一个可操作、可测试、可记录的单体主动技能，并建立由临时聚合场景 SO 驱动、可供后续技能、状态和 Buff 持续回归的固定 2v2 最小对局；补齐行动内位置调整、可扩展行动选择状态、双路径操作面板、取消回退和地格焦点反馈
+  - 完成标准：技能具备定义、目标规则、固定 AP 消耗和直接伤害；AP 不足或目标非法时不消耗资源；成功结果能驱动表现并进入 ActionLog / Snapshot / JSON 调试导出；Battle 权威层能够判定阵营全灭、胜方和对局结束，结束后拒绝继续操作；`Test.unity` 通过 Inspector 引用的聚合场景 SO 创建对局，能够调节 AP、耐久、移动力、基础攻击和技能参数，并完成固定 2v2 手动对局、显示结果和重新开始；每次机兵行动以行动开始位置为移动范围锚点，在未锁定行动或目标前可在该固定范围内反复调整站位，成功武器攻击或主动技能会自动结束当前机兵行动；支持行动优先与目标优先两种选择顺序，当前接入基础武器和主动技能两类行动来源，进入行动锁定后只能确认或取消；当前焦点地格具备不覆盖范围语义的独立选中框
+  - 任务进度：
+    1. [x] Task 4.1 最小 `AbilityDefinition` 与 `TargetRule`
+    2. [x] Task 4.2 `AbilityResolver` 与单体直接伤害技能
+    3. [x] Task 4.3 仅服务首个主动技能的固定 AP 消耗与行动开始恢复
+    4. [x] Task 4.4 技能 Result、ActionLog、Snapshot 与 JSON 诊断
+    5. [x] Task 4.5 临时技能按钮、目标选择和技能范围高亮
+    6. [x] Task 4.6 最小对局生命周期与胜负判定
+    7. [x] Task 4.7 临时聚合场景 SO 与配置校验
+    8. [x] Task 4.8 行动内位置调整与行动结束规则
+    9. [x] Task 4.9 可扩展行动选择状态机、输入锁定与取消回退
+    10. [x] Task 4.10 行动优先/目标优先双路径面板与默认基础武器入口
+    11. [x] Task 4.11 独立四角地格选中框与焦点反馈
+    12. [x] Task 4.12 固定 2v2 战斗实验场景与重新开始
+  - 阶段后续：Task 4.11 与 Task 4.12 完成并验收后，优先接入 TEngine 正式战斗流程与项目自有 UGUI 战斗界面，不直接进入 Sprint 5；具体迁移任务在 Sprint 4 收尾时拆分
+  - 当前验证：Unity EditMode 293 / 293 通过；Battle.Tests、Presentation.Tests、GameLogic 与 Editor 编译及源码与配置 `git diff --check` 通过；开发者已完成固定 2v2 全灭胜负、结果卡、重新开始，以及四台机兵、位置、耐久、AP、回合、阵营、选择、高亮和后续操作恢复的 Play Mode 验收
+  - Task 4.5 当前内容：Battle 提供无副作用的技能范围与合法目标查询，并增加区分单位行动结束与阵营回合结束的权威入口；Presentation 使用“选择技能 → 点击合法目标 → 确认释放”的两阶段技能交互，已选目标使用独立高亮；全部临时操作迁移到运行时 UI Toolkit 战斗 HUD，按“左上单位状态、顶部回合、右下行动、右上折叠诊断”组织；显式指定运行时字体，避免动态 `PanelSettings` 无主题时文字不可见；`TempGameEntry` 拆分启动编排、调试动作和单位状态表现；Inspector 改为 UI Toolkit 配置视图，不再承担运行时按钮；单位血条下方显示分段 AP 条（与血条等宽，按上限分格，有 AP 为黄、空缺为灰，技能扣除和行动/回合推进恢复时同步）；调试 JSON Schema 因新增 `EndFactionTurn` 升级为 4
+  - Task 4.6 当前内容：新增不可变 `BattleOutcome` 与 `BattleEndReason`，由 `BattleSession` 在 TeamA / TeamB 最后一名机兵受到普通攻击或主动技能致死伤害后立即记录胜方、全灭方和结束原因，Neutral 不参与胜负；最后一击 Result 按伤害、死亡、阵营全灭、对局结束顺序记录变化，ActionLog、Snapshot 与 JSON 同步携带 Outcome，调试 JSON Schema 升级为 5；对局结束后移动、攻击、技能、结束单位行动和结束阵营回合统一返回 `BattleAlreadyEnded` 且不改变位置、耐久、AP 或回合，行动范围与候选目标查询返回空集合；Presentation 清理选择和高亮、拒绝后续棋盘输入，临时 HUD 禁用战斗交互按钮并保留日志与导出；已覆盖 TeamA / TeamB 获胜、非最后单位死亡、Neutral 死亡、结束后无副作用、变化顺序、Outcome 不变量和序列化测试，Play Mode 已验证最后一击、结束后输入拒绝与调试导出
+  - Task 4.7 完成内容：新增 `TempBattleScenarioConfig` 聚合 SO 与 Unit、Pilot、Mech、基础攻击、主动技能配置 DTO，`Test.unity` 通过 Inspector 直接引用，不使用 `Resources.Load`；`TempBattleScenarioValidator` 一次性校验棋盘、固定 2v2 阵营数量、ID、枚举、越界、重复占格、空配置、数值与射程，`TempBattleScenarioBuilder` 仅在校验通过后创建全新的 Battle 静态数据、Runtime、四个 `CombatUnit`、单位技能映射和 `BattleSession`，运行中不回写 SO；`TempGameEntry` 移除棋盘、1v1 单位和调试技能硬编码，按构建结果创建 10x10 棋盘、四单位表现、碰撞输入、血条与当前单位首个技能 HUD，缺少或非法配置时明确报错并停止；配置资源固定双方各两台单位，初始位置为 `(2,3)`、`(2,4)`、`(7,7)`、`(7,8)`；新增 13 项 Validator / Builder 测试覆盖合法映射、全量错误、无部分结果、重复构建对象隔离、Runtime 修改不污染后续构建与 SO 不回写；本任务未拆分多套独立 SO，也未替代 Sprint 11 的 Luban 正式配置
+  - Task 4.8 计划范围：在 Battle 权威层记录阵营内已行动单位、当前行动机兵及其行动开始位置，并以该位置生成本次行动固定的可达范围；阵营回合内可从当前阵营存活且尚未行动的机兵中自由选择行动者，切换时上一机兵立即回到行动开始位置；在尚未锁定武器、技能或攻击目标时，允许机兵在固定范围内反复调整最终站位，不能从每次新位置重新获得完整移动力；移动不消耗 AP，也不妨碍之后使用当前仍合法的行动；锁定行动或目标后禁止继续移动和切换行动者，取消时保留当前站位并重新开放原固定范围内的位置调整；成功武器攻击、主动技能或待机后提交当前站位、标记当前机兵已行动并推进到下一台未行动机兵；失败攻击或技能不提交、不推进；结束阵营回合时先回退当前未提交移动，再跳过本阵营剩余单位；暂定移动与位置回退通过结构化 Result / ActionLog 保持可观察，不静默留下与最终位置冲突的日志；当前不实现击杀再动、无条件再动、通用行动配额或 Task 4.9 的通用交互状态机；补齐自由选择、切换回退、固定范围内多次调整、越界拒绝、锁定与取消、移动后行动、成功推进及失败不推进测试
+  - Task 4.8 完成内容：`TurnCoordinator` 使用已行动单位集合替代固定行动索引，支持当前阵营存活且未行动机兵的自由选择；`BattleSession` 记录行动开始位置，移动查询与执行均固定使用该锚点，切换行动者和结束阵营回合会权威回退未提交走位并记录位置变化；成功基础攻击或主动技能会自动结束当前机兵行动，手动结束行动作为待机入口，失败行动不推进；Snapshot 与 JSON Schema 6 增加行动开始位置和单位已行动状态；Presentation 在未锁定时将己方点击解释为切换行动者，并同步回退 Visual、HUD 与范围，技能或基础攻击目标锁定后拒绝继续移动或切换；自动测试已覆盖固定范围内多次调整、自由选择、已行动拒绝、切换与结束阵营回合回退、成功行动自动推进、失败不推进及诊断数据，Play Mode 手工验收已通过
+  - Task 4.8 验收后重构：`BattleActionLog` 改为只接收 `BattleActionResult` 并直接复制 Actor、Target 与 NextUnit 的稳定 ID，基础攻击失败 Result 保留目标身份，`BattleSession.RecordAction` 不再接收旁路 ID；临时 HUD 删除与构造函数非空契约冲突的就绪判断、Presentation 空值后备路径和无生产者的 `TargetAbilityUsed`；自动验证与 Play Mode 冒烟均通过，没有引入新抽象或提前实现 Task 4.9
+  - Task 4.9 计划范围：建立与具体 UI 布局和行动来源解耦的显式交互状态，只区分机兵行动列表、行动已选待目标、目标已选待行动，以及行动与目标均已选择待确认，不建立武器专用或技能专用状态；当前行动选项接入基础武器攻击与主动技能，并预留未来增加左右手武器、道具、支援、交互、警戒或防御时无需重写状态流；行动目标模型预留单位目标、地格目标和自身/无目标类别，但 Sprint 4 只实际接入现有单位目标技能；支持行动优先和目标优先两种选择顺序；锁定状态下禁止点击空地移动，只允许确认或取消；取消返回机兵行动列表，成功行动交由 Task 4.8 自动结束当前机兵行动；补齐状态转换和失败无副作用测试
+  - Task 4.9 完成内容：新增与具体 HUD 解耦的 `BattleActionSelection`、`BattleActionTargetSelection`、四状态 `BattleActionSelectionStateMachine` 和 Battle 权威查询驱动的 `BattleActionSelectionCoordinator`；基础攻击与主动技能共用行动选择、单位目标、确认和取消契约，目标模型预留地格、自身与无目标类别；`BattlePresentationController` 支持行动优先与目标优先，待选择或待确认期间锁定移动、行动者切换、待机和结束阵营回合，取消后保留当前位置并恢复固定锚点移动范围，成功确认继续复用 Task 4.8 自动推进；行动优先只按对局、行动者、行动归属和资源判断行动能否选取，点击技能后始终先显示技能范围，不依赖范围内已有目标，无目标时确认保持禁用且只能取消；目标优先仍由 Battle 权威查询过滤兼容行动；临时 HUD 增加最小通用取消入口但未提前实现 Task 4.10 正式双路径布局；新增 18 项状态转换、行动查询、无目标选择、失败无副作用、执行重置和高亮测试
+  - Task 4.10 计划范围：基于 Task 4.9 状态驱动临时 UI Toolkit HUD，并验证行动优先与目标优先两条 UI 路径；选中机兵后，右侧偏上显示一个默认选中的基础武器栏，右下水平显示技能列表与大号“待机”；点击基础武器栏按场景 SO 转换得到的 `BasicAttackData` 射程进入目标选择，点击技能按配置技能射程进入目标选择；先选目标时，右侧纵向显示基础武器攻击及该目标可用技能；目标与行动均有效时同时显示取消和确认/攻击；锁定后隐藏移动范围，取消时恢复行动开始位置锚定的固定移动范围；“待机”结束当前机兵行动，左下全局面板只保留结束当前阵营回合；本任务不提前实现左右手、装备槽或通用武器系统
+  - Task 4.10 当前内容：新增纯 C# `TempBattleActionPanelState`，将 Task 4.9 状态、显式 `ActionFirst` / `TargetFirst` 路径和技能武器依赖映射为 HUD 区域显隐，不保存 HUD 平行选择状态；临时 UI Toolkit HUD 参考《钢岚》布局改为无外层说明面板的独立基础武器栏、右下横向技能图标与大号菱形待机，技能槽按“图标在上、AP 在下”排列并在悬停时显示说明；常态默认武器栏只表示当前装备选择，Sprint 4 无第二把武器时点击仅保留动效，不进入攻击范围或行动状态；目标优先选择武器范围内目标后隐藏常态武器栏，右上以统一技能项样式纵向列出独立的基础武器技能及依赖当前武器的技能，并默认选中基础武器技能，右下立即显示攻击/取消且允许继续切换技能；技能优先路径锁定已选技能，仅显示确认/取消，并只在 `RequiresBasicWeapon` 为真时显示右上依赖武器栏；任一路径进入待确认后，当前行动释放前仍可在其合法目标间切换，非法目标不修改原选择；`RequiresBasicWeapon` 只表达依赖条件和目标优先候选资格，`BattleActionSelection.RangeSource` 显式保证目标优先使用基础武器范围、技能优先使用技能自身配置范围，查询、高亮、确认与结算共用同一来源；当前场景八个技能均依赖基础武器；`BasicAttackData` 的配置 AP 消耗已统一接入查询、实际扣费、Result/ActionLog 与失败无副作用；左下全局控制只保留结束阵营回合
+  - Task 4.10 验收后重构：`BattleActionSelection` 统一校验技能范围来源与基础武器依赖组合，并提供唯一行动身份比较；Coordinator 合并行动已选/待确认的目标校验分支并复用默认行动查询，StateMachine 在清除部分选择时同步规范化路径；Controller 将行动优先、目标优先和待确认目标点击合并到单一入口；临时 HUD 适配仅改为消费统一纯 C# 契约，没有调整 UI Toolkit 结构、布局或样式，为后续 UGUI 替换保留稳定逻辑边界
+  - Task 4.11 计划范围：在 Presentation 增加独立于范围底色的地格焦点表现，使用四角开放式选中框而非完整闭环；选中机兵时定位到机兵格，普通地格点击时定位到所点地格，锁定攻击或技能目标时固定到目标格，取消时回到当前机兵格，结束行动或清除选择时隐藏；选中框不得覆盖移动、攻击、技能范围和合法目标颜色，不参与射线检测；首版使用高对比静态颜色，不加入脉冲动画、贴图资源或正式美术特效
+  - Task 4.11 完成内容：新增 `BattleGridFocusIndicator`，以独立程序化 MeshRenderer 绘制四个开放角（共 8 个矩形段），复用现有高亮材质但通过属性块使用独立高对比颜色，不修改范围底色；焦点对象无 Collider 且位于 Ignore Raycast 层；Presentation 在选中/切换机兵、普通地格点击、行动与目标锁定、取消、行动结束、清除选择和对局结束路径统一刷新或隐藏焦点；新增 3 项 EditMode 测试覆盖位置、显隐、网格结构、射线隔离与参数校验
+  - Task 4.12 计划范围：使用 Task 4.7 的聚合场景 SO 将 `Test.unity` 从硬编码 1v1 调整为固定 2v2 战斗实验场景，双方机兵均可手动选择和操作，能够完整经历多机兵行动顺序、多轮阵营切换、移动、基础武器攻击、现有主动技能、死亡和一方全灭；HUD 显示胜负结果并提供重新开始，重新开始后机兵、耐久、AP、位置、回合、选择、高亮、日志和对局状态全部从同一 SO 恢复初始值；建立可供纯 C# 对局级回归测试使用的等价固定构建方式，但不把临时场景 SO 升级为正式关卡 Schema；本任务不接敌方 AI、TEngine Procedure、Luban、部署、关卡选择、剧情、掉落或正式结算 UI
+  - Task 4.12 完成内容：`TempGameEntry` 拆出可重复的场景构建、运行时创建与释放流程，重新开始时销毁旧单位与血条、清空输入映射和选择反馈，再从同一聚合场景 SO 创建全新的 BattleSession、四台机兵、能力映射、单位表现、输入、控制器和 HUD 适配；临时 HUD 根据 Battle 权威 Outcome 显示“我方胜利/敌方胜利”结果卡及重新开始按钮；新增固定 2v2 对局级测试，覆盖多轮移动、待机、基础攻击、主动技能、双方行动、死亡与阵营全灭，并断言重建后第 1 回合、TeamA、首台机兵、四台单位初始位置、满耐久/AP、空 ActionLog 和未结束 Outcome 全部恢复
+  - Task 4.4 完成内容：扩展 UseAbility / InsufficientActionPoint / ActionPointSpent / ActionPointRestored；BattleActionResult 增加 AbilitySucceeded / AbilityFailed 与 AP 字段；BattleActionLog 与 BattleUnitSnapshot 同步技能身份与 AP；BattleSession.TryUseAbility 接入 AbilityResolver 并在结束行动时记录 AP 恢复；调试 JSON Schema 升级为 3；补齐 Result、Session、Snapshot 测试
+  - Task 4.3 完成规则：
+    - AP 归属 `Pilot`；移动继续不消耗 AP，本任务也不改变普通攻击规则
+    - `Pilot.MaxActionPoint`、局内当前 AP 与技能消耗均为非负整数；每个技能只配置一个 `ActionPointCost`，首个实际技能使用正消耗，数据模型允许后续出现 0 AP 技能
+    - Task 4.3 阶段的技能结算入口允许在 AP 足够时重复调用，AP 恰好等于消耗时允许释放并降为 0；Task 4.8 接入最小行动结束规则后，一次成功武器攻击或主动技能会结束当前机兵行动，AP 只作为行动费用，不再代表同一次行动内可连续释放，后续再行动需重新获得机兵行动机会
+    - 空参数和未注册单位仍属于调用错误；死亡、同阵营、棋盘外、射程非法和 AP 不足属于正常玩法失败
+    - 所有目标与 AP 校验必须先无副作用完成；成功时先原子支付 AP，再结算伤害，任一失败都不能扣 AP 或修改目标耐久
+    - 当下一个存活单位成为 `CurrentCombatUnit`、开始自己的行动时，将其 AP 恢复到 `Pilot.MaxActionPoint`；首个行动单位由 `CombatUnitFactory` 以满 AP 初始化
+  - Task 4.4 已确认玩法规则：
+    - BattleSession 提供技能释放入口，返回结构化 BattleActionResult 并写入 ActionLogs
+    - 成功技能结果记录技能 ID、目标、Actor AP 前后值、目标耐久前后值，以及 ActionPointSpent / DamageApplied（致死时再加 UnitDied）
+    - 失败技能结果保留技能 ID 与目标身份，失败原因可区分 AP 不足、同阵营、死亡、越距等；失败不修改 AP 与耐久
+    - 单位快照与 JSON 导出补充当前 AP / 最大 AP；结束行动时若下一单位 AP 被恢复，结果记录该恢复前后值
+    - 调试 JSON 因契约扩展升级 Schema 版本；空技能、空目标、未注册目标仍属调用契约异常
+  - Task 4.4 开发范围：扩展 BattleActionType / FailureReason / ChangeType；扩展 BattleActionResult / BattleActionLog / BattleUnitSnapshot；BattleSession 接入 AbilityResolver 并返回技能 Result；扩展 JSON 序列化与对应测试
+  - Task 4.3 完成内容：扩展 `AbilityDefinition` 固定 AP 消耗；为 `PilotData` / `PilotRuntime` 建立 AP 非负不变量，并为 Runtime 增加查询、原子支付和恢复方法；由 `AbilityResolver` 编排“校验目标与余额 → 提交消耗 → 伤害”；由 `TurnCoordinator` 在单位行动开始边界恢复 AP；补齐 Data、Runtime、Resolver 和 Turn 测试
   - 备注：首个技能不附带 Buff，不实现 Effect 列表、Modifier、Trigger、完整 GAS 或正式技能栏；Task 4.3 不建立通用 `BattleResource` / `SkillCost[]`，Sprint 7 再将固定 AP 规则迁移为通用资源管线；仅当首个真实技能明确需要召唤时，才在本 Sprint 验收后追加动态召唤垂直切片
+
+- [ ] Sprint T1（P1.5）：TEngine + UGUI 正式战斗表现迁移
+  - 状态：已排期，正式战斗 UI 流程与当前阶段范围已确认，等待启动 Task T1.1
+  - 排期位置：Sprint 4 完成后、Sprint 5 开始前；本阶段完成前不继续扩展临时 UI Toolkit HUD
+  - 总目标：复用 Sprint 4 已稳定的 Battle / Presentation 纯 C# 契约，将固定 2v2 战斗闭环迁入 TEngine 正式流程与项目自有 UGUI Prefab，建立“主场景 -> 战前确认 -> 战斗提示 -> 战斗 HUD/镜头控制 -> 结果/统计 -> 重战或返回”的完整灰盒流程
+  - 完成标准：启动后停留在伪主场景；点击战斗按钮进入战斗场景并显示固定队伍预览；点击开始战斗后依次确认全灭敌方的胜利条件和当前阵营回合提示；默认选中当前阵营首台可行动机兵并进入战斗；选择、移动、待机、四档环绕镜头、双路径攻击/技能、目标切换、确认/取消全部对齐；结束后显示相对玩家阵营的胜利/失败结果，可查看每单位造成伤害、承受伤害和击杀统计，并可重新战斗或返回主场景；重复进出和流程退出均正确释放 UI 与战斗 Runtime
+  - 实施原则：
+    - Battle 继续持有权威规则，UGUI View 不复制合法性判断、范围计算、AP 扣费、回合推进或胜负规则
+    - TEngine 侧通过 `GameModule.Scene`、`GameModule.UI`、`UIWindow` 生命周期和 YooAsset 地址进入正式流程，不绕过框架直接加载
+    - Presenter / View 或等价 UI Adapter 只消费 Presentation 契约；战斗 Runtime 的创建、重启与释放有单一所有者
+    - 无正式美术素材时使用 UGUI 灰盒 Prefab、纯色 `Image`、文本和几何占位，不以运行时代码临时拼装作为最终 Prefab 方案
+    - `UIWidget` 只在子区域确有独立刷新或生命周期时拆分，不为形式提前增加空壳层
+    - 现有 `BattleMainUI.prefab` 仅视为 TEngine 示例资源，不作为最终战斗 Prefab；正式 UI 使用 MechStorm 自有命名、层级和生命周期
+    - 战前阶段只预览同一场景配置中的固定 2v2 队伍和站位，不实现角色库滑动、上下阵、拖拽布阵或队伍合法性规则
+  - 计划任务：
+    1. **Task T1.1 伪主场景与战斗入口按钮**
+       - 搭建或改造现有 `main.unity` 为最小伪主场景，保留 TEngine 启动所需的 `UIRoot` 和框架对象，不在主场景创建战斗 Runtime
+       - 新增 UGUI 主界面灰盒窗口与“进入战斗”按钮，游戏启动后先停留在主场景，由玩家主动点击进入战斗
+       - 按钮通过正式流程入口请求战斗切换，切换期间锁定重复点击；验收启动停留、按钮显示、单次跳转和重复点击隔离
+    2. **Task T1.2 战斗入口与生命周期基线**
+       - 明确并实现 `GameApp / Procedure -> Battle Scene -> BattlePreparationUI -> BattleHUDUI` 的进入、退出和异常回收顺序
+       - 确认正式战斗场景、持久 `UIRoot`、YooAsset 场景/UI Collector 与资源地址；保留 TEngine 示例 `BattleMainUI.prefab`，新建 MechStorm 自有灰盒 Prefab
+       - 建立可重复进入、返回和再次进入的最小流程切片，验证不会重复创建窗口、残留场景对象或持有失效引用
+    3. **Task T1.3 战斗 Runtime Host 抽取**
+       - 从 `TempGameEntry` 抽取固定 2v2 的配置读取、Session 创建、单位表现创建、输入装配、重启和释放职责
+       - 正式 Host 统一拥有 BattleSession、Presentation Controller、场景单位与表现资源；临时入口只作为迁移期适配，不成为正式 UI 依赖
+       - 保持同一 `TempBattleScenarioConfig` 全量重建语义，并补齐创建/释放/重建隔离测试
+    4. **Task T1.4 固定队伍战前确认**
+       - 新建 `BattlePreparationUI` 灰盒 Prefab，读取同一战斗场景配置并显示固定 2v2 的我方队伍、敌方队伍和预设站位摘要
+       - 点击“开始战斗”后锁定重复输入、关闭战前窗口并创建全新战斗 Runtime；取消或返回时不残留 Session 和场景单位
+       - 本任务不接角色库和真实布阵，只保留未来扩展列表与站位编辑的 Presenter / View 边界
+    5. **Task T1.5 `BattleHUDUI` 灰盒 Prefab 与只读状态 MVP**
+       - 新建项目自有 `BattleHUDUI` 灰盒 Prefab，建立回合、当前阵营、当前单位、耐久和 AP 等基础状态区
+       - 建立 `BattleHUDUI : UIWindow` 与 Presenter / View（或 UI Adapter）边界，使用框架生命周期完成绑定、刷新、解绑和销毁
+       - 根据真实独立刷新需求决定是否拆分状态、行动和结果 `UIWidget`，不把 Battle 对象直接散落绑定到各个控件
+    6. **Task T1.6 胜利条件、阵营回合提示与默认选角**
+       - 开始战斗后先显示 `BattleObjectiveUI`，本阶段固定说明“全灭敌方单位”；确认后再显示当前阵营和回合数提示
+       - 每个阵营回合开始时显示一次 `BattleRoundUI`，弹窗存在期间锁定棋盘和 HUD 操作，确认关闭后才允许继续
+       - 提示结束后默认选中 `CurrentCombatUnit`；若当前对象不可行动，则只从当前阵营存活且可行动单位中确定后备选择，不在 UI 中复制回合规则
+    7. **Task T1.7 基础棋盘操作迁移**
+       - 对齐单位选择、地格选择、移动范围、移动提交、待机、确认、取消与输入锁定
+       - UGUI 与棋盘射线输入明确分层，点击 HUD 不穿透到战场，行动锁定和取消后的焦点/范围反馈与 Sprint 4 契约一致
+       - 补齐 Presenter / View 状态测试与 Play Mode 基础操作冒烟
+    8. **Task T1.8 四档环绕镜头控制**
+       - 在 Presentation 层建立简单战斗镜头控制器，以当前操控机兵为观察焦点，在 0°、45°、90°、135° 四个离散方位间切换，俯角和观察距离保持固定
+       - 默认围绕 `CurrentCombatUnit`；切换我方可行动角色或角色移动后更新焦点位置，选择敌方目标时不改变当前操控机兵焦点
+       - 在 `BattleHUDUI` 提供离散角度控制入口，切换后棋盘射线、范围高亮、焦点框和 UGUI 输入隔离仍保持正确
+       - 本阶段不实现自由轨道旋转、缩放、平移、镜头碰撞或 `BattleDirector` 动画，只验证四档视角均可稳定观察和操作棋盘
+    9. **Task T1.9 双路径行动面板迁移**
+       - 对齐默认武器栏、基础武器技能、依赖基础武器技能、技能优先/目标优先、合法目标切换与释放前确认
+       - 继续使用 `BattleActionSelectionPath`、`RequiresBasicWeapon`、`AbilityTargetRangeSource` 和统一行动身份契约，不在 UGUI 内重新推导
+       - 对齐技能说明、可用/禁用/选中反馈和输入锁定，并覆盖两条路径的 EditMode 与 Play Mode 验收
+    10. **Task T1.10 结果、伤害统计与后续选择**
+       - 根据 Battle 权威 Outcome 和固定玩家阵营映射胜利/失败，显示 `BattleResultUI`；结果页提供“查看统计”“重新战斗”“返回主场景”
+       - 从 ActionLog 构建只读统计快照，按每台单位聚合实际造成伤害、实际承受伤害和击杀数；使用耐久前后差计算实际伤害，避免过量伤害污染统计
+       - `BattleStatisticsUI` 由结果页按需打开，关闭后返回结果页；统计聚合使用纯 C# 测试覆盖普通攻击、技能、致死、过量伤害和双方单位
+       - 验证重新开始恢复四台单位、初始位置、满耐久/AP、第 1 回合、TeamA、首台机兵、空日志、空选择与空高亮
+       - 验证窗口关闭、返回伪主场景、再次进入战斗、场景切换和应用退出均按单一顺序释放 UI 事件、战斗 Runtime、场景单位与资源句柄
+    11. **Task T1.11 功能对齐验收与临时 HUD 退役**
+       - 完成“伪主场景 -> 点击进入战斗 -> 固定队伍确认 -> 胜利条件 -> 阵营回合提示 -> 固定 2v2 -> 结果/统计 -> 重战或返回 -> 再次进入”的完整回归验收
+       - 覆盖默认选角、四档镜头、双路径、焦点、弹窗输入锁定、棋盘/HUD 隔离、胜负、统计、重启和重复进出战斗，确保不同流程窗口不会同时响应输入
+       - 在功能对齐后移除 UI Toolkit HUD 及仅为其服务的适配代码，保留仍被正式 Presentation 复用的纯 C# 契约
+       - 运行 Battle、Presentation、GameLogic、Editor 编译与 Unity EditMode / Play Mode 验证，形成进入 Sprint 5 的稳定基线
+  - 扩展规则：用户新增需求默认从 Task T1.12 起顺序追加；若扩展任务是现有任务的硬前置，可插入对应位置，但必须同步记录依赖、验收标准和对后续任务编号的影响
+  - 非目标：本阶段不新增角色库滑动选人、上下阵、拖拽布阵、地形 Cost、路径动画、`BattleDirector` 动画时序、Luban 配表、正式美术皮肤、Buff / Modifier / Trigger 或新的战斗规则
 
 - [ ] Sprint 5：地形 Cost 与路径查询
   - 状态：未开始
@@ -267,10 +372,11 @@
   - 状态：已完成
   - 完成标准：项目已接入 TEngine 框架及依赖库
   - 验证方式：历史提交记录确认
-  - 备注：对应历史提交 `dbd147e 接入 TEngine 框架以及依赖库`；后续 Sprint 9 只接正式战斗流程、UI 和资源边界，不重复执行框架接入
+  - 备注：对应历史提交 `dbd147e 接入 TEngine 框架以及依赖库`；Sprint T1 只接正式战斗流程、UI 和资源边界，不重复执行框架接入
 
-- [ ] Sprint 9：正式战斗流程与部署
-  - 计划内容：TEngine Procedure 战斗流程、正式 `BattleMainUI`、BattlePreparation / Deployment、Presenter / View 边界、`BattleDirector` 表现时序与最小战斗配置入口
+- [ ] Sprint 9：战前部署与表现导演
+  - 计划内容：在 Sprint T1 的正式流程、项目自有 `BattleHUDUI` 和 Presenter / View 基线上增加 BattlePreparation / Deployment、可配置战斗入口与 `BattleDirector` 表现时序
+  - 前置条件：Sprint T1 已完成 TEngine 正式战斗流程迁移并退役临时 UI Toolkit HUD，不在本 Sprint 重复接入框架或重做基础 HUD
   - 备注：随机先手、速度先手和剧情指定先手由独立 `InitiativeResolver` 生成行动顺序，不塞入 `TurnCoordinator`
 
 - [ ] Sprint 10：属性、状态、Modifier 与 Trigger
@@ -311,7 +417,7 @@
 | 主计划旧 Sprint 2 | AP / PP、技能成本、命中率、确定性 RNG、部位命中与伤害管线 | Sprint 4 先做最小 AP；完整能力放 Sprint 7 |
 | 主计划旧 Sprint 3 | Cost Matrix、A*、TerrainType、Elevation、Locomotion、ZOC、LOS、掩体 | Terrain Cost / Dijkstra / A* 放 Sprint 5；Elevation / Locomotion / ZOC / LOS / 掩体放 Sprint 8 |
 | 主计划 P1 AI | 贪心 AI 与长期 Utility AI | 最小贪心 AI 放 Sprint 8；Utility AI 保留 Sprint 13+ |
-| 主计划旧 Sprint 4～5 | 正式 TEngine 战斗流程、Presenter、State / Attribute / Modifier / Trigger、Luban、装配、Command、悔棋、续战和回放 | 已完成的框架 / asmdef 不重复；其余拆入 Sprint 9～12 |
+| 主计划旧 Sprint 4～5 | 正式 TEngine 战斗流程、Presenter、State / Attribute / Modifier / Trigger、Luban、装配、Command、悔棋、续战和回放 | 正式流程、UGUI 与 Presenter 提前进入 Sprint T1；部署和表现导演保留 Sprint 9；其余拆入 Sprint 10～12 |
 | 主计划旧 Sprint 6+ | 背包、元件、天赋、追加攻击、行动配额、养成、热更新资源流、分享录像和 PVP | Sprint 13+ 或满足前置条件后再单独排期 |
 | 编辑器与参考分析 | TargetValidationReport、Breakdown、Schema、Validator、沙盒和内容编辑器 | 保留 P4～P6 工具链路线，不进入近期机制 Sprint |
 
@@ -340,6 +446,12 @@
 | 2026-07-16 | Battle 与 Presentation 按职责目录和命名空间归类，保持现有 asmdef 边界 | 原 `MechStorm.Battle.Combat` 已同时容纳单位、回合、规则、行动结果和调试数据，无法继续表达职责；Sprint 3 会增加空间和范围脚本，后续 Sprint 还会增加技能脚本 | Battle 使用 `Actions / Diagnostics / Foundation / Numeric / Rules / Snapshots / Spatial / Turns / Units`，`BattleSession` 保留在根命名空间；Presentation 使用 `Board / Controllers / Input / Units`，测试目录同步镜像，不拆分程序集 |
 | 2026-07-18 | P1 执行顺序调整为“范围 → 技能 → 地形”，并补回旧规划遗漏 | 实际 Sprint 2 已完成战斗流程、Result、Snapshot 与日志，与主计划旧 Sprint 2 的属性、部位、资源和武器任务不同；把范围、技能、地形和复杂机甲机制塞入同一 Sprint 会扩大返工风险 | Sprint 3 做占格与范围，Sprint 4 做最小技能，Sprint 5 做 Terrain Cost / Dijkstra / A*，Sprint 6～8 补机甲深度、资源命中和高级空间规则；原 P2 工程化顺延到 Sprint 9～12，主计划保持历史蓝图，当前执行以本文件为准 |
 | 2026-07-18 | Sprint 3 继续瞬移，A* 放到地形阶段 | 当前没有路径预览、逐格移动动画或 AI 路径消费方，等代价格子的范围查询由 BFS 即可正确完成；A* 需要先有稳定通行和 Cost 规则 | Sprint 3 不实现 A*；Sprint 5 使用 Dijkstra 计算带权可达范围，A* 只负责单目标最低 Cost 路径 |
+| 2026-07-22 | 玩法任务先以可观察需求卡描述，再映射为开发任务 | 仅列类名、模块名和架构目标无法让开发者还原具体玩法、成功失败规则与状态时序，容易在编码阶段猜测策划意图 | 后续玩法任务默认说明玩法目的、数值示例、成功失败边界、状态流程、开发职责、验收测试与非目标；通用模板记录在 `ENGINEERING_COLLABORATION_GUIDELINES.md` |
+| 2026-07-30 | Sprint 4 完成后优先接入 TEngine 正式战斗流程与 UGUI，不继续扩展临时 UI Toolkit HUD | 当前双路径战斗交互和纯 C# 契约已稳定，继续扩展临时 HUD 会增加未来迁移成本；缺少美术素材不阻塞灰盒 UGUI 验证 | Task 4.11 / 4.12 仍按当前临时场景完成；阶段验收后先拆分 `BattleMainUI`、`UIWindow / UIWidget`、Procedure 与 Presenter / View 迁移任务，功能对齐后停止维护 UI Toolkit 版本，再继续 Sprint 5 |
+| 2026-07-30 | 新增独立 P1.5 / Sprint T1 承载 TEngine + UGUI 正式战斗表现迁移 | 迁移工作横跨正式入口、场景、Runtime 生命周期、UGUI、双路径操作与退役临时 HUD，不应作为 Sprint 4 尾项，也不应混入 Sprint 5 地形机制；独立阶段也便于继续追加用户扩展任务 | Sprint T1 排在 Sprint 4 与 Sprint 5 之间，使用 Task T1.x 独立编号；原 Sprint 9 缩减为战前部署、可配置战斗入口和表现导演 |
+| 2026-07-30 | Sprint T1 先搭建伪主场景和战斗入口按钮，再进入正式战斗场景 | 需要验证真实的游戏入口与场景切换链路，避免应用启动后直接打开战斗 UI，也为后续扩展主界面功能保留稳定入口 | 该入口固定为 Task T1.1；最终验收覆盖进入战斗、返回主场景和再次进入 |
+| 2026-07-30 | Sprint T1 使用项目自有战斗 UI Prefab，并补齐固定队伍确认、胜利条件、阵营回合提示、默认选角、结果与按需伤害统计流程 | TEngine 示例 `BattleMainUI.prefab` 不代表最终项目结构；当前已有固定 2v2、Outcome、ActionLog 与重建能力，可以以中等可控成本建立正式灰盒流程，而无需提前实现角色库和真实布阵 | 新增 `BattlePreparationUI`、`BattleHUDUI`、`BattleObjectiveUI`、`BattleRoundUI`、`BattleResultUI`、`BattleStatisticsUI` 职责；回合提示每个阵营回合一次；统计按单位记录造成伤害、承受伤害和击杀；结果页按需打开统计 |
+| 2026-07-30 | Sprint T1 增加围绕当前操控机兵的四档战斗镜头 | 战棋需要从不同方向观察棋盘，但当前阶段不需要自由相机和复杂镜头导演 | Task T1.8 支持 0°、45°、90°、135° 四个离散方位，固定俯角和距离；单位切换或移动后更新焦点，并验证旋转后棋盘射线与 UI 输入隔离 |
 
 ## Git 版本管理约定
 
@@ -357,6 +469,6 @@
 
 ## 下一步
 
-1. 开始 Task 3.4，为当前单位提供无副作用的移动格、普通攻击覆盖格与合法目标查询。
-2. 保证查询结果与最终移动、攻击校验使用同一套 Battle 规则。
-3. 不提前实现范围高亮或完整 TargetSelector / Filter。
+1. 启动 Task T1.1，搭建伪主场景、UGUI 主界面灰盒窗口和“进入战斗”按钮。
+2. 按 Task T1.2～T1.10 建立正式场景生命周期、固定队伍确认、战斗提示、项目自有 HUD、基础操作、四档镜头、双路径行动、结果与伤害统计。
+3. 完成 Task T1.11 全流程验收并退役临时 UI Toolkit HUD，再进入 Sprint 5。

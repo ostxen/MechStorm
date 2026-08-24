@@ -33,6 +33,11 @@ namespace MechStorm.Battle.Rules
             }
 
             var attack = source.Mech.BasicAttack;
+            if (!source.PilotRuntime.TrySpendActionPoint(attack.ActionPointCost))
+            {
+                return false;
+            }
+
             target.MechRuntime.TakeDamage(attack.Damage);
             return true;
         }

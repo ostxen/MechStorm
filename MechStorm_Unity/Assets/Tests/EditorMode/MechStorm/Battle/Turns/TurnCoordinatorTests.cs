@@ -28,7 +28,7 @@ namespace MechStorm.Battle.Tests.Turns
         {
             var firstTeamAUnit = CreateCombatUnit(1);
             var deadTeamAUnit = CreateCombatUnit(2);
-            var nextTeamAUnit = CreateCombatUnit(3);
+            var nextTeamAUnit = CreateCombatUnit(3, currentActionPoint: 0);
             var teamBUnit = CreateCombatUnit(4);
             deadTeamAUnit.MechRuntime.TakeDamage(
                 deadTeamAUnit.Mech.MaxDurability);
@@ -40,13 +40,14 @@ namespace MechStorm.Battle.Tests.Turns
 
             Assert.AreEqual(CombatFaction.TeamA, coordinator.CurrentFaction);
             Assert.AreSame(nextTeamAUnit, coordinator.CurrentCombatUnit);
+            Assert.AreEqual(10, nextTeamAUnit.PilotRuntime.CurrentActionPoint);
         }
 
         [Test]
         public void EndCurrentUnitAction_AfterFactionCompletes_SwitchesFaction()
         {
             var teamAUnit = CreateCombatUnit(1);
-            var teamBUnit = CreateCombatUnit(2);
+            var teamBUnit = CreateCombatUnit(2, currentActionPoint: 0);
             var coordinator = CreateTurnCoordinator(
                 new[] { teamAUnit },
                 new[] { teamBUnit });
@@ -56,14 +57,15 @@ namespace MechStorm.Battle.Tests.Turns
             Assert.AreEqual(CombatFaction.TeamB, coordinator.CurrentFaction);
             Assert.AreSame(teamBUnit, coordinator.CurrentCombatUnit);
             Assert.AreEqual(1, coordinator.CurrentRoundNumber);
+            Assert.AreEqual(10, teamBUnit.PilotRuntime.CurrentActionPoint);
         }
 
         [Test]
         public void EndCurrentUnitAction_AfterFullRound_ResetsTeamAProgress()
         {
-            var firstTeamAUnit = CreateCombatUnit(1);
-            var secondTeamAUnit = CreateCombatUnit(2);
-            var teamBUnit = CreateCombatUnit(3);
+            var firstTeamAUnit = CreateCombatUnit(1, currentActionPoint: 1);
+            var secondTeamAUnit = CreateCombatUnit(2, currentActionPoint: 0);
+            var teamBUnit = CreateCombatUnit(3, currentActionPoint: 0);
             var coordinator = CreateTurnCoordinator(
                 new[] { firstTeamAUnit, secondTeamAUnit },
                 new[] { teamBUnit });
@@ -75,6 +77,9 @@ namespace MechStorm.Battle.Tests.Turns
             Assert.AreEqual(CombatFaction.TeamA, coordinator.CurrentFaction);
             Assert.AreSame(firstTeamAUnit, coordinator.CurrentCombatUnit);
             Assert.AreEqual(2, coordinator.CurrentRoundNumber);
+            Assert.AreEqual(10, firstTeamAUnit.PilotRuntime.CurrentActionPoint);
+            Assert.AreEqual(10, secondTeamAUnit.PilotRuntime.CurrentActionPoint);
+            Assert.AreEqual(10, teamBUnit.PilotRuntime.CurrentActionPoint);
         }
 
         [Test]
@@ -82,7 +87,7 @@ namespace MechStorm.Battle.Tests.Turns
         {
             var teamAUnit = CreateCombatUnit(1);
             var teamBUnit = CreateCombatUnit(2);
-            var neutralUnit = CreateCombatUnit(3);
+            var neutralUnit = CreateCombatUnit(3, currentActionPoint: 0);
             var registry = new CombatUnitRegistry(
                 new[] { teamAUnit },
                 new[] { teamBUnit },
@@ -94,6 +99,101 @@ namespace MechStorm.Battle.Tests.Turns
 
             Assert.AreEqual(CombatFaction.TeamA, coordinator.CurrentFaction);
             Assert.AreSame(teamAUnit, coordinator.CurrentCombatUnit);
+            Assert.AreEqual(0, neutralUnit.PilotRuntime.CurrentActionPoint);
+        }
+
+        [Test]
+        public void EndCurrentUnitAction_RestoresOnlyTheNextCombatUnit()
+        {
+            var firstTeamAUnit = CreateCombatUnit(1, currentActionPoint: 3);
+            var secondTeamAUnit = CreateCombatUnit(2, currentActionPoint: 0);
+            var teamBUnit = CreateCombatUnit(3, currentActionPoint: 0);
+            var coordinator = CreateTurnCoordinator(
+                new[] { firstTeamAUnit, secondTeamAUnit },
+                new[] { teamBUnit });
+
+            coordinator.EndCurrentUnitAction();
+
+            Assert.AreSame(secondTeamAUnit, coordinator.CurrentCombatUnit);
+            Assert.AreEqual(3, firstTeamAUnit.PilotRuntime.CurrentActionPoint);
+            Assert.AreEqual(10, secondTeamAUnit.PilotRuntime.CurrentActionPoint);
+            Assert.AreEqual(0, teamBUnit.PilotRuntime.CurrentActionPoint);
+        }
+
+        [Test]
+        public void SelectCombatUnit_AllowsAliveUnactedUnitFromCurrentFaction()
+        {
+            var firstTeamAUnit = CreateCombatUnit(1, currentActionPoint: 3);
+            var selectedTeamAUnit = CreateCombatUnit(2, currentActionPoint: 1);
+            var teamBUnit = CreateCombatUnit(3);
+            var coordinator = CreateTurnCoordinator(
+                new[] { firstTeamAUnit, selectedTeamAUnit },
+                new[] { teamBUnit });
+
+            coordinator.SelectCombatUnit(selectedTeamAUnit);
+
+            Assert.AreSame(selectedTeamAUnit, coordinator.CurrentCombatUnit);
+            Assert.AreEqual(10, selectedTeamAUnit.PilotRuntime.CurrentActionPoint);
+            Assert.IsFalse(coordinator.HasUnitActed(firstTeamAUnit));
+            Assert.IsFalse(coordinator.HasUnitActed(selectedTeamAUnit));
+        }
+
+        [Test]
+        public void CanSelectCombatUnit_RejectsEnemyDeadAndAlreadyActedUnits()
+        {
+            var firstTeamAUnit = CreateCombatUnit(1);
+            var secondTeamAUnit = CreateCombatUnit(2);
+            var deadTeamAUnit = CreateCombatUnit(3);
+            var teamBUnit = CreateCombatUnit(4);
+            deadTeamAUnit.MechRuntime.TakeDamage(deadTeamAUnit.Mech.MaxDurability);
+            var coordinator = CreateTurnCoordinator(
+                new[] { firstTeamAUnit, secondTeamAUnit, deadTeamAUnit },
+                new[] { teamBUnit });
+            coordinator.SelectCombatUnit(secondTeamAUnit);
+            coordinator.EndCurrentUnitAction();
+
+            Assert.IsTrue(coordinator.HasUnitActed(secondTeamAUnit));
+            Assert.IsFalse(coordinator.CanSelectCombatUnit(secondTeamAUnit));
+            Assert.IsFalse(coordinator.CanSelectCombatUnit(deadTeamAUnit));
+            Assert.IsFalse(coordinator.CanSelectCombatUnit(teamBUnit));
+            Assert.IsTrue(coordinator.CanSelectCombatUnit(firstTeamAUnit));
+        }
+
+        [Test]
+        public void EndCurrentFactionTurn_SkipsRemainingFactionUnits()
+        {
+            var firstTeamAUnit = CreateCombatUnit(1, currentActionPoint: 3);
+            var skippedTeamAUnit = CreateCombatUnit(2, currentActionPoint: 1);
+            var teamBUnit = CreateCombatUnit(3, currentActionPoint: 0);
+            var coordinator = CreateTurnCoordinator(
+                new[] { firstTeamAUnit, skippedTeamAUnit },
+                new[] { teamBUnit });
+
+            coordinator.EndCurrentFactionTurn();
+
+            Assert.AreEqual(CombatFaction.TeamB, coordinator.CurrentFaction);
+            Assert.AreSame(teamBUnit, coordinator.CurrentCombatUnit);
+            Assert.AreEqual(3, firstTeamAUnit.PilotRuntime.CurrentActionPoint);
+            Assert.AreEqual(1, skippedTeamAUnit.PilotRuntime.CurrentActionPoint);
+            Assert.AreEqual(10, teamBUnit.PilotRuntime.CurrentActionPoint);
+        }
+
+        [Test]
+        public void EndCurrentFactionTurn_FromTeamB_StartsNextRound()
+        {
+            var teamAUnit = CreateCombatUnit(1, currentActionPoint: 0);
+            var teamBUnit = CreateCombatUnit(2);
+            var coordinator = CreateTurnCoordinator(
+                new[] { teamAUnit },
+                new[] { teamBUnit });
+            coordinator.EndCurrentFactionTurn();
+
+            coordinator.EndCurrentFactionTurn();
+
+            Assert.AreEqual(CombatFaction.TeamA, coordinator.CurrentFaction);
+            Assert.AreSame(teamAUnit, coordinator.CurrentCombatUnit);
+            Assert.AreEqual(2, coordinator.CurrentRoundNumber);
+            Assert.AreEqual(10, teamAUnit.PilotRuntime.CurrentActionPoint);
         }
 
         [Test]
@@ -111,12 +211,14 @@ namespace MechStorm.Battle.Tests.Turns
             return new TurnCoordinator(registry);
         }
 
-        private static CombatUnit CreateCombatUnit(int id)
+        private static CombatUnit CreateCombatUnit(
+            int id, int maxActionPoint = 10, int currentActionPoint = 10)
         {
-            var pilot = new PilotData(id, $"Pilot {id}", 10);
+            var pilot = new PilotData(id, $"Pilot {id}", maxActionPoint);
+            var pilotRuntime = new PilotRuntime(currentActionPoint);
             var mech = new MechData(id, $"Mech {id}", new BasicAttackData(10, 1, 1), 100, 3);
-            var factory = new CombatUnitFactory();
-            return factory.Create(id, pilot, mech, new Vector2Int(id, 0));
+            var mechRuntime = new MechRuntime(mech.MaxDurability);
+            return new CombatUnit(id, pilot, pilotRuntime, mech, mechRuntime, new Vector2Int(id, 0));
         }
     }
 }

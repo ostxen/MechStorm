@@ -29,9 +29,99 @@ namespace MechStorm.Battle.Tests.Units
         }
 
         [Test]
+        public void PilotData_WithNegativeMaxActionPoint_Throws()
+        {
+            var exception = Assert.Throws<ArgumentOutOfRangeException>(() =>
+                new PilotData(1, "Test Pilot", -1));
+
+            Assert.AreEqual("maxActionPoint", exception.ParamName);
+        }
+
+        [Test]
+        public void PilotRuntime_WithNegativeCurrentActionPoint_Throws()
+        {
+            var exception = Assert.Throws<ArgumentOutOfRangeException>(() =>
+                new PilotRuntime(-1));
+
+            Assert.AreEqual("currentActionPoint", exception.ParamName);
+        }
+
+        [TestCase(10, 0, true)]
+        [TestCase(10, 10, true)]
+        [TestCase(10, 11, false)]
+        public void HasEnoughActionPoint_ReturnsWhetherCurrentValueCanPay(
+            int currentActionPoint, int amount, bool expected)
+        {
+            var pilotRuntime = new PilotRuntime(currentActionPoint);
+
+            Assert.AreEqual(expected, pilotRuntime.HasEnoughActionPoint(amount));
+        }
+
+        [Test]
+        public void TrySpendActionPoint_WithEnoughValue_DeductsAmount()
+        {
+            var pilotRuntime = new PilotRuntime(10);
+
+            var spent = pilotRuntime.TrySpendActionPoint(4);
+
+            Assert.IsTrue(spent);
+            Assert.AreEqual(6, pilotRuntime.CurrentActionPoint);
+        }
+
+        [Test]
+        public void TrySpendActionPoint_WithExactValue_DeductsToZero()
+        {
+            var pilotRuntime = new PilotRuntime(4);
+
+            var spent = pilotRuntime.TrySpendActionPoint(4);
+
+            Assert.IsTrue(spent);
+            Assert.AreEqual(0, pilotRuntime.CurrentActionPoint);
+        }
+
+        [Test]
+        public void TrySpendActionPoint_WithInsufficientValue_ReturnsFalseWithoutChange()
+        {
+            var pilotRuntime = new PilotRuntime(3);
+
+            var spent = pilotRuntime.TrySpendActionPoint(4);
+
+            Assert.IsFalse(spent);
+            Assert.AreEqual(3, pilotRuntime.CurrentActionPoint);
+        }
+
+        [Test]
+        public void ResetActionPointToMax_ReplacesCurrentValue()
+        {
+            var pilotRuntime = new PilotRuntime(2);
+
+            pilotRuntime.ResetActionPointToMax(10);
+
+            Assert.AreEqual(10, pilotRuntime.CurrentActionPoint);
+        }
+
+        [Test]
+        public void ActionPointMethods_WithNegativeAmount_Throw()
+        {
+            var pilotRuntime = new PilotRuntime(10);
+
+            var enoughException = Assert.Throws<ArgumentOutOfRangeException>(() =>
+                pilotRuntime.HasEnoughActionPoint(-1));
+            var spendException = Assert.Throws<ArgumentOutOfRangeException>(() =>
+                pilotRuntime.TrySpendActionPoint(-1));
+            var resetException = Assert.Throws<ArgumentOutOfRangeException>(() =>
+                pilotRuntime.ResetActionPointToMax(-1));
+
+            Assert.AreEqual("amount", enoughException.ParamName);
+            Assert.AreEqual("amount", spendException.ParamName);
+            Assert.AreEqual("maxActionPoint", resetException.ParamName);
+            Assert.AreEqual(10, pilotRuntime.CurrentActionPoint);
+        }
+
+        [Test]
         public void MechData_StoresStaticValues()
         {
-            var basicAttack = new BasicAttackData(25, 1, 3);
+            var basicAttack = new BasicAttackData(25, 1, 3, 2);
             var mech = new MechData(101, "Test Mech", basicAttack, 120, 5);
 
             Assert.AreEqual(101, mech.Id);
@@ -40,6 +130,7 @@ namespace MechStorm.Battle.Tests.Units
             Assert.AreEqual(25, mech.BasicAttack.Damage);
             Assert.AreEqual(1, mech.BasicAttack.MinRange);
             Assert.AreEqual(3, mech.BasicAttack.MaxRange);
+            Assert.AreEqual(2, mech.BasicAttack.ActionPointCost);
             Assert.AreEqual(120, mech.MaxDurability);
             Assert.AreEqual(5, mech.MoveRange);
         }
@@ -50,6 +141,7 @@ namespace MechStorm.Battle.Tests.Units
             Assert.Throws<ArgumentOutOfRangeException>(() => new BasicAttackData(-1, 1, 1));
             Assert.Throws<ArgumentOutOfRangeException>(() => new BasicAttackData(10, 0, 1));
             Assert.Throws<ArgumentOutOfRangeException>(() => new BasicAttackData(10, 3, 2));
+            Assert.Throws<ArgumentOutOfRangeException>(() => new BasicAttackData(10, 1, 1, -1));
         }
 
         [Test]

@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using MechStorm.Battle.Foundation;
+using MechStorm.Battle.Outcomes;
 using MechStorm.Battle.Units;
 
 namespace MechStorm.Battle.Snapshots
@@ -19,22 +21,43 @@ namespace MechStorm.Battle.Snapshots
 
         public int CurrentUnitId { get; }
 
+        /// <summary>
+        /// 当前机兵本次行动的固定移动范围锚点。
+        /// </summary>
+        public Vector2Int CurrentActionStartPosition { get; }
+
+        /// <summary>
+        /// 创建快照时的对局结果。
+        /// </summary>
+        public BattleOutcome Outcome { get; }
+
+        /// <summary>
+        /// 创建快照时所有单位的只读副本。
+        /// </summary>
         public IReadOnlyList<BattleUnitSnapshot> Units { get; }
 
+        /// <summary>
+        /// 创建完整战场快照；未显式提供 Outcome 时表示对局仍在进行。
+        /// </summary>
         public BattleSnapshot(int boardWidth, int boardHeight, int roundNumber, CombatFaction currentFaction,
-            int currentUnitId, IEnumerable<BattleUnitSnapshot> units)
+            int currentUnitId, IEnumerable<BattleUnitSnapshot> units, BattleOutcome outcome = null,
+            Vector2Int? currentActionStartPosition = null)
         {
             ValidateBasicFields(boardWidth, boardHeight, roundNumber, currentUnitId);
 
             var unitList = CopyAndValidateUnits(units);
-            ValidateCurrentUnit(unitList, currentUnitId, currentFaction);
+            var currentUnit = ValidateCurrentUnit(unitList, currentUnitId, currentFaction);
+            var actionStartPosition = currentActionStartPosition ?? currentUnit.Position;
+            ValidateActionStartPosition(boardWidth, boardHeight, actionStartPosition);
 
             BoardWidth = boardWidth;
             BoardHeight = boardHeight;
             RoundNumber = roundNumber;
             CurrentFaction = currentFaction;
             CurrentUnitId = currentUnitId;
+            CurrentActionStartPosition = actionStartPosition;
             Units = unitList.AsReadOnly();
+            Outcome = outcome ?? BattleOutcome.InProgress;
         }
 
         private static void ValidateBasicFields(int boardWidth, int boardHeight, int roundNumber, int currentUnitId)
@@ -92,7 +115,7 @@ namespace MechStorm.Battle.Snapshots
             return unitList;
         }
 
-        private static void ValidateCurrentUnit(IReadOnlyList<BattleUnitSnapshot> units, int currentUnitId,
+        private static BattleUnitSnapshot ValidateCurrentUnit(IReadOnlyList<BattleUnitSnapshot> units, int currentUnitId,
             CombatFaction currentFaction)
         {
             BattleUnitSnapshot currentUnit = null;
@@ -118,6 +141,19 @@ namespace MechStorm.Battle.Snapshots
             if (currentUnit.IsDead)
             {
                 throw new ArgumentException("Current unit must be alive.", nameof(currentUnitId));
+            }
+
+            return currentUnit;
+        }
+
+        private static void ValidateActionStartPosition(
+            int boardWidth, int boardHeight, Vector2Int position)
+        {
+            if (position.X < 0 || position.X >= boardWidth ||
+                position.Y < 0 || position.Y >= boardHeight)
+            {
+                throw new ArgumentOutOfRangeException(nameof(position), position,
+                    "Current action start position must be inside the battle grid.");
             }
         }
     }

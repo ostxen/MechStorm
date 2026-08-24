@@ -57,6 +57,23 @@ namespace MechStorm.Presentation.Tests.Board
         }
 
         [Test]
+        public void Build_WithSelectedAttackTarget_PrioritizesSelectedTarget()
+        {
+            var mapper = new BattleRangeHighlightMapper();
+            var target = CreateCombatUnit(1, new Vector2Int(2, 0));
+
+            var highlights = mapper.Build(
+                Array.Empty<Vector2Int>(),
+                new[] { target.Position },
+                new[] { target },
+                target);
+
+            Assert.AreEqual(
+                BattleCellHighlightType.SelectedAttackTarget,
+                highlights[target.Position]);
+        }
+
+        [Test]
         public void Build_DoesNotModifyInputCollections()
         {
             var mapper = new BattleRangeHighlightMapper();
@@ -72,6 +89,68 @@ namespace MechStorm.Presentation.Tests.Board
         }
 
         [Test]
+        public void BuildAbility_PrioritizesValidAbilityTargets()
+        {
+            var mapper = new BattleRangeHighlightMapper();
+            var abilityPosition = new Vector2Int(1, 0);
+            var target = CreateCombatUnit(1, new Vector2Int(2, 0));
+
+            var highlights = mapper.BuildAbility(
+                new[] { abilityPosition, target.Position },
+                new[] { target });
+
+            Assert.AreEqual(BattleCellHighlightType.Ability, highlights[abilityPosition]);
+            Assert.AreEqual(BattleCellHighlightType.ValidAbilityTarget, highlights[target.Position]);
+        }
+
+        [Test]
+        public void BuildAbility_WithSelectedTarget_PrioritizesSelectedTarget()
+        {
+            var mapper = new BattleRangeHighlightMapper();
+            var target = CreateCombatUnit(1, new Vector2Int(2, 0));
+
+            var highlights = mapper.BuildAbility(
+                new[] { target.Position },
+                new[] { target },
+                target);
+
+            Assert.AreEqual(
+                BattleCellHighlightType.SelectedAbilityTarget,
+                highlights[target.Position]);
+        }
+
+        [Test]
+        public void BuildSelectedActionTarget_UsesGenericSelectedTargetType()
+        {
+            var mapper = new BattleRangeHighlightMapper();
+            var target = CreateCombatUnit(1, new Vector2Int(2, 0));
+
+            var highlights = mapper.BuildSelectedActionTarget(target);
+
+            Assert.AreEqual(1, highlights.Count);
+            Assert.AreEqual(
+                BattleCellHighlightType.SelectedActionTarget,
+                highlights[target.Position]);
+            Assert.Throws<ArgumentNullException>(() =>
+                mapper.BuildSelectedActionTarget(null));
+        }
+
+        [Test]
+        public void BuildAbility_WithInvalidInputs_Throws()
+        {
+            var mapper = new BattleRangeHighlightMapper();
+            var positions = Array.Empty<Vector2Int>();
+            var targets = Array.Empty<CombatUnit>();
+
+            Assert.Throws<ArgumentNullException>(() => mapper.BuildAbility(null, targets));
+            Assert.Throws<ArgumentNullException>(() => mapper.BuildAbility(positions, null));
+            Assert.Throws<ArgumentException>(() =>
+                mapper.BuildAbility(positions, new CombatUnit[] { null }));
+            Assert.Throws<ArgumentException>(() =>
+                mapper.BuildAbility(positions, targets, CreateCombatUnit(1, new Vector2Int(0, 0))));
+        }
+
+        [Test]
         public void Build_WithInvalidInputs_Throws()
         {
             var mapper = new BattleRangeHighlightMapper();
@@ -83,6 +162,8 @@ namespace MechStorm.Presentation.Tests.Board
             Assert.Throws<ArgumentNullException>(() => mapper.Build(positions, positions, null));
             Assert.Throws<ArgumentException>(() =>
                 mapper.Build(positions, positions, new CombatUnit[] { null }));
+            Assert.Throws<ArgumentException>(() =>
+                mapper.Build(positions, positions, targets, CreateCombatUnit(1, new Vector2Int(0, 0))));
         }
 
         private static CombatUnit CreateCombatUnit(int unitId, Vector2Int position)

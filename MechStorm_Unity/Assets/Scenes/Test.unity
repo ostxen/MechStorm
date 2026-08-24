@@ -502,8 +502,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   _plane: {fileID: 317279695}
   _rangeHighlightTemplate: {fileID: 527249959}
-  _boardWidth: 10
-  _boardHeight: 10
+  _scenarioConfig: {fileID: 11400000, guid: 9835cf0430e09f9429cc6dc6f6e5b5ba, type: 2}
   _cellSize: 1
   _boardOrigin: {x: -5, y: 0, z: -5}
   _boardColor: {r: 0.12, g: 0.14, b: 0.16, a: 1}
@@ -514,6 +513,7 @@ MonoBehaviour:
   _battleInputLayerMask:
     serializedVersion: 2
     m_Bits: 4294967291
+  _hudTheme: {fileID: 11400000, guid: 0a2d7f9d8c564de4a7a0fd8a3e3d8f10, type: 2}
 --- !u!1 &1341193990
 GameObject:
   m_ObjectHideFlags: 0

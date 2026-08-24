@@ -187,6 +187,11 @@ namespace MechStorm.Presentation.Board
                 BattleCellHighlightType.Attack => new Color(1f, 0.2f, 0.15f),
                 BattleCellHighlightType.MoveAndAttack => new Color(0.65f, 0.2f, 0.9f),
                 BattleCellHighlightType.ValidTarget => new Color(1f, 0.8f, 0.1f),
+                BattleCellHighlightType.SelectedAttackTarget => new Color(1f, 0.45f, 0.08f),
+                BattleCellHighlightType.Ability => new Color(0.15f, 0.75f, 1f),
+                BattleCellHighlightType.ValidAbilityTarget => new Color(0.2f, 1f, 0.45f),
+                BattleCellHighlightType.SelectedAbilityTarget => new Color(1f, 0.75f, 0.1f),
+                BattleCellHighlightType.SelectedActionTarget => new Color(1f, 0.65f, 0.15f),
                 _ => throw new ArgumentOutOfRangeException(nameof(highlightType), highlightType, null),
             };
 
