@@ -53,6 +53,22 @@ namespace MechStorm.Presentation.Controllers
         public bool IsCurrentUnitSelected =>
             ReferenceEquals(_selectedCombatUnit, _battleSession.CurrentCombatUnit);
 
+        /// <summary>
+        /// 默认选中当前行动单位，并显示 Battle 权威计算的移动与攻击范围。
+        /// </summary>
+        public void SelectCurrentCombatUnit()
+        {
+            if (_battleSession.IsBattleEnded)
+            {
+                ClearSelection();
+                return;
+            }
+
+            _selectedCombatUnit = _battleSession.CurrentCombatUnit;
+            _actionSelection.Reset();
+            RefreshSelection();
+        }
+
         public IReadOnlyList<BattleActionSelection> GetAvailableActions()
         {
             return _actionSelection.GetAvailableActions();

@@ -4,7 +4,6 @@ using MechStorm.Battle.Units;
 using MechStorm.Presentation.Board;
 using MechStorm.Presentation.Controllers;
 using MechStorm.Presentation.Input;
-using MechStorm.Presentation.Units;
 using TEngine;
 using UnityEngine;
 using Vector2Int = MechStorm.Battle.Foundation.Vector2Int;
@@ -31,6 +30,10 @@ namespace MechStorm.Presentation
         private Color _gridFocusColor = new Color(1f, 0.85f, 0.1f);
         [SerializeField]
         private bool _showBoardDebugMarkers = true;
+        [SerializeField]
+        private bool _createPresentationTools = true;
+        [SerializeField]
+        private bool _createTemporaryDebugTools = true;
 
         [SerializeField]
         private Camera _camera;
@@ -43,11 +46,8 @@ namespace MechStorm.Presentation
         [SerializeField]
         private TempBattleHudTheme _hudTheme;
 
-        private readonly Dictionary<CombatUnit, CombatUnitVisual> _combatUnitVisuals = new();
-        private readonly Dictionary<Collider, CombatUnit> _combatUnitColliders = new();
-        private readonly Dictionary<CombatUnit, Transform> _healthBarAnchors = new();
-
-        private Transform _combatUnitRoot;
+        private BattleRuntimeHost _runtimeHost;
+        private Transform _combatUnitRoot => _runtimeHost?.UnitRoot;
         private int _boardWidth;
         private int _boardHeight;
         private GridCoordinateConverter _coordConverter;
@@ -55,9 +55,9 @@ namespace MechStorm.Presentation
         private BattleGridFocusIndicator _gridFocusIndicator;
         private BattleBoardInputter _boardInputter;
         private BattlePresentationController _presentationController;
-        private BattleSession _battleSession;
-        private TempBattleScenarioBuildResult _scenarioBuildResult;
-        private TempBattleUnitPresenter _unitPresenter;
+        private BattleSession _battleSession => _runtimeHost?.Session;
+        private TempBattleScenarioBuildResult _scenarioBuildResult => _runtimeHost?.Scenario;
+        private BattleUnitPresenter _unitPresenter;
         private TempBattleDebugActions _debugActions;
 
         void Start()
@@ -68,10 +68,9 @@ namespace MechStorm.Presentation
                 return;
             }
 
-            if (_rangeHighlightTemplate == null)
+            if (_createPresentationTools)
             {
-                Log.Error("[MechStorm] TempGameEntry requires a range highlight template.");
-                return;
+                EnsureRangeHighlightTemplate();
             }
 
             if (_scenarioConfig == null)
@@ -85,21 +84,35 @@ namespace MechStorm.Presentation
                 return;
             }
 
-            _boardWidth = _scenarioConfig.BoardWidth;
-            _boardHeight = _scenarioConfig.BoardHeight;
-            EnsureDebugPanel();
-            _debugPanel.SetTheme(_hudTheme);
-            CreateBoard();
-            CreateRangeHighlighter();
-            CreateGridFocusIndicator();
-            LogBoardValidation();
-            CreateDebugMarkers();
-            CreateBattleRuntime();
+            if (!_createPresentationTools)
+            {
+                return;
+            }
+
+            try
+            {
+                if (_createTemporaryDebugTools)
+                {
+                    EnsureDebugPanel();
+                    _debugPanel.SetTheme(_hudTheme);
+                }
+
+                CreateRangeHighlighter();
+                CreateGridFocusIndicator();
+                LogBoardValidation();
+                CreateDebugMarkers();
+                CreateBattleRuntime();
+            }
+            catch (System.Exception exception)
+            {
+                ReleaseBattleRuntime();
+                Log.Error($"[MechStorm] Temporary battle initialization failed: {exception}");
+            }
         }
 
         private void CreateBattleRuntime()
         {
-            CreateCombatUnitVisuals();
+            _unitPresenter = _runtimeHost.UnitPresenter;
             CreateBoardInputter();
             CreatePresentationController();
             CreateDebugTools();
@@ -107,39 +120,40 @@ namespace MechStorm.Presentation
 
         void Update()
         {
-            _debugActions?.Tick();
+            if (_createTemporaryDebugTools)
+            {
+                _debugActions?.Tick();
+            }
+            else
+            {
+                _presentationController?.Tick(out _);
+            }
+
             _unitPresenter?.RefreshFacing();
         }
 
         void OnDestroy()
         {
-            if (_combatUnitRoot != null)
-            {
-                Destroy(_combatUnitRoot.gameObject);
-            }
-
-            _gridFocusIndicator?.Dispose();
-            _rangeHighlighter?.Dispose();
+            ReleaseBattleRuntime();
         }
 
         private bool TryBuildScenario()
         {
-            var scenarioBuilder = new TempBattleScenarioBuilder();
-            if (scenarioBuilder.TryBuild(
-                    _scenarioConfig,
-                    out _scenarioBuildResult,
-                    out var validationResult))
+            try
             {
-                _battleSession = _scenarioBuildResult.BattleSession;
+                var camera = _camera != null ? _camera : Camera.main;
+                _runtimeHost = new BattleRuntimeHost(_scenarioConfig, _plane, camera, transform,
+                    _cellSize, _boardOrigin, _boardColor);
+                _coordConverter = _runtimeHost.Coordinates;
+                _boardWidth = _scenarioConfig.BoardWidth;
+                _boardHeight = _scenarioConfig.BoardHeight;
                 return true;
             }
-
-            Log.Error(
-                $"[MechStorm] TempBattleScenarioConfig is invalid:" +
-                $"{System.Environment.NewLine}{validationResult.ErrorMessage}");
-            _scenarioBuildResult = null;
-            _battleSession = null;
-            return false;
+            catch (System.Exception exception)
+            {
+                Log.Error($"[MechStorm] Battle Runtime Host initialization failed: {exception}");
+                return false;
+            }
         }
 
         private void EnsureDebugPanel()
@@ -148,13 +162,6 @@ namespace MechStorm.Presentation
             {
                 _debugPanel = gameObject.AddComponent<TempBattleDebugPanel>();
             }
-        }
-
-        private void CreateBoard()
-        {
-            _coordConverter = new GridCoordinateConverter(_cellSize, _boardOrigin);
-            var boardRenderer = new BattleBoardRenderer();
-            boardRenderer.Initialize(_boardWidth, _boardHeight, _cellSize, _boardOrigin, _plane, _boardColor);
         }
 
         private void CreateRangeHighlighter()
@@ -198,6 +205,7 @@ namespace MechStorm.Presentation
         private void CreateDebugMarker(string markerName, Vector2Int gridPosition, Color color)
         {
             var marker = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+            marker.transform.SetParent(_combatUnitRoot, false);
             marker.name = $"BoardDebug_{markerName}";
             marker.transform.position = _coordConverter.GridToWorld(gridPosition) + Vector3.up * 0.05f;
             marker.transform.localScale = Vector3.one * Mathf.Min(_cellSize * 0.25f, 0.25f);
@@ -213,79 +221,29 @@ namespace MechStorm.Presentation
             }
         }
 
-        private void CreateCombatUnitVisuals()
-        {
-            _combatUnitRoot = new GameObject("BattleCombatUnits").transform;
-            foreach (var combatUnit in _scenarioBuildResult.Units)
-            {
-                var unitObject = GameObject.CreatePrimitive(PrimitiveType.Cube);
-                unitObject.name = $"BattleUnit_{combatUnit.UnitId}_{combatUnit.Pilot.Name}";
-                unitObject.transform.SetParent(_combatUnitRoot, false);
-                unitObject.transform.localScale = new Vector3(
-                    _cellSize * 0.6f,
-                    _cellSize,
-                    _cellSize * 0.6f);
-
-                var anchorObject = new GameObject("HealthBarAnchor");
-                anchorObject.transform.SetParent(unitObject.transform, false);
-                anchorObject.transform.localPosition = Vector3.up * 0.8f;
-                anchorObject.transform.localScale = Vector3.one;
-
-                var visual = new CombatUnitVisual(
-                    unitObject.transform,
-                    _coordConverter,
-                    unitObject.transform.localScale.y * 0.5f);
-                visual.RefreshPosition(combatUnit.Position);
-                _combatUnitVisuals.Add(combatUnit, visual);
-                _healthBarAnchors.Add(combatUnit, anchorObject.transform);
-
-                if (!unitObject.TryGetComponent<Collider>(out var unitCollider))
-                {
-                    Log.Error($"[MechStorm] Combat unit {combatUnit.UnitId} requires a collider.");
-                    continue;
-                }
-
-                _combatUnitColliders.Add(unitCollider, combatUnit);
-                LogUnitStatus(combatUnit, unitObject.transform.position);
-            }
-        }
-
-        private void LogUnitStatus(CombatUnit combatUnit, Vector3 worldPosition)
-        {
-            Log.Info(
-                $"[MechStorm] Unit={combatUnit.Pilot.Name}/{combatUnit.Mech.Name}, " +
-                $"Position=({combatUnit.Position.X},{combatUnit.Position.Y}), " +
-                $"World={worldPosition}, " +
-                $"HP={combatUnit.MechRuntime.CurrentDurability}/{combatUnit.Mech.MaxDurability}, " +
-                $"AP={combatUnit.PilotRuntime.CurrentActionPoint}/{combatUnit.Pilot.MaxActionPoint}");
-        }
-
         private void CreateBoardInputter()
         {
-            var camera = _camera != null ? _camera : Camera.main;
+            var camera = _runtimeHost.BattleCamera;
             if (camera == null)
             {
-                Log.Error("[MechStorm] BattleBoardInputter requires a camera.");
-                return;
+                throw new System.InvalidOperationException("BattleBoardInputter requires a camera.");
             }
 
             if (!_plane.TryGetComponent<Collider>(out var boardCollider))
             {
-                Log.Error("[MechStorm] BattleBoardInputter requires a collider on the board plane.");
-                return;
+                throw new System.InvalidOperationException("BattleBoardInputter requires a collider on the board plane.");
             }
 
-            if (_combatUnitColliders.Count != _scenarioBuildResult.Units.Count)
+            if (_runtimeHost.CombatUnitColliders.Count != _scenarioBuildResult.Units.Count)
             {
-                Log.Error("[MechStorm] Every combat unit requires an input collider.");
-                return;
+                throw new System.InvalidOperationException("Every combat unit requires an input collider.");
             }
 
             _boardInputter = new BattleBoardInputter(
                 camera,
                 boardCollider,
                 _coordConverter,
-                _combatUnitColliders,
+                _runtimeHost.CombatUnitColliders,
                 _battleInputLayerMask.value,
                 () => _debugPanel != null && _debugPanel.IsPointerOverPanel());
         }
@@ -293,32 +251,32 @@ namespace MechStorm.Presentation
         private void CreatePresentationController()
         {
             if (_battleSession == null ||
-                _combatUnitVisuals.Count != _scenarioBuildResult.Units.Count ||
+                _runtimeHost.CombatUnitVisuals.Count != _scenarioBuildResult.Units.Count ||
                 _boardInputter == null ||
                 _rangeHighlighter == null ||
                 _gridFocusIndicator == null)
             {
-                Log.Error("[MechStorm] BattlePresentationController dependencies are not ready.");
-                return;
+                throw new System.InvalidOperationException("BattlePresentationController dependencies are not ready.");
             }
 
             _presentationController = new BattlePresentationController(
-                _battleSession, _combatUnitVisuals, _boardInputter, _rangeHighlighter, _gridFocusIndicator,
+                _battleSession, _runtimeHost.CombatUnitVisuals, _boardInputter, _rangeHighlighter, _gridFocusIndicator,
                 _scenarioBuildResult.AbilitiesByUnitId);
+            _presentationController.SelectCurrentCombatUnit();
         }
 
         private void CreateDebugTools()
         {
-            var camera = _camera != null ? _camera : Camera.main;
-            if (_presentationController == null || camera == null)
+            if (!_createTemporaryDebugTools)
             {
-                Log.Error("[MechStorm] Temporary battle debug tools require a presentation controller and camera.");
                 return;
             }
 
-            _unitPresenter = new TempBattleUnitPresenter(
-                _healthBarAnchors,
-                camera);
+            var camera = _runtimeHost.BattleCamera;
+            if (_presentationController == null || camera == null)
+            {
+                throw new System.InvalidOperationException("Temporary battle debug tools require a presentation controller and camera.");
+            }
 
             var teamAUnits = _battleSession.GetFactionCombatUnits(CombatFaction.TeamA);
             _debugActions = new TempBattleDebugActions(
@@ -345,29 +303,60 @@ namespace MechStorm.Presentation
                 return;
             }
 
-            CreateBattleRuntime();
-            Log.Info("[MechStorm] Battle restarted from TempBattleScenarioConfig.");
+            try
+            {
+                CreateRangeHighlighter();
+                CreateGridFocusIndicator();
+                CreateDebugMarkers();
+                CreateBattleRuntime();
+                Log.Info("[MechStorm] Battle restarted from TempBattleScenarioConfig.");
+            }
+            catch (System.Exception exception)
+            {
+                ReleaseBattleRuntime();
+                Log.Error($"[MechStorm] Temporary battle restart failed: {exception}");
+            }
         }
 
         private void ReleaseBattleRuntime()
         {
             _debugPanel?.Bind(null);
             _presentationController?.ClearSelection();
-            if (_combatUnitRoot != null)
+            _gridFocusIndicator?.Dispose();
+            _rangeHighlighter?.Dispose();
+            _gridFocusIndicator = null;
+            _rangeHighlighter = null;
+            if (_ownsRangeHighlightTemplate && _rangeHighlightTemplate != null)
             {
-                Destroy(_combatUnitRoot.gameObject);
-                _combatUnitRoot = null;
+                Destroy(_rangeHighlightTemplate);
+                _rangeHighlightTemplate = null;
+                _ownsRangeHighlightTemplate = false;
             }
+            _runtimeHost?.Dispose();
+            _runtimeHost = null;
 
-            _combatUnitVisuals.Clear();
-            _combatUnitColliders.Clear();
-            _healthBarAnchors.Clear();
             _debugActions = null;
             _unitPresenter = null;
             _presentationController = null;
             _boardInputter = null;
-            _battleSession = null;
-            _scenarioBuildResult = null;
+            _coordConverter = null;
+        }
+
+        private bool _ownsRangeHighlightTemplate;
+
+        private void EnsureRangeHighlightTemplate()
+        {
+            if (_rangeHighlightTemplate != null)
+            {
+                return;
+            }
+
+            _rangeHighlightTemplate = GameObject.CreatePrimitive(PrimitiveType.Quad);
+            _rangeHighlightTemplate.name = "RuntimeRangeHighlightTemplate";
+            _rangeHighlightTemplate.transform.rotation = Quaternion.Euler(90f, 0f, 0f);
+            _rangeHighlightTemplate.transform.localScale = Vector3.one * 0.9f;
+            _rangeHighlightTemplate.layer = Physics.IgnoreRaycastLayer;
+            _ownsRangeHighlightTemplate = true;
         }
     }
 }

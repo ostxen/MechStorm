@@ -70,13 +70,6 @@ namespace MechStorm.Presentation.Board
                     nameof(markerTemplate));
             }
 
-            if (markerTemplate.GetComponentInChildren<TextMesh>(true) == null)
-            {
-                throw new ArgumentException(
-                    "Highlight marker template must have a TextMesh in its hierarchy.",
-                    nameof(markerTemplate));
-            }
-
             _root = new GameObject("BattleRangeHighlights");
             _propertyBlock = new MaterialPropertyBlock();
             _defaultColor = defaultColor;
@@ -167,7 +160,10 @@ namespace MechStorm.Presentation.Board
                     markerRenderer.receiveShadows = false;
 
                     var coordinateText = marker.GetComponentInChildren<TextMesh>(true);
-                    coordinateText.text = $"({x},{y})";
+                    if (coordinateText != null)
+                    {
+                        coordinateText.text = $"({x},{y})";
+                    }
                     marker.SetActive(false);
                     markers.Add(position, new MarkerView(marker, markerRenderer));
                 }

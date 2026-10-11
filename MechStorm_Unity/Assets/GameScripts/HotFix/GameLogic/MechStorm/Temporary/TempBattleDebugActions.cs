@@ -22,7 +22,7 @@ namespace MechStorm.Presentation
         private readonly BattleSession _battleSession;
         private readonly CombatUnit _debugDamageTarget;
         private readonly IReadOnlyDictionary<int, IReadOnlyList<AbilityDefinition>> _abilitiesByUnitId;
-        private readonly TempBattleUnitPresenter _unitPresenter;
+        private readonly BattleUnitPresenter _unitPresenter;
         private readonly int _debugDamage;
 
         public TempBattleDebugActions(
@@ -30,7 +30,7 @@ namespace MechStorm.Presentation
             BattlePresentationController presentationController,
             CombatUnit debugDamageTarget,
             IReadOnlyDictionary<int, IReadOnlyList<AbilityDefinition>> abilitiesByUnitId,
-            TempBattleUnitPresenter unitPresenter,
+            BattleUnitPresenter unitPresenter,
             int debugDamage)
         {
             _battleSession = battleSession ?? throw new ArgumentNullException(nameof(battleSession));
