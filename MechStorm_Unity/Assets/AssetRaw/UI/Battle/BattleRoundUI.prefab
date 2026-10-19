@@ -98,12 +98,12 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   m_components:
-  - {fileID: 0}
-  - {fileID: 0}
+  - {fileID: 6883847811814721318}
+  - {fileID: 6883847810508436428}
   genCodePath: Assets/GameScripts/HotFix/GameLogic/UI/Gen
   className: BattlePreparationUI
-  impCodePath: Assets/GameScripts/HotFix/GameLogic/UI
-  isGenImpClass: 0
+  impCodePath: Assets/GameScripts/HotFix/GameLogic/UI/Battle
+  isGenImpClass: 1
   uiType: UIWindow
 --- !u!1 &6652599179474037923
 GameObject:
@@ -325,7 +325,7 @@ GameObject:
   - component: {fileID: 6883847811233803423}
   - component: {fileID: 6883847811233803420}
   m_Layer: 5
-  m_Name: m_tmpRoundLable
+  m_Name: tmpRoundLable
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -595,7 +595,7 @@ GameObject:
   - component: {fileID: 6883847811837067357}
   - component: {fileID: 6883847811837067356}
   m_Layer: 5
-  m_Name: m_tmpNumberLable
+  m_Name: tmpNumberLable
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0

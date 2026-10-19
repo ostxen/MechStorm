@@ -129,6 +129,14 @@ MonoBehaviour:
         FilterRuleName: CollectAll
         AssetTags: 
         UserData: 
+      - CollectPath: Assets/Scenes/Battle.unity
+        CollectorGUID: 71a16b03e7f1dd14e8af67db173c546e
+        CollectorType: 0
+        AddressRuleName: AddressByFileName
+        PackRuleName: PackSeparately
+        FilterRuleName: CollectAll
+        AssetTags:
+        UserData:
     - GroupName: UI
       GroupDesc: 
       AssetTags: 

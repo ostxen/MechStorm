@@ -3,9 +3,28 @@
 ## 当前阶段
 
 - 当前里程碑：P1.5 / Sprint T1（进行中）；Sprint 4 已完成并验收
-- 当前任务：Task T1.6/T1.7 默认单位选择与战斗范围预览
-- 当前状态：正式 Battle 已接入默认我方单位选择与移动/普通攻击范围预览源码，待开发者运行确认；主动技能范围等待正式 HUD 的技能选择入口
-- 最后更新：2026-10-11
+- 当前任务：Task T1.7/T1.9 正式 HUD 待验收；T1.11 旧 HUD 局部清理与场景配置正式化
+- 当前状态：旧 UI Toolkit HUD 及专属依赖已清理，场景配置链已正式命名；开发者反馈当前改动无问题并授权整批本地提交，完整流程回归仍未逐项验收
+- 最后更新：2026-10-19
+
+### 旧 HUD 清理与场景配置正式化（2026-10-19）
+
+- 按用户授权删除 `MechStorm/Temporary` 下五个旧 HUD 脚本、`TempBattleActionPanelStateTests`、两份主题 SO、runtime tss 及其配对 meta；移除两个确实空的专属目录。正式 Controller、行动状态机、BattleUnitPresenter 与战斗核心测试保留。
+- 配置代码保留在 `GameLogic/MechStorm/Config`，命名空间改为 `MechStorm.Config`：`BattleScenarioConfig`、`BattleScenarioBuilder`、`BattleScenarioValidator`、`BattleScenarioBuildResult`、`BattleScenarioValidationResult`，嵌套配置 DTO 同步去掉 Temp 前缀；Runtime/SceneBindings 和四个配置测试文件同步更新，不留旧名兼容包装。
+- 原 SO 成对移动为 `Assets/AssetRaw/Configs/BattleScenarioConfig.asset`，配置脚本 GUID `d2a0ee04b44e4bd5a84eeb704ef4f8ef`、资源 GUID `9835cf0430e09f9429cc6dc6f6e5b5ba` 不变。全部序列化字段、10×10/四单位/八技能数据、每次构建全新对象且不回写 SO 的语义保留；Validator 仍要求双方各两台、无 Neutral，不扩大为通用关卡规则。
+- 静态核对通过：旧类型与11个删除 GUID 在 Assets 无残留；9个改名 C# 文件与2个 Runtime 调用文件相对备份仅有预期名称、命名空间、using、菜单、注释/错误文案变化；10份移动 meta 字节不变；SO 仅改 m_Name，Battle/Test 两场景字节不变；14个配置校验/构建/对局测试用例源码全部保留。
+- 未执行编译、测试、运行、Unity 刷新、生成或提交。开发者需确认配置 Inspector 数据与场景引用正常，再验收正式 HUD 的目标优先武器路径、确认/取消/待机及离场重入。此次删除按用户授权提前执行，不代表 T1.11 全流程对齐已验收，也不代表 T1.12 Luban 迁移完成。
+- 2026-10-19 开发者反馈“没问题了”，确认以“正式战斗与 HUD 整批”进行本地提交：包括正式流程、Runtime/HUD、生成绑定、相关场景/Prefab、配置正式化与旧入口/HUD 退役，以及必要资源。排除无关主计划/规范改动、工程设置、IDE、缓存、构建产物和未使用素材；不 push。AI 未执行编译或运行测试，该反馈不扩大为 T1 全流程逐项验收。
+- 提交前静态资源核对发现：旧示例 `Assets/AssetRaw/UI/BattleMainUI.prefab` 仍有一处缺失 Sprite GUID `b475dce438fe0f54aa0dbd4c905621ec`，在 HEAD 原位置已存在，不是本轮迁移引入；正式入口已不再加载该示例。保留并记录，不在提交任务中擅自替换用户素材。
+- 本批必要依赖通过静态 GUID 与 Shader include/Shader.Find 路径核对纳入，未整包加入第三方素材；保留原资源、meta 和第三方 Shader 的空字段尾空格等格式，完整 staged `diff --check` 因这些空白诊断未通过，不进行无关格式化或手改 meta。仍不将静态资源扫描等同于 Unity 编译/测试或构建验证。
+
+### UI Prefab 阶段性备份（2026-10-11）
+
+- 提交 `3c57d5a`：14 个新 Prefab（StartUI、MainUI、LoadingUI、4 个 Battle 窗口、7 个 Battle Widget）及配对/目录元数据，共 31 个文件。
+- 用户取消素材复制，已删除本次创建的复制工具及配对元数据；素材、业务脚本与其他暂存改动未纳入提交。
+- 仅做序列化结构、元数据配对和提交范围静态检查；未运行 Unity、编译或测试。`git diff --check` 提示 Unity 空字段尾空格，保留原序列化内容。
+- 依赖素材与自定义组件后续提交，本次不代表 UI 引用完整或 Sprint 验收完成。
+- 2026-10-11 用户要求将 `Assets/AssetRaw/UI` 下其余 Prefab 也提交；新增提交 `a46fe00`，包含 BattleMainUI 的目录移动、LoginUI 更新及 ErrorNetworkUI/PopupUpdateUI 新增。与 `3c57d5a` 合计覆盖当前目录 19 个 Prefab。仅静态核对 Prefab/.meta 配对与 GUID；未运行 Unity、编译或测试，素材依赖仍未提交。
 
 ## 状态约定
 
@@ -299,7 +318,12 @@
            - 2026-10-11 正式场景已打开基础 Presentation：进入后自动选中 `CurrentCombatUnit`，通过 `BattleSession` 查询并显示移动范围、普通攻击覆盖范围和当前合法目标；高亮模板由迁移期入口运行时创建，不新增场景资源。主动技能范围继续由 `SelectAbility` 的统一行动契约驱动，待正式 HUD 提供技能选择入口后显示，不在入口代码中复制技能选择状态。
            - 2026-10-11 修复正式场景关闭临时调试工具后输入轮询被一并关闭的问题：正式模式现在由 `TempGameEntry.Update()` 独立调用 `BattlePresentationController.Tick()`，点击合法移动格会提交现有 Battle 移动入口；未复制移动规则。
            - 仅完成源码静态核对，未编译、测试、运行或 Unity 刷新；正式 Battle 场景尚未挂接 Procedure 生命周期，待 T1.3.4 接入。
-         - [ ] **T1.3.4 正式流程生命周期接入**：由 ProcedureBattle 控制 Host 的准备/释放，与 T1.4 的“确认后创建 Runtime”交接；将棋盘、单位等必要准备纳入 LoadingUI 完成条件。配合 T1.2 补返回及再次进入，避免销毁后的引用或重复对象。验收：重复进出无残留、失败不留下半场战斗。
+         - [~] **T1.3.4 正式流程生命周期接入**：由 ProcedureBattle 控制 Runtime 的准备/释放，与 T1.4 的“确认后创建 Runtime”交接；将棋盘、单位等必要准备纳入 LoadingUI 完成条件。配合 T1.2 补返回及再次进入，避免销毁后的引用或重复对象。验收：重复进出无残留、失败不留下半场战斗。
+           - 2026-10-18 按用户确认方案将 `BattleRuntimeHost` 更名为 `BattleRuntime`（保留原 GUID），正式 Runtime 统一装配棋盘输入、选择协调和高亮。`ProcedureBattle` 已编写场景依赖检查、Runtime/HUD 创建、就绪等待、更新、失败回收与退出清理；仍沿用现有场景配置，当前加载后直接启动，战前确认时机留待 T1.4 接入。
+           - 新增只保存场景引用的 `BattleSceneBindings`；开发者已通过 Unity 完成正式 Battle 场景迁移。随后用户明确要求硬切：删除 `TempGameEntry`、专用 Inspector 和已用完的迁移菜单及各自 meta，Procedure 不再引用旧入口；Test 场景保留原地图/相机/配置参数，改用同一绑定组件，不再保留直接 Play 时自行启动战斗的兼容行为。战斗统一由正式 Procedure 启动，现有配置/Builder/Validator 继续复用，不属于旧入口兼容。
+           - 静态检查：Assets 内无旧入口/迁移菜单类型或已删除脚本 GUID 引用；Test 仅修改旧组件及根节点命名两块，31 唯一锚点、本地引用闭合；用户已迁移的 Battle 场景未再改动。未自动编译、测试、运行或 Unity 刷新，重复进出/失败回收与 HUD 刷新仍待运行验收。
+           - 开发者运行反馈超时定时器触发 `ObjectDisposedException`：已修正 ProcedureBattle 两个窗口等待中忽略 `CancelAfterSlim` 返回定时器的问题，使用嵌套 using 先释放定时器再释放取消源，保留15秒超时及父流程取消。仅静态检查通过，等待重新运行超过15秒及离场/失败路径验收。
+           - 随后用户要求取消额外超时：已移除 Loading/HUD 两个15秒定时器及专用 linked CTS，直接保留流程 token 的加载/就绪等待与退出清理；未修改 TE 框架。若初始化失败且既未就绪也未关闭，将等待至流程取消，不再自动超时回退。源码静态检查通过，未运行验收；本条覆盖上一条超时保留方案。
        - 固定镜头只是 T1.8 的前置；四档转向与单位跟随仍在 T1.8 实现，正式输入与 UGUI 操作仍在 T1.7 / T1.9 实现。
     4. **Task T1.4 固定队伍战前确认**
        - 新建 `BattlePreparationUI` 灰盒 Prefab，读取同一战斗场景配置并显示固定 2v2 的我方队伍、敌方队伍和预设站位摘要
@@ -314,6 +338,7 @@
        - `BattleActionPreviewWidget` 内部复用同一个 `BattleActionUnitStatusWidget` 显示行动单位和目标单位，分别以 `m_item_ActorUnitStatus`、`m_item_TargetUnitStatus` 作为实例语义；目标侧只制作 `UnitStatusWidget_Mirrored` Prefab 变体，不新增镜像专用 C# 类型
        - 上述状态、预览、行动、指令和控制区域均作为 `BattleHUDUI` 下的 `UIWidget`，不因存在按钮输入而拆成独立 `UIWindow`；只有具备独立打开/关闭生命周期的结果、统计或模态弹窗才建立独立窗口
        - Widget 只负责只读数据显示、视觉状态和输入意图回调；Battle 合法性、资源检查、目标范围、行动确认和状态修改继续由 Presenter / Battle 权威层处理，不把 Battle 对象直接散落绑定到各个控件
+       - 2026-10-18 已编写姓名/AP 最小只读闭环：`BattleHUDPresenter` 位于 GameLogic 的 `UI/Battle`，直接引用本场 Session 与具体 `BattleHUDUI`，不新增 View 接口或通用 ViewModel；流程在输入后进行差异刷新，HUD 关闭时解绑。状态组件不再在 OnCreate 调用 Clear，仅有真实来源的姓名/AP 被刷新，等级/头像/职业图标/多部位耐久保留 Prefab 默认值；未接线的列表、交战信息和操作区暂隐藏。本轮仅静态检查，未编译、测试或运行；正式场景已迁移，等待从主界面进入战斗后验收。
     6. **Task T1.6 胜利条件、阵营回合提示与默认选角**
        - 开始战斗后先显示 `BattleObjectiveUI`，本阶段固定说明“全灭敌方单位”；确认后再显示当前阵营和回合数提示
        - 每个阵营回合开始时显示一次 `BattleRoundUI`，弹窗存在期间锁定棋盘和 HUD 操作，确认关闭后才允许继续
@@ -328,6 +353,14 @@
        - 在 `BattleHUDUI` 提供离散角度控制入口，切换后棋盘射线、范围高亮、焦点框和 UGUI 输入隔离仍保持正确
        - 本阶段不实现自由轨道旋转、缩放、平移、镜头碰撞或 `BattleDirector` 动画，只验证四档视角均可稳定观察和操作棋盘
     9. **Task T1.9 双路径行动面板迁移**
+       - 用户补充顶部单位状态区与 CombatInfo 互斥：HUD 初始化显示单位状态区，SetCombatInfo 显示交战信息时隐藏顶部状态区，取消目标/执行后随交战信息关闭恢复。未改数据契约、Prefab 或 Gen，待开发者运行验收。
+       - 2026-10-19 用户纠正武器交互顺序，已修正为互斥阶段：无目标时仅显示默认选中的武器卡，点击武器不再提交普攻/进入行动锁定；棋盘选中武器范围内合法目标后隐藏武器、显示既有目标兼容查询返回的普攻/技能，沿用协调器自动默认行动与确认。取消/行动结束后恢复武器阶段；无目标时不能从 HUD 提前选技能，指令仍暂空。移除两列并显布局，两阶段共用右侧区域；Presenter 直接保留查询返回的行动身份与范围来源，不再自行构造技能目录或持有重复技能映射。静态四种显隐组合、点击索引与调用链核对通过，未编译、测试、运行或刷新，等待开发者验收。本条覆盖早前同时显示两列/支持直接点技能的错误实现说明。
+       - 用户随后明确现阶段不需要不可用变淡反馈：已从 WeaponItem/AbilityItem 移除 CanvasGroup 依赖与 alpha 修改，仅保留点击禁用、选中标记和显隐；交互反馈优化后置。本条覆盖下方 CanvasGroup 修复与变淡方案，未修改资源或生成代码。
+       - 2026-10-19 开发者运行报 WeaponItem 缺少 CanvasGroup，初始化回退主界面。已将 WeaponItem/AbilityItem 的 `GetComponent<CanvasGroup>() ?? AddComponent<CanvasGroup>()` 改为显式 Unity `== null` 判断后补组件，避免缺失组件包装对象绕过 `??`。两处源码初始化顺序与尾空白静态核对通过；未改 Prefab/Gen/meta，未编译、测试、运行或刷新，等待重新进入战斗验收。
+       - 2026-10-19 已按最新授权编写正式 HUD 接线：新增无绘制 `RaycastGraphic`，使用 Unity 正常生成的 meta/GUID；三个条目根均补齐 Graphic/CanvasRenderer，保留 AbilityItem 已有 Button，为 WeaponItem/CommandItem 补 Button，TargetGraphic 指向根命中区域，装饰元素不接收射线。武器/技能条目旧绑定类名已统一，Gen 与既有布局/绑定索引未改。
+       - 当前配置每单位只有一份基础攻击，用户确认所有现有主动技能均作为武器技能，指令暂空，不新增分类字段或虚构多武器。Loading 阶段异步准备一张武器卡与最大所需技能槽位（含普攻），切换单位复用；两个空挂点通过运行时两列布局避开彼此及操作区，视觉效果待验收。条目显示名称/AP、基础攻击伤害/射程、选中与不可用反馈；未知等级、头像、持握、多部位耐久和预测数据不刷新。
+       - Presenter 显式接收本场 Session、Controller、单位 Presenter、技能映射和具体 HUD，转发选择、确认、取消、待机；复用 ActionFirst / TargetFirst、RequiresBasicWeapon / RangeSource 与行动身份校验，不新增状态机。行动优先锁定后需确认或取消，目标优先可切换兼容技能；AP 消耗预览、交战双方姓名/AP、单位血条和行动后的默认选角同步刷新。指令控件仍隐藏，不声称已完成角色指令路径。
+       - 静态核对通过：三份 Prefab 相对本轮备份无删除、原布局/绑定顺序保留，根点击组件唯一且本地引用闭合；13 个实现文件空白/分隔符、事件解绑、异步取消后回收、条目就绪顺序与程序集边界已核对。本轮新增差异空白检查通过；相对 HEAD 的 Prefab 检查仍会报告先前已有的 Unity 空字段尾空格。未自动编译、测试、运行、刷新、生成或提交；等待开发者验证整卡点击不穿透、两种选择顺序、AP 不足、合法/非法目标、取消保留站位、待机/成功行动推进、战斗结束禁用及离场/重入。
        - 对齐默认武器栏、基础武器技能、依赖基础武器技能、技能优先/目标优先、合法目标切换与释放前确认
        - 继续使用 `BattleActionSelectionPath`、`RequiresBasicWeapon`、`AbilityTargetRangeSource` 和统一行动身份契约，不在 UGUI 内重新推导
        - 右侧 `BattleWeaponListWidget` 与 `BattleAbilityListWidget` 分别显示武器列表和当前武器主动技能列表，底部 `BattleCommandListWidget` 显示角色指令列表；各列表使用独立的 `BattleWeaponItemWidget`、`BattleAbilityItemWidget` 和 `BattleCommandItemWidget`
@@ -345,11 +378,13 @@
        - 验证重新开始恢复四台单位、初始位置、满耐久/AP、第 1 回合、TeamA、首台机兵、空日志、空选择与空高亮
        - 验证窗口关闭、返回伪主场景、再次进入战斗、场景切换和应用退出均按单一顺序释放 UI 事件、战斗 Runtime、场景单位与资源句柄
     11. **Task T1.11 功能对齐验收与临时 HUD 退役**
+       - 2026-10-19 按用户授权提前完成旧 UI Toolkit HUD、专属测试和主题资源的静态清理；配置链正式化，见顶部记录。以下完整功能对齐与运行回归仍未验收，不能据此标记整个 T1.11 完成。
        - 完成“伪主场景 -> 点击进入战斗 -> 固定队伍确认 -> 胜利条件 -> 阵营回合提示 -> 固定 2v2 -> 结果/统计 -> 重战或返回 -> 再次进入”的完整回归验收
        - 覆盖默认选角、四档镜头、双路径、焦点、弹窗输入锁定、棋盘/HUD 隔离、胜负、统计、重启和重复进出战斗，确保不同流程窗口不会同时响应输入
        - 在功能对齐后移除 UI Toolkit HUD 及仅为其服务的适配代码，保留仍被正式 Presentation 复用的纯 C# 契约
        - 运行 Battle、Presentation、GameLogic、Editor 编译与 Unity EditMode / Play Mode 验证，形成进入 Sprint 5 的稳定基线
     12. **Task T1.12 最小 Luban 战斗配置迁移**
+       - 2026-10-19 当前 SO 入口已正式命名为 `MechStorm.Config.BattleScenarioConfig`，仍是同一聚合数据格式；去 Temp 命名不等于 Luban 数据迁移，以下任务继续保留。
        - 2026-10-10 用户授权提前迁移；执行顺序为 T1.3 固定 2v2 基线恢复后、T1.4 正式战前确认接入前。保留 T1.1～T1.11 编号，后续流程改用同一份正式配置数据。
        - [ ] **T1.12.1 最小数据工程**：定位/建立项目 Luban 配置工程，只覆盖当前关卡、初始单位阵营/站位、驾驶员、机兵、普攻与技能定义；沿用现有数值，不新增属性、装备、Buff 或养成规则。验收：ID 与引用关系明确，原始四台单位和技能均可表达。
        - [ ] **T1.12.2 配置加载**：生成代码归 GameProto、二进制数据由 YooAsset 管理；业务入口异步加载且配对释放资源，配置不可用时阻止战斗初始化并明确报错。生成/导表操作先与开发者确认，不自动运行。

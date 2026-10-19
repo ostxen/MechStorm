@@ -35,12 +35,20 @@ public partial class GameApp
     
     private static void StartGameLogic()
     {
-        // GameEvent.Get<ILoginUI>().ShowLoginUI();
-        GameModule.UI.ShowUIAsync<BattleMainUI>();
+        if (!GameModule.Procedure.RestartProcedure(new ProcedureLogin(), new ProcedureMain(), new ProcedureBattle()))
+        {
+            throw new GameFrameworkException("主包流程未能交接到游戏业务流程。");
+        }
     }
     
     private static void Release()
     {
+        // 停止业务事件和窗口，再释放 UI 等单例；流程销毁时可重复清理。
+        if (GameModule.Fsm.HasFsm<IProcedureModule>() && GameModule.Procedure.CurrentProcedure is System.IDisposable procedure)
+        {
+            procedure.Dispose();
+        }
+
         SingletonSystem.Release();
         Log.Warning("======= Release GameApp =======");
     }

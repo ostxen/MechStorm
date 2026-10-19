@@ -467,7 +467,7 @@ GameObject:
   - component: {fileID: 685082423}
   - component: {fileID: 685082424}
   m_Layer: 0
-  m_Name: TempGameEntry
+  m_Name: BattleWorld
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -497,23 +497,22 @@ MonoBehaviour:
   m_GameObject: {fileID: 685082422}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: a1e4708d42024499b30421e3e8c251d6, type: 3}
+  m_Script: {fileID: 11500000, guid: 0bdee9b8eba25594f9735e5a04a2f9bf, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
   _plane: {fileID: 317279695}
   _rangeHighlightTemplate: {fileID: 527249959}
   _scenarioConfig: {fileID: 11400000, guid: 9835cf0430e09f9429cc6dc6f6e5b5ba, type: 2}
+  _unitParent: {fileID: 685082423}
   _cellSize: 1
   _boardOrigin: {x: -5, y: 0, z: -5}
   _boardColor: {r: 0.12, g: 0.14, b: 0.16, a: 1}
   _gridCellColor: {r: 0.2, g: 0.23, b: 0.26, a: 1}
-  _showBoardDebugMarkers: 1
+  _gridFocusColor: {r: 1, g: 0.85, b: 0.1, a: 1}
   _camera: {fileID: 439734056}
-  _debugDamage: 10
   _battleInputLayerMask:
     serializedVersion: 2
     m_Bits: 4294967291
-  _hudTheme: {fileID: 11400000, guid: 0a2d7f9d8c564de4a7a0fd8a3e3d8f10, type: 2}
 --- !u!1 &1341193990
 GameObject:
   m_ObjectHideFlags: 0

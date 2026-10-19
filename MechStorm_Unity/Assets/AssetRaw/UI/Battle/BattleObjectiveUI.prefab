@@ -147,7 +147,7 @@ GameObject:
   - component: {fileID: 1707303373}
   - component: {fileID: 1707303372}
   m_Layer: 5
-  m_Name: m_tmp_ObjectiveLabel
+  m_Name: m_tmpObjectiveLabel
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -427,7 +427,7 @@ GameObject:
   - component: {fileID: 6342087028342519864}
   - component: {fileID: 6342087028342322142}
   - component: {fileID: 9052342819305271838}
-  - component: {fileID: 7753861227919293498}
+  - component: {fileID: 4395128966478482001}
   m_Layer: 5
   m_Name: BattleObjectiveUI
   m_TagString: Untagged
@@ -499,7 +499,7 @@ MonoBehaviour:
   m_BlockingMask:
     serializedVersion: 2
     m_Bits: 55
---- !u!114 &7753861227919293498
+--- !u!114 &4395128966478482001
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -512,12 +512,11 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   m_components:
-  - {fileID: 0}
-  - {fileID: 0}
+  - {fileID: 1707303372}
   genCodePath: Assets/GameScripts/HotFix/GameLogic/UI/Gen
-  className: BattlePreparationUI
-  impCodePath: Assets/GameScripts/HotFix/GameLogic/UI
-  isGenImpClass: 0
+  className: BattleObjectiveUI
+  impCodePath: Assets/GameScripts/HotFix/GameLogic/UI/Battle
+  isGenImpClass: 1
   uiType: UIWindow
 --- !u!1 &7724074766669221191
 GameObject:

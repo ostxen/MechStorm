@@ -128,7 +128,15 @@ namespace TEngine.Editor.UI
             strBind.AppendLine($"\t\t\t\treturn;");
             strBind.AppendLine($"\t\t\t}}");
             m_bindIndex = 0;
-            AutoErgodic(root, root, ref strVar, ref strBind, ref strOnCreate, ref strCallback, isUniTask);
+            try
+            {
+                AutoErgodic(root, root, ref strVar, ref strBind, ref strOnCreate, ref strCallback, isUniTask);
+            }
+            catch (InvalidOperationException exception)
+            {
+                Debug.LogError($"UI 脚本生成失败：{exception.Message}", root.gameObject);
+                return false;
+            }
             StringBuilder strFile = new StringBuilder();
 
             if (includeListener)
@@ -255,6 +263,35 @@ namespace TEngine.Editor.UI
 
         private static int m_bindIndex = 0;
 
+        private static string GetChildWidgetClassName(Transform root, Transform child)
+        {
+            string nodePath = AnimationUtility.CalculateTransformPath(child, root);
+            var bind = child.GetComponent<UIBindComponent>();
+            if (bind == null || bind.uiType != "UIWidget")
+            {
+                throw new InvalidOperationException(
+                    $"节点 {nodePath} 必须配置 UIBindComponent，并将 UI 类型设为 UIWidget。");
+            }
+
+            string className = bind.className?.Trim();
+            const string keywords = "|abstract|as|base|bool|break|byte|case|catch|char|checked|class|const|continue|" +
+                "decimal|default|delegate|do|double|else|enum|event|explicit|extern|false|finally|fixed|float|for|" +
+                "foreach|goto|if|implicit|in|int|interface|internal|is|lock|long|namespace|new|null|object|operator|" +
+                "out|override|params|private|protected|public|readonly|ref|return|sbyte|sealed|short|sizeof|" +
+                "stackalloc|static|string|struct|switch|this|throw|true|try|typeof|uint|ulong|unchecked|unsafe|" +
+                "ushort|using|virtual|void|volatile|while|";
+            if (string.IsNullOrEmpty(className) ||
+                !System.Text.RegularExpressions.Regex.IsMatch(className, @"\A[A-Za-z_][A-Za-z0-9_]*\z") ||
+                keywords.Contains($"|{className}|"))
+            {
+                throw new InvalidOperationException(
+                    $"节点 {nodePath} 的 Widget 类名无效：{bind.className}。请填写当前 UI 命名空间中的简单类名。");
+            }
+
+            // 不依赖类型反射，允许先生成子 Widget，再生成父级脚本。
+            return className;
+        }
+
         public static void AutoErgodic(Transform root, Transform transform, ref StringBuilder strVar,
             ref StringBuilder strBind, ref StringBuilder strOnCreate, ref StringBuilder strCallback, bool isUniTask)
         {
@@ -285,6 +322,21 @@ namespace TEngine.Editor.UI
                 return;
             }
 
+            if (rule.isUIWidget)
+            {
+                string widgetType = GetChildWidgetClassName(root, child);
+                string fieldName = GetWidgetVariableName(varName, rule.uiElementRegex);
+                if (string.IsNullOrEmpty(fieldName))
+                {
+                    throw new InvalidOperationException($"节点 {child.name} 无法生成有效的 Widget 字段名。");
+                }
+
+                strVar.AppendLine($"\t\tprivate {widgetType} {fieldName}{(ScriptGeneratorSetting.Instance.NullableEnable ? " = null!;" : ";")}");
+                strBind.AppendLine($"\t\t\t{fieldName} = CreateWidget<{widgetType}>(m_bindComponent.GetComponent<RectTransform>({m_bindIndex}).gameObject);");
+                m_bindIndex++;
+                return;
+            }
+
             var componentName = rule.componentName.ToString();
 
             if (string.IsNullOrEmpty(componentName))
@@ -304,10 +356,6 @@ namespace TEngine.Editor.UI
             if (rule.componentName == UIComponentName.GameObject)
             {
                 strBind.AppendLine($"\t\t\t{varName} = m_bindComponent.GetComponent<RectTransform>({m_bindIndex}).gameObject;");
-            }
-            else if (rule.componentName != UIComponentName.GameObject && rule.isUIWidget)
-            {
-                strBind.AppendLine($"\t\t\t{varName} = CreateWidget<{componentName}>(m_bindComponent.GetComponent<RectTransform>({m_bindIndex}).gameObject);");
             }
             else
             {
@@ -458,7 +506,7 @@ namespace TEngine.Editor.UI
             var rule = ScriptGeneratorSetting.GetScriptGenerateRule()
                 .Find(r => varName.StartsWith(r.uiElementRegex));
 
-            if (rule == null)
+            if (rule == null || rule.isUIWidget)
             {
                 return;
             }
@@ -824,6 +872,24 @@ namespace TEngine.Editor.UI
                 }
             }
             return varName;
+        }
+
+        private static string GetWidgetVariableName(string nodeName, string widgetPrefix)
+        {
+            if (string.IsNullOrEmpty(nodeName) || string.IsNullOrEmpty(widgetPrefix) ||
+                !nodeName.StartsWith(widgetPrefix, StringComparison.Ordinal))
+            {
+                return string.Empty;
+            }
+
+            string suffix = nodeName[widgetPrefix.Length..];
+            if (string.IsNullOrEmpty(suffix))
+            {
+                return string.Empty;
+            }
+
+            string fieldPrefix = GetPrefixNameByCodeStyle(UIFieldCodeStyle.UnderscorePrefix);
+            return $"{fieldPrefix}{char.ToLowerInvariant(suffix[0])}{suffix[1..]}";
         }
     }
 }
