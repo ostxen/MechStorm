@@ -1,19 +1,18 @@
 using System;
 using System.Collections.Generic;
 using MechStorm.Battle.Units;
-using MechStorm.Presentation.Units;
 using UnityEngine;
 
-namespace MechStorm.Presentation
+namespace MechStorm.Presentation.Units
 {
     /// <summary>
-    /// 维护正式战斗单位的血条与 AP 表现，不负责战斗规则。
+    /// 刷新单位头顶的耐久、AP 条及其朝向，不负责单位模型或战斗规则。
     /// </summary>
-    public class BattleUnitPresenter
+    public class BattleUnitStatusPresenter
     {
         private readonly Dictionary<CombatUnit, UnitHealthBarView> _healthBarViews;
 
-        public BattleUnitPresenter(IReadOnlyDictionary<CombatUnit, Transform> healthBarAnchors, Camera camera)
+        public BattleUnitStatusPresenter(IReadOnlyDictionary<CombatUnit, Transform> healthBarAnchors, Camera camera)
         {
             if (healthBarAnchors == null)
             {

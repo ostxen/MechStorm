@@ -18,7 +18,7 @@ namespace GameLogic
 		#region 脚本工具生成的代码
 
 		private UIBindComponent m_bindComponent;
-		private TextMeshProUGUI m_tmpObjectiveLabel = null!;
+		private TextMeshProUGUI m_tmpObjectiveText = null!;
 
 		protected override void ScriptGenerator()
 		{
@@ -28,7 +28,7 @@ namespace GameLogic
 				Log.Error($"根物体: {gameObject.name} 缺少组件 UIBindComponent, 请检查！！！");
 				return;
 			}
-			m_tmpObjectiveLabel = m_bindComponent.GetComponent<TextMeshProUGUI>(0);
+			m_tmpObjectiveText = m_bindComponent.GetComponent<TextMeshProUGUI>(0);
 		}
 
 		#endregion

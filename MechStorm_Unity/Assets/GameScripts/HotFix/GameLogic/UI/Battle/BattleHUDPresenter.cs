@@ -2,8 +2,8 @@ using System;
 using System.Collections.Generic;
 using MechStorm.Battle;
 using MechStorm.Battle.Units;
-using MechStorm.Presentation;
 using MechStorm.Presentation.Controllers;
+using MechStorm.Presentation.Units;
 using TEngine;
 
 namespace GameLogic
@@ -15,8 +15,9 @@ namespace GameLogic
     {
         private BattleSession _session;
         private BattleHUDUI _view;
-        private BattlePresentationController _controller;
-        private BattleUnitPresenter _unitPresenter;
+        private BattleInteractionController _controller;
+        private BattleUnitStatusPresenter _unitStatusPresenter;
+        private Func<bool> _canAcceptInput;
         private CombatUnit _lastUnit;
         private readonly List<BattleActionSelection> _displayedActions = new();
         private BattleActionSelection _lastAction;
@@ -28,18 +29,14 @@ namespace GameLogic
         private bool _lastSelected;
         private bool _lastCanConfirm;
 
-        public BattleHUDPresenter(BattleSession session, BattlePresentationController controller,
-            BattleUnitPresenter unitPresenter, BattleHUDUI view)
+        public BattleHUDPresenter(BattleSession session, BattleInteractionController controller,
+            BattleUnitStatusPresenter unitStatusPresenter, BattleHUDUI view, Func<bool> canAcceptInput)
         {
             _session = session ?? throw new ArgumentNullException(nameof(session));
             _controller = controller ?? throw new ArgumentNullException(nameof(controller));
-            _unitPresenter = unitPresenter ?? throw new ArgumentNullException(nameof(unitPresenter));
+            _unitStatusPresenter = unitStatusPresenter ?? throw new ArgumentNullException(nameof(unitStatusPresenter));
             _view = view ?? throw new ArgumentNullException(nameof(view));
-            if (!view.IsReady || !view.ActionItemsReady || view.IsDestroyed)
-            {
-                throw new InvalidOperationException("BattleHUDUI 及行动条目必须完成初始化后才能绑定 Presenter。");
-            }
-            view.Closed += Dispose;
+            _canAcceptInput = canAcceptInput ?? throw new ArgumentNullException(nameof(canAcceptInput));
             view.ActionRequested += OnActionRequested;
             view.ConfirmRequested += OnConfirmRequested;
             view.CancelRequested += OnCancelRequested;
@@ -48,11 +45,6 @@ namespace GameLogic
 
         public void RefreshIfChanged(bool force = false)
         {
-            if (_view == null || !_view.IsReady)
-            {
-                return;
-            }
-
             var unit = _session.CurrentCombatUnit;
             bool unitChanged = !ReferenceEquals(unit, _lastUnit);
             if (unitChanged && !_session.IsBattleEnded && !_controller.IsCurrentUnitSelected)
@@ -149,7 +141,7 @@ namespace GameLogic
 
         private bool CanAcceptInput()
         {
-            if (_view == null || !_view.IsReady || !_view.Visible || _session.IsBattleEnded)
+            if (!_view.Visible || _session.IsBattleEnded || !_canAcceptInput())
             {
                 return false;
             }
@@ -218,7 +210,12 @@ namespace GameLogic
 
         private void RefreshAfterAction(bool success)
         {
-            _unitPresenter.RefreshAll();
+            _unitStatusPresenter.RefreshAll();
+            // 阵营已推进但提示尚未播放时，不提前选中新阵营单位或刷新成可操作 HUD。
+            if (success && !_session.IsBattleEnded && !_canAcceptInput())
+            {
+                return;
+            }
             if (success && !_session.IsBattleEnded)
             {
                 _controller.SelectCurrentCombatUnit();
@@ -234,7 +231,6 @@ namespace GameLogic
         {
             if (_view != null)
             {
-                _view.Closed -= Dispose;
                 _view.ActionRequested -= OnActionRequested;
                 _view.ConfirmRequested -= OnConfirmRequested;
                 _view.CancelRequested -= OnCancelRequested;
@@ -244,7 +240,8 @@ namespace GameLogic
             _session = null;
             _lastUnit = null;
             _controller = null;
-            _unitPresenter = null;
+            _unitStatusPresenter = null;
+            _canAcceptInput = null;
             _displayedActions.Clear();
             _lastAction = null;
             _lastTarget = null;

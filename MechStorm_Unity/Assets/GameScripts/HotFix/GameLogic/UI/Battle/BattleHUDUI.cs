@@ -9,22 +9,31 @@ namespace GameLogic
 	[Window(UILayer.UI, location : "BattleHUDUI")]
 	public partial class BattleHUDUI
 	{
-		public bool IsReady { get; private set; }
-		public bool ActionItemsReady { get; private set; }
-		public event Action Closed;
+		private bool _displayEnabled;
 		public event Action<int> ActionRequested;
 		public event Action ConfirmRequested;
 		public event Action CancelRequested;
 		public event Action StandbyRequested;
 
+		public void SetDisplayEnabled(bool enabled)
+		{
+			_displayEnabled = enabled;
+			Visible = enabled;
+		}
+
+		protected override void OnSetVisible(bool visible)
+		{
+			// TE 开关其他窗口时会重算显隐，预备中的 HUD 不能被自动显示。
+			if (visible && !_displayEnabled)
+			{
+				Visible = false;
+			}
+		}
+
 		protected override void OnCreate()
 		{
-			if (m_bindComponent == null || _unitStatus == null || _combatInfo == null || _weapons == null ||
-			    _abilities == null || _commands == null || _actionControl == null)
-			{
-				throw new GameFrameworkException("BattleHUDUI 的 Widget 绑定无效，请重新检查 Prefab 绑定。");
-			}
-
+			SetDisplayEnabled(false);
+			
 			_abilities.Selected += index => ActionRequested?.Invoke(index);
 			_actionControl.Confirmed += () => ConfirmRequested?.Invoke();
 			_actionControl.Cancelled += () => CancelRequested?.Invoke();
@@ -36,17 +45,12 @@ namespace GameLogic
 			_abilities.Visible = false;
 			_commands.Visible = false;
 			_actionControl.Visible = false;
-			IsReady = true;
 		}
 
 		public async UniTask InitializeActionsAsync(int maxAbilityCount, CancellationToken cancellationToken)
 		{
-			using var lifetime = CancellationTokenSource.CreateLinkedTokenSource(
-				cancellationToken, gameObject.GetCancellationTokenOnDestroy());
-			await _weapons.InitializeAsync(lifetime.Token);
-			await _abilities.InitializeAsync(maxAbilityCount + 1, lifetime.Token);
-			lifetime.Token.ThrowIfCancellationRequested();
-			ActionItemsReady = true;
+			await _weapons.InitializeAsync(cancellationToken);
+			await _abilities.InitializeAsync(maxAbilityCount + 1, cancellationToken);
 		}
 
 		public void SetWeapon(int damage, int minRange, int maxRange, bool interactable, bool selected)
@@ -112,27 +116,18 @@ namespace GameLogic
 
 		public void SetPilotName(string pilotName)
 		{
-			if (IsReady)
-			{
-				_unitStatus.SetPilotName(pilotName);
-			}
+			_unitStatus.SetPilotName(pilotName);
 		}
 
 		public void SetActionPoint(int current, int max)
 		{
-			if (IsReady)
-			{
-				_unitStatus.SetActionPoint(current, max);
-			}
+	
+			_unitStatus.SetActionPoint(current, max);
+			
 		}
 
 		protected override void OnDestroy()
 		{
-			IsReady = false;
-			ActionItemsReady = false;
-			// TE 在根窗口 OnDestroy 前已销毁子 Widget，此处只解绑，不访问子节点。
-			Closed?.Invoke();
-			Closed = null;
 			ActionRequested = null;
 			ConfirmRequested = null;
 			CancelRequested = null;

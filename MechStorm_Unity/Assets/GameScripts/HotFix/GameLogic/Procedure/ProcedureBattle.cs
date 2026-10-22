@@ -1,64 +1,68 @@
 using System;
 using System.Threading;
 using Cysharp.Threading.Tasks;
-using MechStorm.Presentation;
+using MechStorm.Battle.Units;
+using MechStorm.Runtime;
 using TEngine;
 using UnityEngine.SceneManagement;
 
 namespace GameLogic
 {
     /// <summary>
-    /// 正式战斗流程：装配本场 Runtime 与 HUD，并按相反顺序释放。
+    /// 正式战斗流程：管理准备、目标/阵营提示、HUD 与本场 Runtime 的生命周期。
     /// </summary>
-    public sealed class ProcedureBattle : ProcedureBase, IDisposable
+    public sealed partial class ProcedureBattle : ProcedureBase, IDisposable
     {
         private const string SceneLocation = "Battle";
         private CancellationTokenSource _lifetime;
-        private LoadingUI _loading;
         private BattleRuntime _runtime;
+        private LoadingUI _loading;
         private BattleHUDUI _hud;
         private BattleHUDPresenter _hudPresenter;
-        private bool _active;
-        private bool _loadFailed;
-        private bool _ready;
-        private bool _loadingRequested;
-        private bool _hudRequested;
+        private int _announcedRound;
+        private CombatFaction _announcedFaction;
+        private bool _returnToMain;
 
         protected override void OnEnter(IFsm<IProcedureModule> fsm)
         {
-            _active = true;
-            _loadFailed = false;
+            _returnToMain = false;
+            _announcedRound = 0;
             _lifetime = new CancellationTokenSource();
-            EnterBattleAsync(_lifetime, _lifetime.Token).Forget();
+            InitializeBattleAsync(_lifetime, _lifetime.Token).Forget();
         }
 
         protected override void OnUpdate(IFsm<IProcedureModule> fsm, float elapseSeconds, float realElapseSeconds)
         {
-            if (_active && _loadFailed)
+            if (_returnToMain)
             {
                 ChangeState<ProcedureMain>(fsm);
                 return;
             }
-            if (!_active || !_ready)
-            {
-                return;
-            }
 
-            _runtime.Tick(_hud != null && _hud.IsReady && _hud.Visible);
-            _hudPresenter?.RefreshIfChanged();
+            var lifetime = _lifetime;
+            try
+            {
+                UpdateBattleFlow();
+            }
+            catch
+            {
+                HandleBattleFailure(lifetime);
+                throw;
+            }
         }
 
         private bool IsCurrent(CancellationTokenSource lifetime)
         {
-            return _active && ReferenceEquals(_lifetime, lifetime);
+            return ReferenceEquals(_lifetime, lifetime);
         }
 
-        private async UniTask EnterBattleAsync(CancellationTokenSource lifetime, CancellationToken cancellationToken)
+        private async UniTask InitializeBattleAsync(CancellationTokenSource lifetime, CancellationToken cancellationToken)
         {
             try
             {
-                await OpenLoadingAsync(lifetime, cancellationToken);
+                var loading = await ShowWindowAsync<LoadingUI>("LoadingUI", cancellationToken);
                 cancellationToken.ThrowIfCancellationRequested();
+                _loading = loading;
                 if (!GameModule.Resource.CheckLocationValid(SceneLocation))
                 {
                     throw new GameFrameworkException("Battle 场景地址无效，请检查 YooAsset 收集配置。");
@@ -70,53 +74,96 @@ namespace GameLogic
                     {
                         if (IsCurrent(lifetime))
                         {
-                            _loading?.SetProgress(progress * 0.7f);
+                            _loading.SetProgress(progress * 0.7f);
                         }
                     });
                 cancellationToken.ThrowIfCancellationRequested();
-                if (!scene.IsValid() || !scene.isLoaded)
+                if (!scene.IsValid())
                 {
                     throw new GameFrameworkException("Battle 场景加载失败。");
                 }
 
                 CreateRuntime(scene);
                 _loading.SetProgress(0.85f);
-                await OpenHUDAsync(lifetime, cancellationToken);
-                cancellationToken.ThrowIfCancellationRequested();
-                int maxAbilityCount = 0;
-                foreach (var abilities in _runtime.Scenario.AbilitiesByUnitId.Values)
-                {
-                    maxAbilityCount = System.Math.Max(maxAbilityCount, abilities.Count);
-                }
-                await _hud.InitializeActionsAsync(maxAbilityCount, cancellationToken);
-                cancellationToken.ThrowIfCancellationRequested();
-                _hudPresenter = new BattleHUDPresenter(_runtime.Session, _runtime.PresentationController,
-                    _runtime.UnitPresenter, _hud);
-                _hudPresenter.RefreshIfChanged();
-                _loading.SetProgress(1f);
-                await UniTask.Yield(cancellationToken);
-                _ready = true;
-                Log.Info("Battle Runtime 与 HUD 已就绪。");
+                ChangeBattlePhase(BattleFlowPhase.Preparation);
             }
-            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            catch
             {
+                HandleBattleFailure(lifetime);
+                throw;
             }
-            catch (Exception exception)
+        }
+
+        private void HandleBattleFailure(CancellationTokenSource lifetime)
+        {
+            if (!IsCurrent(lifetime))
             {
-                if (IsCurrent(lifetime) && !cancellationToken.IsCancellationRequested)
-                {
-                    ReleaseBattle();
-                    Log.Error($"战斗初始化失败，将恢复主界面：{exception.Message}");
-                    _loadFailed = true;
-                }
+                return;
             }
-            finally
+
+            Dispose();
+            // 由流程更新执行切换，避免异步续接重入 FSM；原异常由调用方继续抛出。
+            _returnToMain = true;
+        }
+
+        private async UniTask ShowObjectiveAsync(CancellationToken cancellationToken)
+        {
+            var objective = await ShowWindowAsync<BattleObjectiveUI>("BattleObjectiveUI", cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
+            await objective.PlayAsync("全灭敌方单位", cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
+            GameModule.UI.CloseUI<BattleObjectiveUI>();
+        }
+
+        private async UniTask ShowRoundAsync(CancellationToken cancellationToken)
+        {
+            int roundNumber = _runtime.Session.CurrentRoundNumber;
+            var faction = _runtime.Session.CurrentFaction;
+            var round = await ShowWindowAsync<BattleRoundUI>("BattleRoundUI", cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
+            await round.PlayAsync(roundNumber, faction == CombatFaction.TeamA, cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
+            GameModule.UI.CloseUI<BattleRoundUI>();
+            _announcedRound = roundNumber;
+            _announcedFaction = faction;
+        }
+
+        private async UniTask WaitForBattleStartAsync(CancellationToken cancellationToken)
+        {
+            var preparation = await ShowWindowAsync<BattlePreparationUI>("BattlePreparationUI", cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
+            _loading.SetProgress(1f);
+            await UniTask.Yield(cancellationToken);
+            CloseLoading();
+            Log.Info("战前准备已就绪，等待点击进入战斗。");
+            var enterBattle = new UniTaskCompletionSource();
+            preparation.EnterBattleRequested += () => enterBattle.TrySetResult();
+            await enterBattle.Task.AttachExternalCancellation(cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
+            GameModule.UI.CloseUI<BattlePreparationUI>();
+        }
+
+        private async UniTask InitializeHUDAsync(CancellationToken cancellationToken)
+        {
+            var hud = await ShowWindowAsync<BattleHUDUI>("BattleHUDUI", cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
+            _hud = hud;
+            int maxAbilityCount = 0;
+            foreach (var abilities in _runtime.Scenario.AbilitiesByUnitId.Values)
             {
-                if (IsCurrent(lifetime))
-                {
-                    CloseLoading();
-                }
+                maxAbilityCount = System.Math.Max(maxAbilityCount, abilities.Count);
             }
+            await _hud.InitializeActionsAsync(maxAbilityCount, cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
+            _hudPresenter = new BattleHUDPresenter(_runtime.Session, _runtime.InteractionController,
+                _runtime.UnitStatusPresenter, _hud, CanAcceptBattleInput);
+        }
+
+        private void ShowBattleHUD()
+        {
+            _runtime.InteractionController.SelectCurrentCombatUnit();
+            _hudPresenter.RefreshIfChanged(true);
+            _hud.SetDisplayEnabled(true);
         }
 
         private void CreateRuntime(Scene scene)
@@ -149,51 +196,20 @@ namespace GameLogic
             return bindings;
         }
 
-        private async UniTask OpenLoadingAsync(CancellationTokenSource lifetime, CancellationToken cancellationToken)
+        private async UniTask<T> ShowWindowAsync<T>(string location, CancellationToken cancellationToken) where T : UIWindow, new()
         {
-            _loadingRequested = true;
-            var loading = await GameModule.UI.ShowUIAsyncAwait<LoadingUI>().AttachExternalCancellation(cancellationToken);
-            if (loading == null)
+            if (!GameModule.Resource.CheckLocationValid(location))
             {
-                throw new GameFrameworkException("LoadingUI 创建失败。");
+                throw new GameFrameworkException($"{location} 资源地址无效，请检查 YooAsset 收集配置。");
             }
-
-            // TE 等待 API 可能返回未完成绑定的窗口，需检查 OnCreate 是否完成。
-            await UniTask.WaitUntil(() => loading.IsDestroyed || loading.IsReady, cancellationToken: cancellationToken);
-            if (loading.IsDestroyed)
+            var window = await GameModule.UI.ShowUIAsyncAwait<T>().AttachExternalCancellation(cancellationToken);
+            // TE 超时会直接返回未加载完成的窗口，此处显式失败；已入栈的窗口仍由 ReleaseBattle 关闭。
+            // 框架在设置 IsLoadDone 后同步执行 OnCreate，窗口返回时已创建，无需额外等待。
+            if (!window.IsLoadDone)
             {
-                throw new GameFrameworkException("LoadingUI 在加载前已被关闭。");
+                throw new GameFrameworkException($"{location} 加载未完成，请检查 YooAsset 收集配置或加载耗时。");
             }
-
-            cancellationToken.ThrowIfCancellationRequested();
-            if (IsCurrent(lifetime))
-            {
-                _loading = loading;
-            }
-        }
-
-        private async UniTask OpenHUDAsync(CancellationTokenSource lifetime, CancellationToken cancellationToken)
-        {
-            if (!GameModule.Resource.CheckLocationValid("BattleHUDUI"))
-            {
-                throw new GameFrameworkException("BattleHUDUI 资源地址无效，请检查 YooAsset 收集配置。");
-            }
-            _hudRequested = true;
-            var hud = await GameModule.UI.ShowUIAsyncAwait<BattleHUDUI>().AttachExternalCancellation(cancellationToken);
-            if (hud == null)
-            {
-                throw new GameFrameworkException("BattleHUDUI 创建失败。");
-            }
-            await UniTask.WaitUntil(() => hud.IsDestroyed || hud.IsReady, cancellationToken: cancellationToken);
-            if (hud.IsDestroyed)
-            {
-                throw new GameFrameworkException("BattleHUDUI 在初始化完成前已被关闭。");
-            }
-            cancellationToken.ThrowIfCancellationRequested();
-            if (IsCurrent(lifetime))
-            {
-                _hud = hud;
-            }
+            return window;
         }
 
         protected override void OnLeave(IFsm<IProcedureModule> fsm, bool isShutdown)
@@ -208,31 +224,28 @@ namespace GameLogic
 
         public void Dispose()
         {
-            if (!_active)
+            if (_lifetime == null)
             {
                 return;
             }
 
-            _active = false;
-            _ready = false;
             var lifetime = _lifetime;
             _lifetime = null;
-            lifetime?.Cancel();
-            lifetime?.Dispose();
+            lifetime.Cancel();
+            lifetime.Dispose();
             ReleaseBattle();
             CloseLoading();
         }
 
         private void ReleaseBattle()
         {
-            _ready = false;
+            StopBattleFlow();
+            GameModule.UI.CloseUI<BattlePreparationUI>();
+            GameModule.UI.CloseUI<BattleObjectiveUI>();
+            GameModule.UI.CloseUI<BattleRoundUI>();
             _hudPresenter?.Dispose();
             _hudPresenter = null;
-            if (_hudRequested)
-            {
-                GameModule.UI.CloseUI<BattleHUDUI>();
-                _hudRequested = false;
-            }
+            GameModule.UI.CloseUI<BattleHUDUI>();
             _hud = null;
             _runtime?.Dispose();
             _runtime = null;
@@ -240,11 +253,7 @@ namespace GameLogic
 
         private void CloseLoading()
         {
-            if (_loadingRequested)
-            {
-                GameModule.UI.CloseUI<LoadingUI>();
-                _loadingRequested = false;
-            }
+            GameModule.UI.CloseUI<LoadingUI>();
             _loading = null;
         }
     }

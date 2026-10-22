@@ -2,7 +2,7 @@ using System;
 using MechStorm.Config;
 using UnityEngine;
 
-namespace MechStorm.Presentation
+namespace MechStorm.Runtime
 {
     /// <summary>
     /// 保存战斗场景的依赖，不自行创建或更新战斗。启动与释放由 ProcedureBattle 控制。

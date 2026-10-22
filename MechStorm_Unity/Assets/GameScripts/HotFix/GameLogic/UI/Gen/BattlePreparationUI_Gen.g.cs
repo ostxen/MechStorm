@@ -18,12 +18,14 @@ namespace GameLogic
 		#region 脚本工具生成的代码
 
 		private UIBindComponent m_bindComponent;
-		private BattleUnitStatusItem _unitStatus = null!;
-		private CombatInfoWidget _combatInfo = null!;
-		private BattleWeaponsWidget _weapons = null!;
-		private BattleAbilitiesWidget _abilities = null!;
-		private BattleCommandsWidget _commands = null!;
-		private BattleActionControlWidget _actionControl = null!;
+		private TextMeshProUGUI m_tmpParticipantCount = null!;
+		private TextMeshProUGUI m_tmpObjectiveDescription = null!;
+		private Button m_btnEcs = null!;
+		private Button m_btnBattleUnitFilter = null!;
+		private Button m_btnClassDetails = null!;
+		private BattlcUnitsActionSequenceWidget _battlcUnitActionSequences = null!;
+		private Button m_btnEnterBattle = null!;
+		private RectTransform m_rectBattleUnitCandidates = null!;
 
 		protected override void ScriptGenerator()
 		{
@@ -33,17 +35,35 @@ namespace GameLogic
 				Log.Error($"根物体: {gameObject.name} 缺少组件 UIBindComponent, 请检查！！！");
 				return;
 			}
-			_unitStatus = CreateWidget<BattleUnitStatusItem>(m_bindComponent.GetComponent<RectTransform>(0).gameObject);
-			_combatInfo = CreateWidget<CombatInfoWidget>(m_bindComponent.GetComponent<RectTransform>(1).gameObject);
-			_weapons = CreateWidget<BattleWeaponsWidget>(m_bindComponent.GetComponent<RectTransform>(2).gameObject);
-			_abilities = CreateWidget<BattleAbilitiesWidget>(m_bindComponent.GetComponent<RectTransform>(3).gameObject);
-			_commands = CreateWidget<BattleCommandsWidget>(m_bindComponent.GetComponent<RectTransform>(4).gameObject);
-			_actionControl = CreateWidget<BattleActionControlWidget>(m_bindComponent.GetComponent<RectTransform>(5).gameObject);
+			m_tmpParticipantCount = m_bindComponent.GetComponent<TextMeshProUGUI>(0);
+			m_tmpObjectiveDescription = m_bindComponent.GetComponent<TextMeshProUGUI>(1);
+			m_btnEcs = m_bindComponent.GetComponent<Button>(2);
+			m_btnBattleUnitFilter = m_bindComponent.GetComponent<Button>(3);
+			m_btnClassDetails = m_bindComponent.GetComponent<Button>(4);
+			_battlcUnitActionSequences = CreateWidget<BattlcUnitsActionSequenceWidget>(m_bindComponent.GetComponent<RectTransform>(5).gameObject);
+			m_btnEnterBattle = m_bindComponent.GetComponent<Button>(6);
+			m_rectBattleUnitCandidates = m_bindComponent.GetComponent<RectTransform>(7);
+			m_btnEcs.onClick.RemoveAllListeners();
+			m_btnEcs.onClick.AddListener(UniTask.UnityAction(OnClickEcsBtn));
+			m_btnBattleUnitFilter.onClick.RemoveAllListeners();
+			m_btnBattleUnitFilter.onClick.AddListener(UniTask.UnityAction(OnClickBattleUnitFilterBtn));
+			m_btnClassDetails.onClick.RemoveAllListeners();
+			m_btnClassDetails.onClick.AddListener(UniTask.UnityAction(OnClickClassDetailsBtn));
+			m_btnEnterBattle.onClick.RemoveAllListeners();
+			m_btnEnterBattle.onClick.AddListener(UniTask.UnityAction(OnClickEnterBattleBtn));
 		}
 
 		#endregion
 
 		#region 事件
+
+		private partial UniTaskVoid OnClickEcsBtn();
+
+		private partial UniTaskVoid OnClickBattleUnitFilterBtn();
+
+		private partial UniTaskVoid OnClickClassDetailsBtn();
+
+		private partial UniTaskVoid OnClickEnterBattleBtn();
 
 		#endregion
 	}

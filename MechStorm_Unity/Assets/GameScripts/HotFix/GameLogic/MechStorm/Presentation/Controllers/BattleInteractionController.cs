@@ -21,12 +21,15 @@ namespace MechStorm.Presentation.Controllers
         ActionRejected,
     }
 
-    public sealed class BattlePresentationController
+    /// <summary>
+    /// 协调棋盘与 HUD 的行动交互，调用 BattleSession 权威规则并同步选择和棋盘反馈。
+    /// </summary>
+    public sealed class BattleInteractionController
     {
         private readonly BattleSession _battleSession;
         // 战斗单位到对应表现对象的映射。
         private readonly IReadOnlyDictionary<CombatUnit, CombatUnitVisual> _combatUnitVisuals;
-        private readonly BattleBoardInputter _battleBoardInputter;
+        private readonly BattleBoardInputReader _boardInputReader;
         private readonly BattleRangeHighlightMapper _highlightMapper;
         private readonly BattleRangeHighlighter _rangeHighlighter;
         private readonly BattleGridFocusIndicator _gridFocusIndicator;
@@ -79,15 +82,15 @@ namespace MechStorm.Presentation.Controllers
             return _actionSelection.GetAvailableActionsForSelectedTarget();
         }
 
-        public BattlePresentationController(BattleSession battleSession,
+        public BattleInteractionController(BattleSession battleSession,
             IReadOnlyDictionary<CombatUnit, CombatUnitVisual> combatUnitVisuals,
-            BattleBoardInputter battleBoardInputter, BattleRangeHighlighter rangeHighlighter,
+            BattleBoardInputReader boardInputReader, BattleRangeHighlighter rangeHighlighter,
             BattleGridFocusIndicator gridFocusIndicator,
             IReadOnlyDictionary<int, IReadOnlyList<AbilityDefinition>> abilitiesByUnitId = null)
         {
             _battleSession = battleSession ?? throw new ArgumentNullException(nameof(battleSession));
             _combatUnitVisuals = combatUnitVisuals ?? throw new ArgumentNullException(nameof(combatUnitVisuals));
-            _battleBoardInputter = battleBoardInputter ?? throw new ArgumentNullException(nameof(battleBoardInputter));
+            _boardInputReader = boardInputReader ?? throw new ArgumentNullException(nameof(boardInputReader));
             _rangeHighlighter = rangeHighlighter ?? throw new ArgumentNullException(nameof(rangeHighlighter));
             _gridFocusIndicator = gridFocusIndicator ??
                 throw new ArgumentNullException(nameof(gridFocusIndicator));
@@ -106,7 +109,7 @@ namespace MechStorm.Presentation.Controllers
             LastRejectionReason = null;
             LastActionResult = null;
 
-            if (!_battleBoardInputter.Tick(out var clickedCombatUnit, out var targetGridPosition))
+            if (!_boardInputReader.Tick(out var clickedCombatUnit, out var targetGridPosition))
             {
                 return BattleInputAction.None;
             }

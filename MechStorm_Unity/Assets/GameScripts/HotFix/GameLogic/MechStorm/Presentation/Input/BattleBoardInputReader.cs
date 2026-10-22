@@ -8,7 +8,10 @@ using UnityInput = UnityEngine.Input;
 
 namespace MechStorm.Presentation.Input
 {
-    public sealed class BattleBoardInputter
+    /// <summary>
+    /// 读取棋盘点击，将射线命中转换为单位或网格坐标，不判断行动是否合法。
+    /// </summary>
+    public sealed class BattleBoardInputReader
     {
         private const float MAX_RAY_DISTANCE = 1000f;
 
@@ -20,7 +23,7 @@ namespace MechStorm.Presentation.Input
         private readonly int _layerMask;
         private readonly Func<bool> _isPointerBlocked;
 
-        public BattleBoardInputter(Camera camera, Collider boardCollider, GridCoordinateConverter coordinateConverter,
+        public BattleBoardInputReader(Camera camera, Collider boardCollider, GridCoordinateConverter coordinateConverter,
             IReadOnlyDictionary<Collider, CombatUnit> combatUnitColliders, int layerMask,
             Func<bool> isPointerBlocked = null)
         {

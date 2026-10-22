@@ -11,10 +11,11 @@ using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
 
-namespace MechStorm.Presentation
+namespace MechStorm.Runtime
 {
     /// <summary>
-    /// 拥有一场战斗的逻辑实例、单位表现和棋盘交互对象，不持有 HUD 或复制战斗规则。
+    /// 客户端本场战斗的装配与生命周期容器，拥有 Session、场景表现和交互对象。
+    /// 战斗规则由 BattleSession 负责，此类不持有 HUD 或复制规则。
     /// </summary>
     public sealed class BattleRuntime : IDisposable
     {
@@ -42,8 +43,8 @@ namespace MechStorm.Presentation
         public IReadOnlyDictionary<CombatUnit, CombatUnitVisual> CombatUnitVisuals => _combatUnitVisuals;
         public IReadOnlyDictionary<Collider, CombatUnit> CombatUnitColliders => _combatUnitColliders;
         public IReadOnlyDictionary<CombatUnit, Transform> HealthBarAnchors => _healthBarAnchors;
-        public BattleUnitPresenter UnitPresenter { get; private set; }
-        public BattlePresentationController PresentationController { get; private set; }
+        public BattleUnitStatusPresenter UnitStatusPresenter { get; private set; }
+        public BattleInteractionController InteractionController { get; private set; }
 
         public BattleRuntime(BattleScenarioConfig config, Transform plane, Camera battleCamera,
             Transform unitParent, float cellSize, Vector3 boardOrigin, Color boardColor)
@@ -68,7 +69,7 @@ namespace MechStorm.Presentation
             {
                 CreateSceneObjects(unitParent, config.BoardWidth, config.BoardHeight, cellSize, boardOrigin, boardColor);
                 CreateUnitViews(scenario.Units, cellSize);
-                UnitPresenter = new BattleUnitPresenter(_healthBarAnchors, BattleCamera);
+                UnitStatusPresenter = new BattleUnitStatusPresenter(_healthBarAnchors, BattleCamera);
             }
             catch
             {
@@ -83,7 +84,7 @@ namespace MechStorm.Presentation
             {
                 throw new ObjectDisposedException(nameof(BattleRuntime));
             }
-            if (PresentationController != null)
+            if (InteractionController != null)
             {
                 throw new InvalidOperationException("Battle presentation has already been initialized.");
             }
@@ -95,11 +96,10 @@ namespace MechStorm.Presentation
                     bindings.CellSize, Coordinates, _highlightTemplate, bindings.GridCellColor);
                 _gridFocusIndicator = new BattleGridFocusIndicator(bindings.CellSize, Coordinates,
                     _highlightTemplate.GetComponent<Renderer>().sharedMaterial, bindings.GridFocusColor);
-                var inputter = new BattleBoardInputter(BattleCamera, _plane.GetComponent<Collider>(),
+                var inputReader = new BattleBoardInputReader(BattleCamera, _plane.GetComponent<Collider>(),
                     Coordinates, _combatUnitColliders, bindings.BattleInputLayerMask, IsPointerOverUI);
-                PresentationController = new BattlePresentationController(Session, _combatUnitVisuals,
-                    inputter, _rangeHighlighter, _gridFocusIndicator, Scenario.AbilitiesByUnitId);
-                PresentationController.SelectCurrentCombatUnit();
+                InteractionController = new BattleInteractionController(Session, _combatUnitVisuals,
+                    inputReader, _rangeHighlighter, _gridFocusIndicator, Scenario.AbilitiesByUnitId);
             }
             catch
             {
@@ -144,12 +144,12 @@ namespace MechStorm.Presentation
             {
                 return;
             }
-            if (acceptInput && PresentationController != null &&
-                PresentationController.Tick(out _) != BattleInputAction.None)
+            if (acceptInput && InteractionController != null &&
+                InteractionController.Tick(out _) != BattleInputAction.None)
             {
-                UnitPresenter.RefreshAll();
+                UnitStatusPresenter.RefreshAll();
             }
-            UnitPresenter?.RefreshFacing();
+            UnitStatusPresenter?.RefreshFacing();
         }
 
         private static Renderer ValidateSceneBindings(Transform plane, Camera battleCamera, Transform unitParent,
@@ -242,7 +242,7 @@ namespace MechStorm.Presentation
 
             _disposed = true;
             // 交互状态随本场对象一并丢弃，释放时不再重画可能已经卸载的棋盘。
-            PresentationController = null;
+            InteractionController = null;
             _gridFocusIndicator?.Dispose();
             _rangeHighlighter?.Dispose();
             _gridFocusIndicator = null;
@@ -281,7 +281,7 @@ namespace MechStorm.Presentation
             BattleCamera = null;
             Coordinates = null;
             Scenario = null;
-            UnitPresenter = null;
+            UnitStatusPresenter = null;
             _combatUnitVisuals.Clear();
             _combatUnitColliders.Clear();
             _healthBarAnchors.Clear();
