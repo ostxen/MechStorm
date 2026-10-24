@@ -9,10 +9,14 @@ namespace GameLogic
 	{
 		private Slider _progressBar;
 
-		protected override void OnCreate()
+		protected override void BindMemberProperty()
 		{
 			// 当前生成绑定只有文字，沿用 Prefab 现有进度条路径，不修改生成文件。
 			_progressBar = FindChildComponent<Slider>("Slider_LoadingBar");
+		}
+
+		protected override void OnCreate()
+		{
 			_progressBar.interactable = false;
 			SetProgress(0f);
 		}

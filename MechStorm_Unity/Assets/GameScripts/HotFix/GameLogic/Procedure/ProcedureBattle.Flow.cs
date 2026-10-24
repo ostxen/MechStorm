@@ -98,8 +98,7 @@ namespace GameLogic
                     return BattleFlowPhase.Playing;
                 case BattleFlowPhase.Result:
                     _runtime.InteractionController.ClearSelection();
-                    // 权威结果保留在 Session；结算窗口、重战与返回入口后续接入。
-                    Log.Info("战斗已结束，进入结算阶段，结算界面尚未接入。");
+                    await ShowResultAsync(cancellationToken);
                     return null;
                 default:
                     throw new ArgumentOutOfRangeException(nameof(phase), phase, null);

@@ -1,6 +1,7 @@
 using System;
 using System.Threading;
 using Cysharp.Threading.Tasks;
+using MechStorm.Battle.Statistics;
 using MechStorm.Battle.Units;
 using MechStorm.Runtime;
 using TEngine;
@@ -19,6 +20,7 @@ namespace GameLogic
         private LoadingUI _loading;
         private BattleHUDUI _hud;
         private BattleHUDPresenter _hudPresenter;
+        private BattleStatisticsReport _statisticsReport;
         private int _announcedRound;
         private CombatFaction _announcedFaction;
         private bool _returnToMain;
@@ -101,9 +103,7 @@ namespace GameLogic
                 return;
             }
 
-            Dispose();
-            // 由流程更新执行切换，避免异步续接重入 FSM；原异常由调用方继续抛出。
-            _returnToMain = true;
+            ReturnToMain();
         }
 
         private async UniTask ShowObjectiveAsync(CancellationToken cancellationToken)
@@ -119,11 +119,11 @@ namespace GameLogic
         {
             int roundNumber = _runtime.Session.CurrentRoundNumber;
             var faction = _runtime.Session.CurrentFaction;
-            var round = await ShowWindowAsync<BattleRoundUI>("BattleRoundUI", cancellationToken);
+            var round = await ShowWindowAsync<BattleRoundIntroUI>("BattleRoundIntroUI", cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
             await round.PlayAsync(roundNumber, faction == CombatFaction.TeamA, cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
-            GameModule.UI.CloseUI<BattleRoundUI>();
+            GameModule.UI.CloseUI<BattleRoundIntroUI>();
             _announcedRound = roundNumber;
             _announcedFaction = faction;
         }
@@ -164,6 +164,54 @@ namespace GameLogic
             _runtime.InteractionController.SelectCurrentCombatUnit();
             _hudPresenter.RefreshIfChanged(true);
             _hud.SetDisplayEnabled(true);
+        }
+
+        private async UniTask ShowResultAsync(CancellationToken cancellationToken)
+        {
+            _statisticsReport = BattleStatisticsBuilder.Build(_runtime.Session);
+            var result = await ShowWindowAsync<BattleResultUI>("BattleResultUI", cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
+            result.ShowOutcome(_runtime.Session.Outcome.WinningFaction == CombatFaction.TeamA);
+            result.StatisticsRequested += OnStatisticsRequested;
+            result.ExitRequested += ReturnToMain;
+        }
+
+        private void OnStatisticsRequested()
+        {
+            if (GameModule.UI.HasWindow<BattleStatisticsUI>())
+            {
+                return;
+            }
+            ShowStatisticsAsync(_lifetime, _lifetime.Token).Forget();
+        }
+
+        private async UniTask ShowStatisticsAsync(CancellationTokenSource lifetime, CancellationToken cancellationToken)
+        {
+            try
+            {
+                var statistics = await ShowWindowAsync<BattleStatisticsUI>("BattleStatisticsUI", cancellationToken);
+                cancellationToken.ThrowIfCancellationRequested();
+                statistics.BackRequested += CloseStatistics;
+                statistics.HomeRequested += ReturnToMain;
+                await statistics.DisplayAsync(_statisticsReport);
+            }
+            catch
+            {
+                HandleBattleFailure(lifetime);
+                throw;
+            }
+        }
+
+        private void CloseStatistics()
+        {
+            GameModule.UI.CloseUI<BattleStatisticsUI>();
+        }
+
+        private void ReturnToMain()
+        {
+            Dispose();
+            // 下一次流程更新切回主界面，避免按钮或异步回调直接重入 FSM。
+            _returnToMain = true;
         }
 
         private void CreateRuntime(Scene scene)
@@ -242,7 +290,10 @@ namespace GameLogic
             StopBattleFlow();
             GameModule.UI.CloseUI<BattlePreparationUI>();
             GameModule.UI.CloseUI<BattleObjectiveUI>();
-            GameModule.UI.CloseUI<BattleRoundUI>();
+            GameModule.UI.CloseUI<BattleRoundIntroUI>();
+            CloseStatistics();
+            GameModule.UI.CloseUI<BattleResultUI>();
+            _statisticsReport = null;
             _hudPresenter?.Dispose();
             _hudPresenter = null;
             GameModule.UI.CloseUI<BattleHUDUI>();
