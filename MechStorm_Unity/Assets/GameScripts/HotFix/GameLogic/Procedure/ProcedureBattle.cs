@@ -23,11 +23,11 @@ namespace GameLogic
         private BattleStatisticsReport _statisticsReport;
         private int _announcedRound;
         private CombatFaction _announcedFaction;
-        private bool _returnToMain;
+        private Type _nextProcedureType;
 
         protected override void OnEnter(IFsm<IProcedureModule> fsm)
         {
-            _returnToMain = false;
+            _nextProcedureType = null;
             _announcedRound = 0;
             _lifetime = new CancellationTokenSource();
             InitializeBattleAsync(_lifetime, _lifetime.Token).Forget();
@@ -35,9 +35,9 @@ namespace GameLogic
 
         protected override void OnUpdate(IFsm<IProcedureModule> fsm, float elapseSeconds, float realElapseSeconds)
         {
-            if (_returnToMain)
+            if (_nextProcedureType != null)
             {
-                ChangeState<ProcedureMain>(fsm);
+                ChangeState(fsm, _nextProcedureType);
                 return;
             }
 
@@ -174,6 +174,7 @@ namespace GameLogic
             result.ShowOutcome(_runtime.Session.Outcome.WinningFaction == CombatFaction.TeamA);
             result.StatisticsRequested += OnStatisticsRequested;
             result.ExitRequested += ReturnToMain;
+            result.RestartRequested += RestartBattle;
         }
 
         private void OnStatisticsRequested()
@@ -211,7 +212,13 @@ namespace GameLogic
         {
             Dispose();
             // 下一次流程更新切回主界面，避免按钮或异步回调直接重入 FSM。
-            _returnToMain = true;
+            _nextProcedureType = typeof(ProcedureMain);
+        }
+
+        private void RestartBattle()
+        {
+            Dispose();
+            _nextProcedureType = typeof(ProcedureBattle);
         }
 
         private void CreateRuntime(Scene scene)

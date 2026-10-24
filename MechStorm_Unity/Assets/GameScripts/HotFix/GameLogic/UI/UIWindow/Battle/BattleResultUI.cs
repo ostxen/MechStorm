@@ -10,6 +10,7 @@ namespace GameLogic
 	{
 		public event Action StatisticsRequested;
 		public event Action ExitRequested;
+		public event Action RestartRequested;
 		private Button _backgroundButton;
 
 		protected override void BindMemberProperty()
@@ -43,6 +44,7 @@ namespace GameLogic
 			_backgroundButton.onClick.RemoveListener(OnClickBackground);
 			StatisticsRequested = null;
 			ExitRequested = null;
+			RestartRequested = null;
 		}
 
 		#region 事件
@@ -64,14 +66,18 @@ namespace GameLogic
 			await UniTask.Yield();
 		}
 
-		private async partial UniTaskVoid OnClickRetreatBtn()
+		private partial UniTaskVoid OnClickRetreatBtn()
 		{
-			await UniTask.Yield();
+			ExitRequested?.Invoke();
+
+			return default;
 		}
 
-		private async partial UniTaskVoid OnClickAgainBtn()
+		private partial UniTaskVoid OnClickAgainBtn()
 		{
-			await UniTask.Yield();
+			RestartRequested?.Invoke();
+
+			return default;
 		}
 
 		#endregion
