@@ -41,16 +41,7 @@ namespace GameLogic
                 return;
             }
 
-            var lifetime = _lifetime;
-            try
-            {
-                UpdateBattleFlow();
-            }
-            catch
-            {
-                HandleBattleFailure(lifetime);
-                throw;
-            }
+            UpdateBattleFlow();
         }
 
         private bool IsCurrent(CancellationTokenSource lifetime)
@@ -60,50 +51,32 @@ namespace GameLogic
 
         private async UniTask InitializeBattleAsync(CancellationTokenSource lifetime, CancellationToken cancellationToken)
         {
-            try
+            var loading = await ShowWindowAsync<LoadingUI>("LoadingUI", cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
+            _loading = loading;
+            if (!GameModule.Resource.CheckLocationValid(SceneLocation))
             {
-                var loading = await ShowWindowAsync<LoadingUI>("LoadingUI", cancellationToken);
-                cancellationToken.ThrowIfCancellationRequested();
-                _loading = loading;
-                if (!GameModule.Resource.CheckLocationValid(SceneLocation))
-                {
-                    throw new GameFrameworkException("Battle 场景地址无效，请检查 YooAsset 收集配置。");
-                }
+                throw new GameFrameworkException("Battle 场景地址无效，请检查 YooAsset 收集配置。");
+            }
 
-                // TE 场景 API 不支持取消，等待真实操作结束；退出后不再更新 UI 或继续业务。
-                var scene = await GameModule.Scene.LoadSceneAsync(SceneLocation, LoadSceneMode.Single,
-                    progressCallBack: progress =>
+            // TE 场景 API 不支持取消，等待真实操作结束；退出后不再更新 UI 或继续业务。
+            var scene = await GameModule.Scene.LoadSceneAsync(SceneLocation, LoadSceneMode.Single,
+                progressCallBack: progress =>
+                {
+                    if (IsCurrent(lifetime))
                     {
-                        if (IsCurrent(lifetime))
-                        {
-                            _loading.SetProgress(progress * 0.7f);
-                        }
-                    });
-                cancellationToken.ThrowIfCancellationRequested();
-                if (!scene.IsValid())
-                {
-                    throw new GameFrameworkException("Battle 场景加载失败。");
-                }
-
-                CreateRuntime(scene);
-                _loading.SetProgress(0.85f);
-                ChangeBattlePhase(BattleFlowPhase.Preparation);
-            }
-            catch
+                        _loading.SetProgress(progress * 0.7f);
+                    }
+                });
+            cancellationToken.ThrowIfCancellationRequested();
+            if (!scene.IsValid())
             {
-                HandleBattleFailure(lifetime);
-                throw;
-            }
-        }
-
-        private void HandleBattleFailure(CancellationTokenSource lifetime)
-        {
-            if (!IsCurrent(lifetime))
-            {
-                return;
+                throw new GameFrameworkException("Battle 场景加载失败。");
             }
 
-            ReturnToMain();
+            CreateRuntime(scene);
+            _loading.SetProgress(0.85f);
+            ChangeBattlePhase(BattleFlowPhase.Preparation);
         }
 
         private async UniTask ShowObjectiveAsync(CancellationToken cancellationToken)
@@ -166,7 +139,7 @@ namespace GameLogic
             int maxAbilityCount = 0;
             foreach (var abilities in _runtime.Scenario.AbilitiesByUnitId.Values)
             {
-                maxAbilityCount = System.Math.Max(maxAbilityCount, abilities.Count);
+                maxAbilityCount = Math.Max(maxAbilityCount, abilities.Count);
             }
             await _hud.InitializeActionsAsync(maxAbilityCount, cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
@@ -198,24 +171,16 @@ namespace GameLogic
             {
                 return;
             }
-            ShowStatisticsAsync(_lifetime, _lifetime.Token).Forget();
+            ShowStatisticsAsync(_lifetime.Token).Forget();
         }
 
-        private async UniTask ShowStatisticsAsync(CancellationTokenSource lifetime, CancellationToken cancellationToken)
+        private async UniTask ShowStatisticsAsync(CancellationToken cancellationToken)
         {
-            try
-            {
-                var statistics = await ShowWindowAsync<BattleStatisticsUI>("BattleStatisticsUI", cancellationToken);
-                cancellationToken.ThrowIfCancellationRequested();
-                statistics.BackRequested += CloseStatistics;
-                statistics.HomeRequested += ReturnToMain;
-                await statistics.DisplayAsync(_statisticsReport);
-            }
-            catch
-            {
-                HandleBattleFailure(lifetime);
-                throw;
-            }
+            var statistics = await ShowWindowAsync<BattleStatisticsUI>("BattleStatisticsUI", cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
+            statistics.BackRequested += CloseStatistics;
+            statistics.HomeRequested += ReturnToMain;
+            await statistics.DisplayAsync(_statisticsReport);
         }
 
         private void CloseStatistics()
@@ -273,8 +238,8 @@ namespace GameLogic
                 throw new GameFrameworkException($"{location} 资源地址无效，请检查 YooAsset 收集配置。");
             }
             var window = await GameModule.UI.ShowUIAsyncAwait<T>().AttachExternalCancellation(cancellationToken);
-            // TE 超时会直接返回未加载完成的窗口，此处显式失败；已入栈的窗口仍由 ReleaseBattle 关闭。
-            // 框架在设置 IsLoadDone 后同步执行 OnCreate，窗口返回时已创建，无需额外等待。
+            // TE 超时会返回未加载完成的窗口，此处显式报错，不自动退出战斗。
+            // IsLoadDone 只表示资源加载完成，不保证后续绑定和 OnCreate 成功。
             if (!window.IsLoadDone)
             {
                 throw new GameFrameworkException($"{location} 加载未完成，请检查 YooAsset 收集配置或加载耗时。");

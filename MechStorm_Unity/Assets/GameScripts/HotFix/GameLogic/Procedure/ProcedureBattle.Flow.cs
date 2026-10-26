@@ -35,7 +35,7 @@ namespace GameLogic
             StopBattleFlow();
             CurrentPhase = next;
             Log.Info($"战斗阶段：{previous?.ToString() ?? "初始化"} -> {next}");
-            RunBattlePhaseAsync(_lifetime, next, _lifetime.Token).Forget();
+            RunBattlePhaseAsync(next, _lifetime.Token).Forget();
         }
 
         private static bool CanChangeBattlePhase(BattleFlowPhase? current, BattleFlowPhase next)
@@ -57,23 +57,14 @@ namespace GameLogic
             }
         }
 
-        private async UniTask RunBattlePhaseAsync(CancellationTokenSource lifetime, BattleFlowPhase phase,
-            CancellationToken cancellationToken)
+        private async UniTask RunBattlePhaseAsync(BattleFlowPhase phase, CancellationToken cancellationToken)
         {
             // 阶段工作完成后才推进，离场统一使用本场 token 取消。
-            try
+            var next = await EnterBattlePhaseAsync(phase, cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
+            if (next.HasValue)
             {
-                var next = await EnterBattlePhaseAsync(phase, cancellationToken);
-                cancellationToken.ThrowIfCancellationRequested();
-                if (next.HasValue)
-                {
-                    ChangeBattlePhase(next.Value);
-                }
-            }
-            catch
-            {
-                HandleBattleFailure(lifetime);
-                throw;
+                ChangeBattlePhase(next.Value);
             }
         }
 
