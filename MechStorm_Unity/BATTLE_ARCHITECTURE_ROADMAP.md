@@ -64,6 +64,57 @@ MechStorm 后续战斗系统应保持以下方向：
 7. **Modifier / Trigger 后置**：修改器和触发器作为中后期扩展能力，不在早期原型阶段提前完整实现。
 8. **数据驱动渐进引入**：先用简单配置满足玩法验证，技能数量和规则复杂度上来后，再引入更强的数据驱动或编辑器工具。
 
+## 战斗主链路命名与职责
+
+命名以项目内一致、职责明确为准，不把类名后缀当成架构边界。目录与命名空间保持一致，程序集边界由 asmdef 决定。
+
+| 类型 | 位置 / 命名空间 | 职责 |
+|---|---|---|
+| `BattleSession` | `Battle` / `MechStorm.Battle` | 本场对局的权威状态和规则入口；纯 C#，不依赖 Unity |
+| `BattleRuntime` | `Runtime` / `MechStorm.Runtime` | 客户端本场战斗的装配与生命周期容器，拥有 Session、场景表现和交互对象；允许依赖 Unity，不复制战斗规则 |
+| `BattleSceneBindings` | `Runtime` / `MechStorm.Runtime` | 保存场景依赖，不自行启动或更新对局 |
+| `BattleInteractionController` | `Presentation/Controllers` / `MechStorm.Presentation.Controllers` | 协调选择、移动、目标、确认取消等交互，调用 Session/选择协调器并同步棋盘反馈，不接管全部表现 |
+| `BattleBoardInputReader` | `Presentation/Input` / `MechStorm.Presentation.Input` | 读取棋盘点击，将命中转换为单位或格子，不判断行动合法性 |
+| `BattleUnitStatusPresenter` | `Presentation/Units` / `MechStorm.Presentation.Units` | 刷新单位头顶耐久/AP 条及其朝向，不管理单位全部表现 |
+| `BattleHUDPresenter` | `UI/Battle` / `GameLogic` | 将 HUD 意图转给交互控制器，将本场状态转换为 HUD 显示 |
+| `BattleScenarioConfig/Builder/Validator` | `Config` / `MechStorm.Config` | 保存初始配置、校验并构建独立逻辑实例，不保存运行中状态 |
+
+`Runtime`、`Config` 和 `UI/Battle` 仍归 `GameLogic` 程序集；`Presentation` 保持独立程序集，不反向依赖 `GameLogic`。命名调整不意味着新增层级、接口或状态机。`PilotRuntime` / `MechRuntime` 等位于 Battle 内的纯逻辑状态也不因 `Runtime` 后缀而依赖客户端容器。
+
+### ProcedureBattle 内部阶段
+
+外层仍由 TEngine Procedure 管理主界面与战斗生命周期；场景、Runtime 和单位初始化完成后才启动内部五阶段。资源加载不是 Gameplay 的 Loading 阶段；初始化和正常离场由 Procedure 管理，开发错误直接暴露，不自动退出或返回主界面。
+
+```text
+Preparation → Starting → Playing → Result
+                           ↕
+                     TurnTransition
+```
+
+| 阶段 | 进入行为与结束条件 |
+|---|---|
+| `Preparation` | 场景与单位已存在但未选中，准备窗口就绪后关闭首次 Loading；确认后进入 Starting |
+| `Starting` | 依次播放目标、首回合提示，然后才初始化 HUD；完成后进入 Playing，不并行预加载 HUD或再次打开 Loading |
+| `Playing` | 同步默认选中、刷新和显示 HUD；唯一允许战斗输入/棋盘轮询的阶段。同阵营切单位不离开；Session 已结束优先进入 Result，否则阵营/回合变化进入 TurnTransition |
+| `TurnTransition` | 隐藏 HUD、清除选择，播放 Session 当前回合/阵营提示；复用已初始化 HUD，完成后进入 Playing |
+| `Result` | 隐藏 HUD、清除选择并禁止操作；权威结果仍来自 Session.Outcome。Procedure 打开结算窗口并接收统计、重战/返回意图；重战/返回通过正常离场与外层 Procedure 切换完成，不由内部阶段自行重建对局 |
+
+采用枚举和集中的合法转换、进入/退出逻辑，不为动画或一次 await 建状态类，不新增通用 FSM/全局状态变更事件。`CurrentPhase` 在资源初始化及退出后为 null；异常不额外重置阶段。当前异步阶段完成后才转移，没有独立抢占需求，统一复用整场 token，不增加阶段级 CTS 或阶段身份；离场先使整场身份失效并取消，阻止旧任务推进。不可取消的场景加载进度回调仍按整场身份隔离。
+
+`ProcedureBattle.cs` 保留初始化、窗口请求和统一释放，`ProcedureBattle.Flow.cs` 保存内部阶段与输入门控，二者为同一 Procedure 的 partial，而非新的 RuntimeController。窗口离场直接调用 TE 的 CloseUI（对未入栈窗口为空操作），不另记请求状态；加载是否完成由窗口的 IsLoadDone 判断，不用当前阶段猜测。棋盘与 HUD 共用门控，同时检查 Session 是否结束及提示是否已覆盖当前阵营，防止切阶段前的同帧输入泄漏；内部流程不推进核心回合或判定胜负。
+
+Playing 内部依赖由进入条件保证，更新时不重复判空或静默跳过。按 2026-10-26 最新决定，开发阶段程序错误直接暴露，由开发者修复，不自动清理、返回主流程或重试。初始化、阶段、菜单、统计及同步更新不为失败退出包裹 try/catch，不保留 HandleBattleFailure 或仅供失败处理的生命周期参数。异步异常经 UniTask/Forget、同步异常经原更新调用链暴露，不重复记录日志；异常可能保留部分初始化状态或重复报错，不将此视为恢复成功。
+
+正常撤退、重开和离场仍先取消再统一释放；ReturnToMain/RestartBattle 仅响应正常导航，使用 `_nextProcedureType` 调度下一次更新切换，避免按钮回调直接重入 FSM。每次进入战斗重置导航请求并新建整场生命周期。ProcedureMain 只重新打开 MainUI、监听 RequestBattle，不新增物理主场景回切。旧场异常只上报，不再拥有清理或跳转当前场的路径。本决定覆盖2026-10-21“异常清理并自动返回入口”及更早“异常只清理”的策略，不承诺发生程序错误后可继续操作失败状态。
+
+泛型窗口创建的非空契约由框架保证，不在 Procedure 重复判空；加载完成检查（TE 超时返回未完成窗口时显式报错）、场景绑定与资源地址校验仍保留，以明确暴露边界错误。IsLoadDone 在 Canvas 检查及绑定/OnCreate 前设置，不证明这些步骤成功；TE 内部独立 UI 加载任务的异常不保证回传 Procedure，本轮不修改框架或另建 IsReady/恢复机制。正常窗口在顺序步骤结束时关闭，正常离场统一释放；异常不自动触发释放，退出阶段不重复关闭已完成的提示窗口。相关精简遵循工程协作文档的“避免过度防御”。
+
+目标/回合动画及 HUD 条目初始化直接接收 Procedure 的整场 token，不额外建立窗口销毁取消源或 linked CTS。Procedure 等待 HUD 初始化后才构造 Presenter，不再维护 ActionItemsReady 或重复检查 IsDestroyed；正常释放时先停止流程并关闭窗口（含 HUD），再 Dispose Presenter 与 Runtime，不通过 HUD.Closed 建立第二条释放链，也不在普通刷新/输入调用中静默忽略已释放 Presenter。目标文本和 Loading 绑定错误由生成绑定诊断及直接使用暴露，不另写业务预检查。
+
+HUD 显示许可由 OnCreate 关闭、进入 Playing 开启、退出 Playing 关闭，OnSetVisible 负责阻止 TE 的显隐重算提前显示；不在 HUD 初始化完成或回合提示关闭后重复隐藏。动画循环中带 token 的 UniTask.Yield 已检查取消，恢复后不重复检查；动画时长与非缩放时间语义不变。
+
+准备窗口由 Procedure 独占关闭。其开始确认等待只依赖 EnterBattleRequested 事件和整场取消，不轮询 IsDestroyed 或为推测性外部关闭抛错；菜单撤退/重开使用整场取消结束等待，再关闭窗口。不增加独立 IsReady 等待，也不将 IsLoadDone 当作创建成功的证明。
+
 ### 基础战斗镜头边界（2026-10-22 批准，待实现）
 
 - 镜头属于客户端 Presentation；Runtime 装配并管理本场镜头依赖，Procedure 管阶段启停与释放，HUD 只提交操作意图。Battle 不引用镜头，不因观察变化修改角色逻辑朝向、位置、行动或胜负。
