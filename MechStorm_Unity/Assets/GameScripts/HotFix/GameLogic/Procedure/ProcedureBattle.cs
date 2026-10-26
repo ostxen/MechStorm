@@ -132,15 +132,30 @@ namespace GameLogic
         {
             var preparation = await ShowWindowAsync<BattlePreparationUI>("BattlePreparationUI", cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
+            var enterBattle = new UniTaskCompletionSource();
+            preparation.EnterBattleRequested += () => enterBattle.TrySetResult();
+            preparation.MenuRequested += OnBattleMenuRequested;
+            await preparation.DisplayAsync(_runtime.Session.GetFactionCombatUnits(CombatFaction.TeamA), cancellationToken);
             _loading.SetProgress(1f);
             await UniTask.Yield(cancellationToken);
             CloseLoading();
             Log.Info("战前准备已就绪，等待点击进入战斗。");
-            var enterBattle = new UniTaskCompletionSource();
-            preparation.EnterBattleRequested += () => enterBattle.TrySetResult();
             await enterBattle.Task.AttachExternalCancellation(cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
             GameModule.UI.CloseUI<BattlePreparationUI>();
+        }
+
+        private void OnBattleMenuRequested()
+        {
+            ShowBattleMenuAsync(_lifetime.Token).Forget();
+        }
+
+        private async UniTask ShowBattleMenuAsync(CancellationToken cancellationToken)
+        {
+            var menu = await ShowWindowAsync<BattleMenuUI>("BattleMenuUI", cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
+            menu.ExitRequested += ReturnToMain;
+            menu.RestartRequested += RestartBattle;
         }
 
         private async UniTask InitializeHUDAsync(CancellationToken cancellationToken)
@@ -295,6 +310,8 @@ namespace GameLogic
         private void ReleaseBattle()
         {
             StopBattleFlow();
+            GameModule.UI.CloseUI<SettingsUI>();
+            GameModule.UI.CloseUI<BattleMenuUI>();
             GameModule.UI.CloseUI<BattlePreparationUI>();
             GameModule.UI.CloseUI<BattleObjectiveUI>();
             GameModule.UI.CloseUI<BattleRoundIntroUI>();

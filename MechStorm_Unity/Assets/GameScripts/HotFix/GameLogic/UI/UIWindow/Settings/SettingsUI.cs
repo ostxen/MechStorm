@@ -11,9 +11,11 @@ namespace GameLogic
 	{
 		#region 事件
 
-		private async partial UniTaskVoid OnClickCloseBtn()
+		private partial UniTaskVoid OnClickCloseBtn()
 		{
-			await UniTask.Yield();
+			GameModule.UI.CloseUI<SettingsUI>();
+
+			return default;
 		}
 
 		private async partial UniTaskVoid OnClickGameplayBtn()
