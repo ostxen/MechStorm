@@ -315,12 +315,12 @@ namespace GameLogic
             GameModule.UI.CloseUI<BattlePreparationUI>();
             GameModule.UI.CloseUI<BattleObjectiveUI>();
             GameModule.UI.CloseUI<BattleRoundIntroUI>();
-            CloseStatistics();
+            GameModule.UI.CloseUI<BattleStatisticsUI>();
             GameModule.UI.CloseUI<BattleResultUI>();
+            GameModule.UI.CloseUI<BattleHUDUI>();
             _statisticsReport = null;
             _hudPresenter?.Dispose();
             _hudPresenter = null;
-            GameModule.UI.CloseUI<BattleHUDUI>();
             _hud = null;
             _runtime?.Dispose();
             _runtime = null;

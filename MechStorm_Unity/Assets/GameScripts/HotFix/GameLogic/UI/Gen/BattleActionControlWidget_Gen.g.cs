@@ -19,7 +19,9 @@ namespace GameLogic
 
 		private UIBindComponent m_bindComponent;
 		private ActionButtonItem _standby = null!;
-		private AbilityConfirmItem _abilityConfirm = null!;
+		private GameObject m_goAbilityConfirm = null!;
+		private ActionButtonItem _attack = null!;
+		private Button m_btnCancel = null!;
 		private CommandOperationWidget _commandOperation = null!;
 
 		protected override void ScriptGenerator()
@@ -31,13 +33,19 @@ namespace GameLogic
 				return;
 			}
 			_standby = CreateWidget<ActionButtonItem>(m_bindComponent.GetComponent<RectTransform>(0).gameObject);
-			_abilityConfirm = CreateWidget<AbilityConfirmItem>(m_bindComponent.GetComponent<RectTransform>(1).gameObject);
-			_commandOperation = CreateWidget<CommandOperationWidget>(m_bindComponent.GetComponent<RectTransform>(2).gameObject);
+			m_goAbilityConfirm = m_bindComponent.GetComponent<RectTransform>(1).gameObject;
+			_attack = CreateWidget<ActionButtonItem>(m_bindComponent.GetComponent<RectTransform>(2).gameObject);
+			m_btnCancel = m_bindComponent.GetComponent<Button>(3);
+			m_btnCancel.onClick.RemoveAllListeners();
+			m_btnCancel.onClick.AddListener(UniTask.UnityAction(OnClickCancelBtn));
+			_commandOperation = CreateWidget<CommandOperationWidget>(m_bindComponent.GetComponent<RectTransform>(4).gameObject);
 		}
 
 		#endregion
 
 		#region 事件
+
+		private partial UniTaskVoid OnClickCancelBtn();
 
 		#endregion
 	}

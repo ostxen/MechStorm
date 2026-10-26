@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Threading;
 using Cysharp.Threading.Tasks;
 using TEngine;
@@ -10,6 +11,8 @@ namespace GameLogic
 	public partial class BattleHUDUI
 	{
 		private bool _displayEnabled;
+		private WeaponItem _weaponItem;
+		private readonly List<AbilityItem> _abilityItems = new();
 		public event Action<int> ActionRequested;
 		public event Action ConfirmRequested;
 		public event Action CancelRequested;
@@ -32,7 +35,6 @@ namespace GameLogic
 
 		protected override void RegisterEvent()
 		{
-			_abilities.Selected += index => ActionRequested?.Invoke(index);
 			_actionControl.Confirmed += () => ConfirmRequested?.Invoke();
 			_actionControl.Cancelled += () => CancelRequested?.Invoke();
 			_actionControl.Standby += () => StandbyRequested?.Invoke();
@@ -43,60 +45,89 @@ namespace GameLogic
 			SetDisplayEnabled(false);
 			// 动态条目准备完毕并绑定 Presenter 前不开放输入。
 			_combatInfo.Visible = false;
+			m_rectBattleStateRegion.gameObject.SetActive(true);
+			m_rectBattleAuxiliaryRegion.gameObject.SetActive(true);
 			_unitStatus.Visible = true;
-			_weapons.Visible = false;
-			_abilities.Visible = false;
-			_commands.Visible = false;
+			m_rectWeapons.gameObject.SetActive(false);
+			m_rectAbilities.gameObject.SetActive(false);
+			m_rectCommands.gameObject.SetActive(false);
 			_actionControl.Visible = false;
 		}
 
 		public async UniTask InitializeActionsAsync(int maxAbilityCount, CancellationToken cancellationToken)
 		{
-			await _weapons.InitializeAsync(cancellationToken);
-			await _abilities.InitializeAsync(maxAbilityCount + 1, cancellationToken);
+			if (_weaponItem == null)
+			{
+				_weaponItem = await LoadActionItemAsync<WeaponItem>("WeaponItem", m_rectWeapons, cancellationToken);
+			}
+			for (int i = _abilityItems.Count; i < maxAbilityCount + 1; i++)
+			{
+				var item = await LoadActionItemAsync<AbilityItem>("AbilityItem", m_rectAbilities, cancellationToken);
+				int index = i;
+				item.Clicked += () => ActionRequested?.Invoke(index);
+				_abilityItems.Add(item);
+			}
+		}
+
+		private async UniTask<T> LoadActionItemAsync<T>(string location, RectTransform parent,
+			CancellationToken cancellationToken) where T : UIWidget, new()
+		{
+			if (!GameModule.Resource.CheckLocationValid(location))
+			{
+				throw new GameFrameworkException($"HUD 条目资源地址无效：{location}");
+			}
+			cancellationToken.ThrowIfCancellationRequested();
+			var go = await UIModule.Resource.LoadGameObjectAsync(location, parent, cancellationToken);
+			// 加载可能晚于窗口关闭完成，此时不再向旧窗口注册条目。
+			if (cancellationToken.IsCancellationRequested || IsDestroyed || gameObject == null)
+			{
+				if (go != null)
+				{
+					UnityEngine.Object.Destroy(go);
+				}
+				throw new OperationCanceledException(cancellationToken);
+			}
+			if (go == null)
+			{
+				throw new GameFrameworkException($"HUD 条目加载失败：{location}");
+			}
+			var item = CreateWidget<T>(go, false);
+			if (item == null)
+			{
+				UnityEngine.Object.Destroy(go);
+				throw new GameFrameworkException($"HUD 条目创建失败：{location}");
+			}
+			return item;
 		}
 
 		public void SetWeapon(int damage, int minRange, int maxRange, bool interactable, bool selected)
 		{
-			_weapons.SetData(damage, minRange, maxRange, interactable, selected);
+			_weaponItem.Visible = true;
+			_weaponItem.SetData(damage, minRange, maxRange, interactable, selected);
 		}
 
 		public void SetAbilityCount(int count)
 		{
-			_abilities.SetCount(count);
-			LayoutActionLists(count);
-		}
-
-		private void LayoutActionLists(int abilityCount)
-		{
-			// 武器和技能属于互斥阶段，共用右侧区域，不再按两列并排。
-			const float spacing = 8f;
-			var control = _actionControl.rectTransform;
-			float controlTop = rectTransform.InverseTransformPoint(
-				control.TransformPoint(new Vector3(0f, control.rect.yMax, 0f))).y;
-			float height = abilityCount > 0 ? _abilities.GetContentHeight(abilityCount) : _weapons.ContentHeight;
-			float top = Mathf.Min(rectTransform.rect.yMax - spacing, controlTop + spacing + height);
-			float right = rectTransform.rect.xMax - spacing;
-			PlaceList(_abilities.rectTransform, right, top);
-			PlaceList(_weapons.rectTransform, right, top);
-		}
-
-		private void PlaceList(RectTransform list, float right, float top)
-		{
-			list.position = rectTransform.TransformPoint(
-				new Vector3(right - list.rect.xMax, top - list.rect.yMax, 0f));
+			if (count < 0 || count > _abilityItems.Count)
+			{
+				throw new ArgumentOutOfRangeException(nameof(count));
+			}
+			for (int i = 0; i < _abilityItems.Count; i++)
+			{
+				_abilityItems[i].Visible = i < count;
+			}
 		}
 
 		public void SetAbility(int index, string title, int cost, bool interactable, bool selected)
 		{
-			_abilities.SetItem(index, title, cost, interactable, selected);
+			_abilityItems[index].SetData(title, cost, interactable, selected);
 		}
 
 		public void SetActionLayout(bool enabled, bool selecting, bool hasTarget, bool showConfirm, bool canConfirm)
 		{
-			_weapons.Visible = enabled && !hasTarget;
-			_abilities.Visible = enabled && hasTarget;
-			_commands.Visible = false;
+			m_rectWeapons.gameObject.SetActive(enabled && !hasTarget);
+			m_rectAbilities.gameObject.SetActive(enabled && hasTarget);
+			m_rectCommands.gameObject.SetActive(false);
 			_actionControl.Visible = enabled;
 			_actionControl.SetState(selecting, showConfirm, canConfirm);
 		}
@@ -111,6 +142,8 @@ namespace GameLogic
 		{
 			_combatInfo.Visible = visible;
 			_unitStatus.Visible = !visible;
+			m_rectBattleStateRegion.gameObject.SetActive(!visible);
+			m_rectBattleAuxiliaryRegion.gameObject.SetActive(!visible);
 			if (visible)
 			{
 				_combatInfo.SetUnits(actorName, actorAP, actorMaxAP, targetName, targetAP, targetMaxAP, cost);
@@ -131,6 +164,9 @@ namespace GameLogic
 
 		protected override void OnDestroy()
 		{
+			// 子 Widget 已由 TE 回收，此处只清除窗口持有的引用。
+			_weaponItem = null;
+			_abilityItems.Clear();
 			ActionRequested = null;
 			ConfirmRequested = null;
 			CancelRequested = null;

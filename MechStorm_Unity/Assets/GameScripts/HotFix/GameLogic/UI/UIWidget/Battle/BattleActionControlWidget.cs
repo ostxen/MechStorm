@@ -1,4 +1,5 @@
 ﻿using System;
+using Cysharp.Threading.Tasks;
 
 namespace GameLogic
 {
@@ -11,8 +12,7 @@ namespace GameLogic
 		protected override void RegisterEvent()
 		{
 			_standby.Clicked += () => Standby?.Invoke();
-			_abilityConfirm.Confirmed += () => Confirmed?.Invoke();
-			_abilityConfirm.Cancelled += () => Cancelled?.Invoke();
+			_attack.Clicked += () => Confirmed?.Invoke();
 		}
 
 		protected override void OnCreate()
@@ -24,10 +24,17 @@ namespace GameLogic
 		{
 			_standby.Visible = !selecting;
 			_standby.SetInteractable(!selecting);
-			_abilityConfirm.Visible = selecting;
-			_abilityConfirm.SetState(showConfirm, canConfirm);
+			m_goAbilityConfirm.SetActive(selecting);
+			_attack.Visible = showConfirm;
+			_attack.SetInteractable(canConfirm);
 			// 当前配置全部技能走武器技能路径，没有角色指令。
 			_commandOperation.Visible = false;
+		}
+
+		private partial UniTaskVoid OnClickCancelBtn()
+		{
+			Cancelled?.Invoke();
+			return default;
 		}
 
 		protected override void OnDestroy()

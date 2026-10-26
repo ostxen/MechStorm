@@ -20,10 +20,12 @@ namespace GameLogic
 		private UIBindComponent m_bindComponent;
 		private BattleUnitStatusItem _unitStatus = null!;
 		private CombatInfoWidget _combatInfo = null!;
-		private BattleWeaponsWidget _weapons = null!;
-		private BattleAbilitiesWidget _abilities = null!;
-		private BattleCommandsWidget _commands = null!;
+		private RectTransform m_rectWeapons = null!;
+		private RectTransform m_rectAbilities = null!;
+		private RectTransform m_rectCommands = null!;
 		private BattleActionControlWidget _actionControl = null!;
+		private RectTransform m_rectBattleStateRegion = null!;
+		private RectTransform m_rectBattleAuxiliaryRegion = null!;
 
 		protected override void ScriptGenerator()
 		{
@@ -35,10 +37,12 @@ namespace GameLogic
 			}
 			_unitStatus = CreateWidget<BattleUnitStatusItem>(m_bindComponent.GetComponent<RectTransform>(0).gameObject);
 			_combatInfo = CreateWidget<CombatInfoWidget>(m_bindComponent.GetComponent<RectTransform>(1).gameObject);
-			_weapons = CreateWidget<BattleWeaponsWidget>(m_bindComponent.GetComponent<RectTransform>(2).gameObject);
-			_abilities = CreateWidget<BattleAbilitiesWidget>(m_bindComponent.GetComponent<RectTransform>(3).gameObject);
-			_commands = CreateWidget<BattleCommandsWidget>(m_bindComponent.GetComponent<RectTransform>(4).gameObject);
+			m_rectWeapons = m_bindComponent.GetComponent<RectTransform>(2);
+			m_rectAbilities = m_bindComponent.GetComponent<RectTransform>(3);
+			m_rectCommands = m_bindComponent.GetComponent<RectTransform>(4);
 			_actionControl = CreateWidget<BattleActionControlWidget>(m_bindComponent.GetComponent<RectTransform>(5).gameObject);
+			m_rectBattleStateRegion = m_bindComponent.GetComponent<RectTransform>(6);
+			m_rectBattleAuxiliaryRegion = m_bindComponent.GetComponent<RectTransform>(7);
 		}
 
 		#endregion
