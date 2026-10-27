@@ -12,8 +12,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d2a0ee04b44e4bd5a84eeb704ef4f8ef, type: 3}
   m_Name: BattleScenarioConfig
   m_EditorClassIdentifier: 
-  _boardWidth: 10
-  _boardHeight: 10
+  _boardWidth: 15
+  _boardHeight: 15
   _units:
   - _unitId: 1
     _faction: 0
@@ -25,7 +25,7 @@ MonoBehaviour:
     _mech:
       _id: 1
       _name: "\u75BE\u5578"
-      _maxDurability: 1000
+      _maxDurability: 200
       _moveRange: 5
       _basicAttack:
         _actionPointCost: 1
@@ -59,7 +59,7 @@ MonoBehaviour:
     _mech:
       _id: 2
       _name: XR-03-E
-      _maxDurability: 1000
+      _maxDurability: 150
       _moveRange: 4
       _basicAttack:
         _actionPointCost: 1
@@ -93,11 +93,11 @@ MonoBehaviour:
     _mech:
       _id: 3
       _name: "\u5954\u9704"
-      _maxDurability: 1000
+      _maxDurability: 200
       _moveRange: 5
       _basicAttack:
         _actionPointCost: 1
-        _damage: 100
+        _damage: 500
         _minRange: 1
         _maxRange: 2
     _abilities:
@@ -127,11 +127,11 @@ MonoBehaviour:
     _mech:
       _id: 4
       _name: "\u963F\u65AF\u7279\u8389\u4E9A"
-      _maxDurability: 1000
+      _maxDurability: 300
       _moveRange: 5
       _basicAttack:
         _actionPointCost: 1
-        _damage: 100
+        _damage: 500
         _minRange: 1
         _maxRange: 2
     _abilities:
