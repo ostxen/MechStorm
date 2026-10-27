@@ -9,6 +9,7 @@
 - [一、项目概述与架构铁律](#一项目概述与架构铁律)
 - [二、游戏核心规则 (Game Mechanics Rulebook)](#二游戏核心规则-game-mechanics-rulebook)
 - [三、核心系统模块拆解 (Core Modules)](#三核心系统模块拆解-core-modules)
+- [数据管理与生命周期决策](#数据管理与生命周期决策)
 - [四、技术栈与基建选型 (Infrastructure)](#四技术栈与基建选型-infrastructure)
 - [五、开发排期表与里程碑 (Milestones & Sprints)](#五开发排期表与里程碑-milestones--sprints)
 - [六、技术探针 (Spikes)](#六技术探针-spikes)
@@ -262,6 +263,220 @@
 |--------|--------|------|
 | 贪心 AI（靠近最弱目标并攻击） | **P1** | 够用，让关卡可测试 |
 | Utility AI（Action-Location Pair + 响应曲线） | **P3** | 核心稳定后再做 |
+
+---
+
+## 数据管理与生命周期决策
+
+### 决策状态
+
+**已接受（2026-10-05）**
+
+2026-10-27 文案校正：采用当前源码名称，明确配置查询封装按需引入；不改变原有生命周期决策。当前执行范围与验收状态以 `MechStorm_Unity/DEVELOPMENT_PROGRESS.md` 为准，T1.12 最小 Luban 迁移尚未开始。
+
+### 背景
+
+随着 MechStorm 继续发展，项目会同时出现三类“数据”：
+
+1. **静态战斗配置**：Pilot、Mech、Weapon、Ability、State、Modifier 等由策划配置的规则和数值。
+2. **单场战斗运行时状态**：当前 HP、AP、位置、回合、行动状态、胜负、日志和快照。
+3. **局外长期数据**：玩家拥有的角色、机兵、装备、材料、等级、天赋、解锁内容和关卡进度。
+
+这三类数据的生命周期、修改权限和持久化方式不同。如果把它们都放入一个类似 GF_X 的通用 `DataModel`，会产生以下问题：
+
+- `BattleSession` 的单场战斗边界被全局状态污染。
+- 静态配置和可变存档数据混合，难以区分“配置改变”与“玩家成长”。
+- UI 临时状态、战斗 Runtime 和长期存档互相引用，导致跨场景残留和重启恢复困难。
+- 运行时对象、Unity `GameObject`、事件订阅和可序列化存档模型混在一起，破坏 `MechStorm.Battle` 的无头核心约束。
+- 为尚未出现的局外养成需求提前引入通用容器，增加抽象成本而没有当前验收收益。
+
+当前源码已经形成了正确的局部边界：
+
+```text
+PilotData / MechData
+    静态战斗基础数据
+
+PilotRuntime / MechRuntime
+    单场战斗中会变化的状态
+
+CombatUnit
+    Pilot 与 Mech 在本场战斗中的组合实体
+
+BattleSession
+    单场战斗的权威状态、规则入口、回合和日志
+
+BattleScenarioConfig
+    当前 ScriptableObject 战斗初始配置，不承载运行时状态；待 T1.12 迁移数据来源
+```
+
+因此，本决策不是“是否需要数据管理”，而是确定不同数据的所有权和生命周期，避免形成一个无边界的全局数据桶。
+
+### 决策
+
+MechStorm 采用**按领域和生命周期分层的数据管理体系**，不直接迁移 GF_X 的通用 `DataModel` 实现。
+
+目标结构如下：
+
+```text
+ConfigSystem / Luban
+    静态配置中心，只读
+
+BattleSession
+    单场战斗运行时数据中心，只在一场战斗内有效
+
+PlayerProfile / ProgressionData
+    局外长期数据中心，跨场景、可保存
+
+BattleSaveData
+    战斗续战和恢复边界，独立于局外玩家档案
+
+Presentation
+    UI 选择、窗口、焦点、高亮等临时表现状态
+```
+
+#### 1. 静态配置逐步迁移至 Luban
+
+Pilot、Mech、Weapon、Ability、State、Modifier 等基础定义属于内容配置，不属于玩家存档，也不属于 `BattleSession` 的全局状态。
+
+约束：
+
+- 目标配置源为 Luban 表，运行时在异步加载完成后通过配置访问入口读取；`ConfigSystem` / `Tables` 表示目标职责，不代表当前已经接入，不采用首次访问时同步加载的方式。
+- T1.12 先在 GameLogic 侧将 Luban 行转换为现有 Battle Data，再创建独立 Runtime；Battle 不依赖 Luban、GameProto 或 Unity。仅替换当前数据来源，不预建完整配置体系。
+- 配置查询优先直接使用已加载的表和装配转换；只有出现重复查询、独立变化或明确复用需求时，才按领域提取查询封装，不要求预建 `PilotConfigRepository`、`MechConfigRepository`、`AbilityConfigRepository` 等仓储层。
+- 如引入配置查询封装，其职责仅为读取和引用解析，不负责修改玩家进度。
+- 配置表生成代码和二进制产物不能手工维护。
+- 当前 `BattleScenarioConfig` 是 Sprint T1 正式战斗流程使用的 SO 配置入口；T1.12 等价与隔离验收后，再退役正式路径中的 SO 战斗数据来源，保留仍被测试使用的夹具。场景对象引用、材质与镜头调试参数留在表现层，不将 SO 战斗数据维护为第二套正式 Schema。
+
+#### 2. `BattleSession` 继续作为单场战斗权威中心
+
+`BattleSession` 管理一场战斗中的棋盘、单位注册表、回合、当前行动单位、规则结算、胜负、`BattleActionResult`、`BattleSnapshot` 和 `BattleActionLog`。
+
+以下数据不得因为存在“全局数据中心”而上移到全局：
+
+- 当前 HP、AP、位置和部位状态。
+- 当前回合、当前阵营和已行动单位。
+- 当前行动开始位置、行动选择和锁定目标。
+- 单场战斗的胜负结果和行动日志。
+- `CombatUnit`、`PilotRuntime`、`MechRuntime` 等运行时对象。
+- 战斗中的事件订阅、规则服务和表现适配引用。
+
+战斗结束、返回主界面或重新开始时，应释放该 `BattleSession` 及其关联表现对象。下一场战斗应从静态配置和明确的战斗入口重新构建，不能复用上一场的可变 Runtime。
+
+#### 3. 局外数据在出现真实需求后建立领域模块
+
+当第一个真实的局外功能需要跨场景共享和持久化时，再建立最小的局外数据模块。推荐边界为：
+
+```text
+GameModule.PlayerData
+├── Profile
+├── Inventory
+├── Equipment
+├── TalentProgression
+└── SaveService
+```
+
+这不是要求一次性实现全部子模块。应从实际功能开始，例如：
+
+- 关卡完成记录。
+- 机兵或角色解锁。
+- 材料库存。
+- 一个天赋节点的解锁与消耗。
+
+局外模块必须满足：
+
+- 对外提供类型化模型和领域操作，不提供无类型字符串字典作为主 API。
+- 内部集合不能被 UI 或其他模块直接替换。
+- 资源消耗、解锁、升级等修改通过明确的业务方法或命令完成。
+- 保存模型与运行时模型分离，支持存档版本号和迁移。
+- 通过明确的通知边界刷新 UI，不让 UI 直接修改存档对象。
+- 不引用 `BattleSession`、Unity `GameObject` 或单场战斗事件订阅。
+
+#### 4. 战斗续战数据单独建模
+
+战斗中途退出后的续战存档不是普通的局外玩家档案。它应单独使用 `BattleSaveData` 或等价模型，至少包含：
+
+- 战斗场景或关卡身份。
+- 可恢复的初始配置版本。
+- `BattleSnapshot` 所需的战场 Runtime 状态。
+- `BattleRNG` 的种子和游标。
+- 已提交的 Command / Action 序列或恢复所需的关联信息。
+- 存档 Schema 版本。
+
+续战存档的保存时机是权威行动提交之后，而不是 UI 点击或表现动画播放期间。加载时应先校验配置版本和存档版本，再由 `BattleSession` 从恢复数据重建运行时状态。
+
+#### 5. 表现层状态保持局部
+
+UI 的选中单位、选中行动、待选目标、范围高亮、焦点地格、窗口打开状态和动画播放状态属于 `Presentation`，不进入 `PlayerProfile` 或 `BattleSaveData`，除非未来明确要求恢复某项用户界面偏好。
+
+`BattleSession` 可以向表现层提供只读查询和结构化结果，但表现层不能通过全局数据中心绕过战斗规则直接修改战斗状态。
+
+### 生命周期与所有权表
+
+| 数据类别 | 代表对象 | 所有者 | 生命周期 | 是否持久化 |
+|---|---|---|---|---|
+| 静态配置 | Luban `TbPilot`、`TbMech`、`TbAbility` | `ConfigSystem` | 应用运行期只读 | 配置资源，不是玩家存档 |
+| 战斗静态输入 | 关卡、编队、规则参数 | Battle 创建入口 | 创建 `BattleSession` 时读取 | 通过版本引用间接保存 |
+| 战斗 Runtime | `CombatUnit`、`PilotRuntime`、`MechRuntime` | `BattleSession` | 单场战斗 | 仅在需要续战时写入 `BattleSaveData` |
+| 战斗诊断 | `BattleSnapshot`、`BattleActionLog` | `BattleSession` / Diagnostics | 单场战斗或调试文件 | 可选，本地调试或回放 |
+| 局外 Runtime | `PlayerProfile`、库存、养成状态 | 局外数据模块 | 跨场景、跨流程 | 是 |
+| 局外存档 DTO | `PlayerProfileSaveData` | `SaveService` | 读写期间 | 是 |
+| UI 临时状态 | 选择、高亮、窗口和动画状态 | `Presentation` | 当前窗口或当前场景 | 否 |
+
+### 不采用的方案
+
+#### 不直接迁移 GF_X `DataModel`
+
+GF_X 的 `DataModel` 适合作为“按类型和 ID 管理多个业务模型”的参考，但不能作为 MechStorm 的整体数据架构直接接入，原因如下：
+
+- 它不能自动解决静态配置、战斗 Runtime、局外存档和 UI 状态的边界问题。
+- 通用的 `Create / Get / Release` 容器容易把不同生命周期的数据放到同一入口。
+- JSON 持久化示例不能直接满足 MechStorm 的版本迁移、战斗快照、RNG 恢复和回放约束。
+- 全局注册和释放时机若没有领域约束，容易与 `BattleSession` 的显式生命周期冲突。
+
+可以借鉴其类型化模型、生命周期和存储接口思想，但具体实现必须贴合 MechStorm 的领域模块和无头核心边界。
+
+#### 不把所有数据做成一个 `GameData` 单例
+
+单例只解决访问位置，不解决所有权、并发修改、版本迁移和恢复时序。`GameModule` 可以作为模块访问入口，但不应成为承载所有业务字段的万能对象。
+
+#### 不用 `PlayerPrefs` 存储复杂业务数据
+
+TEngine 现有 `Utility.PlayerPrefs` 适合语言、音频和简单设置，不适合作为库存、养成、战斗快照或回放的主存储。复杂数据应使用版本化的存档 DTO 和独立的 `SaveService`。
+
+### 接入时机
+
+| 阶段 | 数据管理范围 | 结论 |
+|---|---|---|
+| 当前 Sprint T1 | `ProcedureBattle` 编排流程并持有 `BattleRuntime`；后者拥有 Session、场景表现与交互对象，随流程统一释放 | 不引入完整 DataModel |
+| 首个局外功能 | 最小 `PlayerProfile` + 对应领域服务 + 存档 DTO | 以真实功能为入口建立 |
+| T1.12 最小 Luban 迁移 | 异步配置加载、GameLogic 装配转换与等价验收；查询封装按需引入 | 只替换当前配置来源，不改变玩法或引入通用仓储层 |
+| Sprint 12 续战 | `BattleSaveData`、Snapshot 恢复、RNG 恢复 | 独立于 PlayerProfile |
+| 局外养成扩展 | Inventory、Equipment、TalentProgression 等按领域增加 | 不建立无边界总容器 |
+
+### 后果
+
+正面影响：
+
+- 保留当前 `BattleSession` 的单场权威边界，不破坏纯 C# 战斗核心。
+- Luban 配置、战斗 Runtime、局外存档和 UI 状态可以独立演进。
+- 续战、悔棋、回放和存档版本迁移有明确落点。
+- 局外养成出现真实需求后，可以渐进接入，不需要先搭建空泛框架。
+- 便于测试：战斗测试只构造 `BattleSession`，局外数据测试不依赖 Unity 场景。
+
+代价与风险：
+
+- 访问路径不再是一个万能 `DataModel.Get<T>()`，调用方需要理解领域边界。
+- 后续需要为 `PlayerProfileSaveData`、`BattleSaveData` 和版本迁移补充模型及测试。
+- 配置访问、局外数据模块和战斗装配之间需要明确数据转换与所有权，不能直接共享可变 Runtime；确有需要时才提取查询封装或专用 DTO。
+- 如果未来引入网络登录、云存档或多存档槽，需要进一步定义存储服务和冲突策略。
+
+### 与现有路线的关系
+
+- 不改变 `MechStorm.Battle` 纯 C#、确定性、`Data + Runtime` 和 `BattleSession` 约束。
+- 不提前改变当前 Sprint T1 的范围。
+- 与 T1.12 最小 Luban 迁移及 Sprint 11 的完整数据驱动和实体装配相配合：先替换现有配置来源，再随真实机制扩表；Luban 提供静态定义，装配过程创建本场战斗 Runtime。
+- 与 Sprint 12 的 Command、Snapshot、续战和回放相配合：战斗持久化使用独立恢复模型。
+- 与 P3 局外养成相配合：玩家进度模块在养成需求真实出现后按领域逐步增加。
 
 ---
 
