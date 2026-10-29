@@ -8,7 +8,6 @@ namespace GameLogic
 	[Window(UILayer.UI, location : "BattleStatisticsUI")]
 	public partial class BattleStatisticsUI
 	{
-		private const string ItemLocation = "BattleUnitStatisticsItem";
 		public event Action BackRequested;
 		public event Action HomeRequested;
 
@@ -30,8 +29,7 @@ namespace GameLogic
 		{
 			foreach (var unit in report.Units)
 			{
-				var rowObject = await UIModule.Resource.LoadGameObjectAsync(ItemLocation, m_rectContent);
-				var row = CreateWidget<BattleUnitStatisticsItem>(rowObject);
+				var row = await CreateWidgetByTypeAsync<BattleUnitStatisticsItem>(m_rectContent);
 				row.SetData(unit.PilotName, unit.KillCount, unit.DamageDealt, unit.DamageTaken);
 			}
 			_pageHeader.SetNavigationInteractable(true);

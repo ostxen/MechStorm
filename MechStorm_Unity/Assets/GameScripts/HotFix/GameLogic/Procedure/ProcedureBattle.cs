@@ -141,7 +141,7 @@ namespace GameLogic
             {
                 maxAbilityCount = Math.Max(maxAbilityCount, abilities.Count);
             }
-            await _hud.InitializeActionsAsync(maxAbilityCount, cancellationToken);
+            await _hud.InitializeActionsAsync(maxAbilityCount);
             cancellationToken.ThrowIfCancellationRequested();
             _hudPresenter = new BattleHUDPresenter(_runtime.Session, _runtime.InteractionController,
                 _runtime.UnitStatusPresenter, _hud, CanAcceptBattleInput);

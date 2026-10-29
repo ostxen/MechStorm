@@ -1,9 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Threading;
 using Cysharp.Threading.Tasks;
 using TEngine;
-using UnityEngine;
 
 namespace GameLogic
 {
@@ -54,50 +52,16 @@ namespace GameLogic
 			_actionControl.Visible = false;
 		}
 
-		public async UniTask InitializeActionsAsync(int maxAbilityCount, CancellationToken cancellationToken)
+		public async UniTask InitializeActionsAsync(int maxAbilityCount)
 		{
-			if (_weaponItem == null)
-			{
-				_weaponItem = await LoadActionItemAsync<WeaponItem>("WeaponItem", m_rectWeapons, cancellationToken);
-			}
+			_weaponItem = await CreateWidgetByTypeAsync<WeaponItem>(m_rectWeapons, false);
 			for (int i = _abilityItems.Count; i < maxAbilityCount + 1; i++)
 			{
-				var item = await LoadActionItemAsync<AbilityItem>("AbilityItem", m_rectAbilities, cancellationToken);
+				var item = await CreateWidgetByTypeAsync<AbilityItem>(m_rectAbilities, false);
 				int index = i;
 				item.Clicked += () => ActionRequested?.Invoke(index);
 				_abilityItems.Add(item);
 			}
-		}
-
-		private async UniTask<T> LoadActionItemAsync<T>(string location, RectTransform parent,
-			CancellationToken cancellationToken) where T : UIWidget, new()
-		{
-			if (!GameModule.Resource.CheckLocationValid(location))
-			{
-				throw new GameFrameworkException($"HUD 条目资源地址无效：{location}");
-			}
-			cancellationToken.ThrowIfCancellationRequested();
-			var go = await UIModule.Resource.LoadGameObjectAsync(location, parent, cancellationToken);
-			// 加载可能晚于窗口关闭完成，此时不再向旧窗口注册条目。
-			if (cancellationToken.IsCancellationRequested || IsDestroyed || gameObject == null)
-			{
-				if (go != null)
-				{
-					UnityEngine.Object.Destroy(go);
-				}
-				throw new OperationCanceledException(cancellationToken);
-			}
-			if (go == null)
-			{
-				throw new GameFrameworkException($"HUD 条目加载失败：{location}");
-			}
-			var item = CreateWidget<T>(go, false);
-			if (item == null)
-			{
-				UnityEngine.Object.Destroy(go);
-				throw new GameFrameworkException($"HUD 条目创建失败：{location}");
-			}
-			return item;
 		}
 
 		public void SetWeapon(int damage, int minRange, int maxRange, bool interactable, bool selected)
