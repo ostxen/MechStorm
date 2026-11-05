@@ -3,9 +3,207 @@
 ## 当前阶段
 
 - 当前里程碑：P1.5 / Sprint T1（进行中）；Sprint 4 已完成并验收
-- 当前任务：本轮运行反馈与 T1.10.3 统计验收收口；等待开发者启动下一项任务
-- 当前状态：开发者确认本轮运行反馈及 T1.10.3 伤害统计细项均通过；下一项为 T1.12 最小 Luban 配置迁移，尚未开始，T1.11 完整回归仍未完成
-- 最后更新：2026-10-27
+- 当前任务：T1.12 最小 Luban 配置迁移，先执行 T1.12.1 数据工程
+- 当前状态：feature/t1-luban-config 上已建立14张逻辑表、14份工作簿，共26条数据。Battle收敛为Scenario/Deployment/UnitSkill，部署引用新Pilot和MechLoadout；机兵域五表含武器挂载关联，Skill共十条（含三条武器普攻）。保留15×15关卡、三条机型、四个型号、五条驾驶等级和三条默认普攻映射；架构员、部件、装配、武器和出战关联留空。Luban工具已由开发者构建，首次导表与运行库兼容性尚未验证；当前战斗仍读取SO，T1.11完整回归仍未完成
+- 最后更新：2026-11-05
+
+### 按逻辑分批提交（2026-11-05）
+
+- 用户授权分批提交并推送当前分支，范围包含Luban配置及相关架构文档，排除美术资源、项目设置、IDE文件、运行记录与构建缓存。
+- 已提交924947f（Luban配置工程、工具脚本与装配边界）、bc31f8c（Unity CLI、Pipeline与依赖锁）、0ef809e（Unity工作流与单次审批）；本批补齐技能、操作规则及正式进度。原有三份.idea暂存保持，不纳入提交。
+- 提交前6份Schema、14份工作簿包内XML和luban.conf静态解析通过；Pipeline JSON、CLI SHA-256及单文件大小检查通过。包内上游/Unity meta含既有空白提示，保留原内容，不做无关格式化；本次手写工作流/规则空白检查通过。未重新运行测试、游戏或构建，沿用此前16项隔离测试通过及CLI up_to_date结果；真实工具栏交互与首次Luban导表仍未验收。
+
+### 解除默认编译与刷新限制（2026-11-05）
+
+- 用户明确要求去掉“不自动编译或刷新”的默认约束。此后修改后可按需主动通过Unity CLI连接本项目已运行Editor执行正常刷新/导入、脚本编译与结果查询，无需逐次确认；本条覆盖此前仅限单次授权或禁止自动刷新/编译的历史规则，不改写历史执行事实。
+- AGENTS、Unity CLI技能及操作规程同步；刷新/编译明确允许直接调用script recompile及recompile_status，无需先扩展Python包装白名单或预览审批。仍需项目/PID核对、空闲状态、串行执行及终态确认，不因超时重复发送。正常刷新可由Editor自动生成meta，仍禁止手写GUID。
+- 测试、Play Mode、运行游戏、截图、构建、安装/更新、其他资源/设置写入及Editor启动/关闭的授权边界保持；不允许借此强制全量重新导入、清缓存或绕过其他审批。本轮仅修改规则文档，不再次请求Unity编译，不改包装脚本或游戏逻辑。
+- 三份现行规则文档的权限与空白静态核对通过，AGENTS/正式进度git diff --check退出0；历史“未编译/未刷新”执行事实保留，由本节覆盖旧默认规则。
+
+### Unity CLI脚本编译请求验证（2026-11-05）
+
+- 用户明确选择“本次允许直接调用CLI”，授权一次script recompile及最终状态查询，包括命令自带资源数据库刷新/导入，不进入Play Mode、不构建、不运行测试；本次授权不改变默认操作/审批规则，也未扩展Python包装白名单。
+- 绑定MechStorm项目与实时发现的PID26604，预检Editor ready、未编译/域重载、Play Mode停止，确认script recompile及recompile_status可用。只发送一次编译请求，退出0，返回up_to_date、No scripts needed recompilation。
+- 随后script recompile_status退出0：status=up_to_date、failed=false、errors=[]、compilationFailed=false；editor status退出0：ready、compiling=false、domainReloadInProgress=false、playMode=stopped、codeLoadCount=3（本次前后未变）。本次刷新未触发新编译，不声称强制重编完成；当前Editor未报告脚本编译失败。未重放请求、强制清缓存或修改源码来触发编译。
+- CLI可控制已运行Editor完成刷新/按需编译，无需开发者手动切回窗口；之前仅静态检查是遵守默认不自动编译边界，不是CLI不具备能力。工具栏按钮显示/点击和布局仍未实际验收，游戏阶段保持。
+
+### Pipeline工具栏命名整理与审查（2026-11-05）
+
+- 按用户要求将工具栏文件与类统一命名为PipelineToolbar，初始化/刷新引用和文档同步，删除类注释及刷新说明中多余的版本身份标签。后续命名按功能职责表达，不用兼容身份前后缀；真实版本条件与必要限制说明保留。本轮不修改无关上游历史迁移代码。
+- 源码与Unity已生成的meta配对重命名，meta文本逐字保持，GUID不变，未重新生成或更改导入配置。改名前后源码对照确认差异仅名称/注释，服务启停、UI与生命周期逻辑不变。
+- 修改后review完成：旧类名及路径无残留引用，新文件/类名/调用一致，工具栏源码无多余身份标签，条件编译与空白检查通过，git diff --check退出0。未发现本次重命名引入的逻辑问题；未主动刷新Unity、编译或运行测试，真实按钮/布局验收仍待开发者确认。游戏阶段保持，未提交或推送。
+
+### Pipeline主工具栏2021.3适配（2026-11-05，源码完成，待Editor验收）
+
+- 用户要求补齐旧版主工具栏，并明确兼容目标是尽量保留正常版本的大部分功能，优先旧版等价API或局部适配，不仅让包能编译；真正依赖新版引擎或缺失扩展包的能力仍明确限制，本轮不宣称全部命令验收。
+- 新增包内Editor/PipelineToolbar.cs，在Unity6.3之前通过UnityEditor.Toolbar.m_Root挂入右侧UIElements区域。显示Pipeline Server、红绿状态及运行端口提示，点击共享原有菜单启停，现有启动/停止入口刷新状态。Unity6.3+保留原生MainToolbar注册；主进程才初始化，批处理跳过UI，不反向依赖Assets/Editor/ToolbarExtender，不改游戏逻辑、网络安全设置或包显示名。
+- 旧版半秒检查布局及服务状态；工具栏重建时重新挂接，域重载/退出时移除控件和事件。内部接口缺失时给出一次警告，保留Window/Pipeline菜单与服务。未手写meta，等待Unity正常生成；具体布局、启停、菜单同步、重载无重复及现有工具栏共存待开发者验收。
+- 核对本机2021.3 UIElements XML契约、源码预处理分支/空白、主进程判断、共享生命周期及事件解绑，静态检查通过，正式进度git diff --check退出0。未主动刷新Unity、编译、运行游戏/测试或构建，Unity6.3+分支也未实际编译验证；不能将静态检查视为Editor验收。
+- 兼容说明同步本轮范围及此前已完成的真实CLI基础闭环，修正首次导入不可达的过时描述；检查预览导入、Runtime构建回调和Profiler保存的旧版等价路径保持。Build Profiles/MPPM的引擎或扩展前提保持，不伪造实现。无提交/推送，游戏阶段与Luban状态保持。
+
+### Pipeline包显示名称精简（2026-11-05）
+
+- 按用户要求，将Packages/com.unity.pipeline/package.json的displayName恢复为Unity Pipeline，不在编辑器显示兼容后缀；包ID、版本、依赖和兼容代码保持，兼容文档同步当前名称。JSON静态核对通过，未主动刷新Unity、编译或运行测试。本项覆盖初次安装时显示名标记兼容分支的历史状态。
+
+### Unity工作流真实Editor闭环验证（2026-11-05）
+
+- 用户要求继续验证。通过Python工作流运行doctor与scene list_open，真实Editor预检、项目/PID绑定、能力分页发现和场景查询均通过；Unity2021.3.45f2处于ready、未编译/域重载、Play Mode停止，main.unity无未保存修改。
+- 生成仅打开/聚焦Console的静态预览，明确不会保存场景或修改资源；用户在展示预览后选择“确认，执行一次”。随后approve --high-risk成功，unity apply成功，执行结果为Executed menu item 'Window/General/Console'。核对报告只有一次mutating请求，退出0；存在与该预览哈希对应的审批消耗回执，未重复发送以测试重放。
+- 执行后再次scene list_open，main.unity仍isDirty=false、rootCount=3；report命令重建报告退出0。doctor报告20261105T140800Z-02f7438e、首次查询20261105T140826Z-1dcd4ff1、预览20261105T140915Z-48fc4db8、审批20261105T141222Z-977525c2、执行20261105T141246Z-83b60a45、事后查询20261105T141351Z-2c84858c，均保存于已忽略的.codex/runs。
+- 基础真实闭环已验收，无需修改工作流源码。资源删除/移动、构建设置和其他写入仍未真实执行验收；未进入Play Mode、刷新、编译、构建或运行游戏测试，未提交/推送。此前Python/端到端未验证的描述为历史状态，以本节及Python隔离测试结果为准。游戏阶段保持。
+
+### Python3安装与工作流隔离测试（2026-11-05）
+
+- 用户授权安装Python3至D:/ProgramFiles，使用Python官方3.14.10 x64完整安装包，安装到D:/ProgramFiles/Python3，当前用户安装。安装器33498520字节，SHA-256为92480239264744fe0386a1bd8275786fefa126e3129e56a68e22b52c73329965，与官方发布页一致，Authenticode签名Valid，发布者Python Software Foundation，安装退出0。
+- 安装包含pip与开发所需标准组件，将Python和Scripts目录加入用户PATH；未改系统PATH，未安装Python Install Manager/launcher、Tcl/Tk、文档或标准库测试套件，未设置文件关联。新终端可用；原有进程需重启或刷新其环境。
+- 绝对路径及刷新进程环境后的python --version均为3.14.10，64位；pip为26.2.2，ssl/venv导入通过。用户PATH首轮精确字符串比较因转义/末尾分隔符误报，第二次检查因PowerShell转义失败，改用字符码归一化后确认路径与命令解析通过，未追加重复PATH。
+- 使用D:/ProgramFiles/Python3/python.exe -B执行.codex/tests的16项隔离测试，全部通过，退出0；workflow.py --help退出0。覆盖此前缺解释器的历史阻塞。未连接或操作Unity、未运行游戏测试；工作流的真实Editor预览/审批/写入端到端仍未验证，不凭隔离测试宣称通过。未提交或推送，游戏开发阶段保持。
+
+### Unity CLI脚本包装与审批机制迁移（2026-11-05，源码落地；隔离测试见上节）
+
+- 用户追加要求迁入workflow.py与脚本审批流程。本轮仅移植Unity专用入口及来源证据/审批核心，新增.codex/scripts/workflow.py、workflow_lib/core.py、unity.py、__init__.py和.codex/tests/test_workflow.py；未移植Luban/HTML领域动作或自动编译/测试门禁。
+- 入口限定自身MechStorm项目，采用当前分组命令和Tools/UnityCLI/unity.exe，动态核对唯一实例/PID；查询与修改使用显式命令及参数白名单，不透传任意菜单/eval。修改支持asset delete、asset move、build set_settings及仅打开Console的菜单；均需预览、真实用户确认、单独高风险标记审批和一次执行。白名单来源为当前包实现契约，不表示真实写入已验收。
+- 审批绑定磁盘工作区、参数、项目、PID和命令预览，一小时有效，发送写入前消耗且不自动重放；项目锁串行操作，JSON/Markdown脱敏报告与审批文件保存到.codex/runs，已新增本地忽略规则。技能与规程同步入口和未支持范围，原有不自动运行Unity验证约束不变。
+- 定义16项隔离Python测试，覆盖审批篡改/过期/项目不匹配/工作区与输入变化/单次尝试/锁/超时/白名单/脱敏等。静态源码和空白检查、Git忽略规则检查通过；本机py不存在，python为Windows Store占位程序，测试启动返回9009（工具退出码49），测试未运行，不能标为通过。未安装Python、操作Unity或生成真实资源审批；脚本查询/审批/写入端到端均待可用Python3.11+后验证，任务保留阻塞状态。未提交/推送，游戏阶段不变。
+
+### Unity CLI技能增量迁移（2026-11-05）
+
+- 清点TEngine-Variant/UnityProject/.codex的四项技能、Python工作流、模板、13项行为评估场景与11份历史任务。开发者选择仅增量迁移Unity CLI技能和操作规程，不迁移完整工作流或覆盖其他技能。
+- 新增.codex/skills/unity-cli/SKILL.md、references/operations.md及agents/openai.yaml，AGENTS增加显式读取导航；正文只维护一份，不复制到.factory或.claude，不改变现有TEngine规范来源。
+- 适配本项目Tools/UnityCLI/unity.exe路径、已实测的分组命令、动态PID选择、Unity2021.3本地兼容边界；去除来源Python入口依赖和自动验证要求，保留本项目不自动刷新、编译、测试与更新的约束。没有引入脚本审批体系或迁移来源任务历史。
+- 三份新增文件、两条相对链接、技能元数据、无未迁移脚本调用及空白静态检查通过；AGENTS/正式进度git diff --check通过。静态检查首次因执行环境不提供URL对象中断，改为路径段解析后通过，未修改Unity状态。未运行Unity、编译、游戏测试或安装工具，未提交/推送；原有技能和用户改动保持，游戏开发进度不变。
+
+### Unity Pipeline 内嵌安装与2021.3适配（2026-11-05，基础Editor连接与操作通过）
+
+- 用户授权先安装，不兼容时修改源码。官方CLI安装命令因Unity6最低版本门禁退出6，未通过伪造项目版本绕过；项目保持2021.3.45f2。
+- 从Unity官方registry取得com.unity.pipeline 0.10.0-exp.1，原始包SHA-1为303cb578aa664fd6f4c220c3d85bb2ba6ca78d0b并核对通过。以Packages/com.unity.pipeline内嵌包落地，保留上游许可证与已有meta；显示名标注本地兼容分支，不修改Library/PackageCache或游戏业务逻辑。
+- 兼容修改覆盖旧版对象查询、内存快照、材质与物理类型、构建API、Console计数、测试回调及分析接口；Unity6专属功能保留不可用状态。修正程序集引用，未安装Input System或改变输入模式。详情见Packages/com.unity.pipeline/Documentation~/MechStorm-2021-Compatibility.md。
+- 最终落地源码使用Unity自带Roslyn、本机Unity程序集、项目.NET4.8引用及脚本宏做包级离线编译，Attributes、IlInterpreter、Runtime、Editor、CodeGen五项退出码均0。Cecil1.11.6已下载核对供离线检查；项目中的依赖解析仍由UPM首次导入完成，未手改manifest或锁文件。
+- CLI pipeline editors退出0，识别MechStorm_Unity及包版本0.10.0-exp.1，但该项目Pipeline服务isReachable=false。另一项目的可达服务不计为本项目验收。尚未主动启动/刷新Unity、运行游戏、构建或执行游戏测试；首次Editor导入、实际程序集编译、IL后处理及CLI连接仍待验证，不能宣称全部功能已兼容。
+- 保留上游回环绑定与认证机制；当前项目未设置ENABLE_RUNTIME_PIPELINE或ENABLE_RUNTIME_PIPELINE_DEV，本任务未开启Player服务。不暂存、提交或推送，保留用户原有改动；T1.12及游戏开发阶段不变。
+- 首次实际导入出现ScriptInterpreter.cs的ILOpCode/MetadataReader等缺失。读取Editor.log与Bee实际响应文件，确认五个包内UnityPipeline DLL均未进入编译引用；上游DLL meta使用PluginImporter v3字典格式。经用户明确授权，将五份meta转换为2021支持的v2平台列表格式，保留全部GUID、宏约束和平台启用状态，未改DLL或解释器逻辑。使用实际Unity编译响应文件的临时副本补齐Metadata/Immutable/Unsafe三个依赖后，IlInterpreter编译退出0（首次只补两项因Unsafe缺失失败，补齐后通过）。此检查未执行Unity导入器，仍需开发者正常重新导入确认；此前宽引用离线编译未覆盖此类导入配置问题。UPM已解析Cecil1.11.6，实际Bee引用已出现其缓存路径。
+
+- 后续开发者确认Console不再报错，并授权CLI操作验证。pipeline editors确认MechStorm PID26604服务可达；明确指定项目路径与PID，editor status返回ready、Unity2021.3.45f2、compiling=false、playMode=stopped；scene list_open返回Assets/Scenes/main.unity已加载且isDirty=false；editor invoke_menu --path Window/General/Console成功执行。上述CLI均退出0，基础连接、查询及菜单控制实测通过，覆盖前述服务不可达的历史状态；未进入Play Mode、刷新、保存场景、构建或运行测试，不代表所有命令及Player功能验收。
+
+### 官方 Unity CLI 便携安装（2026-11-05）
+
+- 按开发者指定的官方安装文档，先在系统临时目录下载 Windows x64 独立二进制，再迁移至 Unity 项目下 Tools/UnityCLI/unity.exe；未放入仓库上级 Tools，不影响现有 Luban 工具。
+- 稳定版清单返回404，依官方脚本回退策略选择1.0.0-beta.16。文件44015536字节，SHA-256为a79f67dfe7e11d91b1b454f4b240b03210bc5e7689c78490c6fd03761eb86ab9，与官方清单一致；Authenticode签名Valid，签名者Unity Technologies SF。
+- 临时目录及迁移后均执行--version/--help，退出码均为0；迁移后哈希一致，临时二进制已移出。只验证CLI自身，不代表Editor连接或项目运行通过。
+- 采用便携单文件下载，未执行官方脚本的用户PATH、Hub安装记录或Agent技能安装步骤；验证进程关闭更新检查、崩溃上报、首次同意提示及身份后台服务，不写持久配置。不登录、不安装Editor/Pipeline包、不启动或刷新Unity、不编译或运行游戏测试，不暂存、提交或推送。
+- 本项不推进游戏开发阶段：T1.12.1首次实际导表及最终验收、T1.12.2～.4和T1.11完整回归状态保持。
+
+### Battle出战配置收敛（2026-11-02，静态完成，未导表）
+
+- 用户确认只更新结构，保留Scenario 1的15×15棋盘，出战及装配关联留空，不生成测试角色、部件、武器或2v2占位数据。Deployment保留九字段，pilotId改引用Pilot.TbPilot，以mechLoadoutId引用Mech.TbMechLoadout，清空原四条部署。
+- UnitSkill替代UnitAbility，字段deploymentId/skillId/slotOrder，list表以deploymentId+skillId联合索引；PilotSkill仍表达机师技能池，UnitSkill表达本场携带。Mech新增MechLoadoutWeapon及空工作簿，字段loadoutId/weaponMount/weaponId，以loadoutId+weaponMount联合索引。默认普攻继续由已装备武器按现有映射授予并绑定来源。
+- 删除用户明确授权的Datas/Battle/Pilot.xlsx、Mech.xlsx、BasicAttack.xlsx、Ability.xlsx、UnitAbility.xlsx五份旧工作簿及对应定义，移除旧TargetRule。Battle当前仅Scenario/Deployment/UnitSkill三表；机兵域五表。全工程14张逻辑表、14份工作簿、26条数据。
+- 新结构、三张空表的字段/顺序/类型/注释、联合索引、外键声明目标、包内XML、网格/冻结/缩放及Scenario数值静态通过。行数统计首次遗漏共享字符串表头解析而误计Pilot三行，修正只读统计后确认Pilot为0行、总数26；未改Pilot工作簿。README同步新结构与约束，原三份.idea索引内容保持。
+- 新配置已脱离原七表等价基线，原型SO及战斗代码保持。当前没有完整出战数据，配置转换、四部位/武器/技能组合执行及差异验收待后续明确；不能据本批宣称T1.12.1最终验收或运行接入完成。未导表、生成、编译、测试、运行、刷新Unity、暂存、提交或推送。
+
+### 艾达双刀技能补齐（2026-11-02，静态完成）
+
+- 用户确认双刀合计倍率除以2，分别按每把武器计算。新增1006崩穹斩（4AP，左右各7500，Active+NonDuel）与1007辉断终焉（5AP，左右各12000，Active+Duel，固定Body）。1001闪霎明确2×0.85，保留左右各8500；Skill现共十条。
+- 新增DirectionalAreaManualActivation及AreaPattern/GridOffset，崩穹斩使用相对施法者的八方向三格模板，覆盖四个正交横排与四个对角折角，SelectedAreaEnemies取得敌方目标；新增FixedPartAttackEffect表达辉断终焉固定躯干。字段注释保持简洁，瞄准、凝势及位移继续后置。
+- Skill.xlsx增加方向范围攻击（73列）与固定部位攻击（27列），均数据第10行、冻结D10。原六个Sheet及样式包内容保持。十条技能字段树、多态、枚举、Tag、空列表、AP/倍率/固定部位及八方向模板静态通过；模板校验曾因PowerShell XML变量类型复用失败，修正后只读检查通过。
+- README同步。仅配置层修改，首次Luban导表及战斗执行后续接入；未生成、编译、测试、刷新Unity或提交。本节覆盖下方倍率待确认状态。
+
+### 艾达技能补充（2026-11-02，静态完成）
+
+- 用户确认本批先配四个攻击技能和碎钢，随后选择崩穹斩/辉断终焉倍率待确认、先配置其余。保留1001闪霎，新增1004星坠闪与1005碎钢，Skill共八条。位移、额外资源效果与瞄准后置，基础发动费用保留；镜心、复辉、破势后续处理。
+- 星坠闪：Command，3AP，固定菱形射程1～4的敌方单体，允许飞行；选用一把已装备刀剑，倍率12000，Active+NonDuel。新增FixedRangeManualActivation、EquippedWeaponUsable与Attack.SelectedWeapon表达技能射程和武器选择；本批略去落点校验、位移与瞄准。
+- 碎钢：Passive/WhileGranted，AttackHasTag(Attack.Mode.Active)与TargetPartDurabilityAtLeast(5000)同时成立时Outgoing+1500，耐久检查受击前目标部位。新增三个Condition及一个Activation、一个WeaponUse子类型，沿用现有组合定义。
+- Skill.xlsx增加“固定射程攻击”（23列、数据第10行、冻结D10）与“部位条件被动”（15列、数据第9行、冻结D9）；原四个Sheet及样式包内容保持。八条技能字段树、多态、枚举、Tag、空列表及新技能关键数值静态读回通过。README同步，Pilot与PilotSkill保持空表。
+- 来源为开发者提供的艾达技能Wiki页；仅配置层修改，首次Luban导表及战斗执行仍待后续。未生成、编译、测试、刷新Unity或提交。
+
+### 配表注释精简（2026-11-02）
+
+- 精简六份XML Schema的类型/字段注释，以及八份Excel中的80个说明单元格，保留字段含义、倍率单位、阈值、填写方式和有效约束。字段、类型、索引、枚举值、数据、分组与样式保持。
+- 射程注释同步开发者已确认的定义：Diamond采用曼哈顿距离，Ring采用切比雪夫距离，一圈含周围8格；README同步。各表结构与数据状态见下方对应章节，当前共17张逻辑表，Attack为内嵌Bean域。
+- 本批仅注释和说明整理，静态对比结构、数据及样式；首次Luban导表仍待授权，战斗继续读取SO。
+
+### 统一攻击定义与分类标识（2026-11-02，静态完成，未导表）
+
+- 按开发者授权，只统一配置层基础结构。新增Defines/Attack.xml，内嵌Attack.Definition由classification、weapon、damageRate组成，不建立攻击分类Excel或独立攻击数据表；Skill.AttackEffect以非空有序attacks列表替换WeaponAttack、SourceWeaponAttack与旧AttackSegment。SourceWeapon使用提供能力的具体武器，MountedWeapon用weaponMount/weaponKind取得指定挂载武器；不改变现有单体Effect.target或activation.selection。
+- 分类沿用GameplayTag，不新增攻击分类枚举。classification.initiativeTag限定Attack.Mode.Active/Attack.Mode.Reactive，interactionTag限定Attack.Mode.Duel/Attack.Mode.NonDuel，两个维度各选其一，XML声明set约束。分类属于每条攻击定义，不能由手动/事件发动、武器大类或射程远近推导；Tag本身不实现反击、隐身或元件机制。
+- Skill.xlsx迁移1001闪霎的左右两条MountedWeapon攻击，各8500、整次2AP；2001～2003普攻为单条SourceWeapon攻击，10000、1AP；均显式Active+Duel。保留六条技能公共数据、条件、消耗、限制及其他效果，默认普攻映射不改。主动攻击与武器普攻均七级标题、数据第10行、冻结D10，26/19数据列；其余两个Sheet、样式及未修改包条目保持普通网格样式。
+- 静态核对通过：包内XML、六条技能字段树、多态、列表/空列表、枚举、Tag合法值声明及实际值、费用/倍率/武器来源/挂载顺序和冻结。校验脚本先因将AA列误判为标记列、后因PowerShell XML类型变量复用失败，均只读，修正后对应结构与关键值检查通过。实际Luban的嵌套解析、set/size校验及生成兼容性仍待首次获授权导表，不能用静态检查代替。
+- 未实现AttackContext、攻击执行、交战/触发边界、反击资格或顺序、隐身选取、范围技能、状态或元件；多条攻击定义不代表逐段必定新建交战或触发完整链路。旧Battle域、Pilot/Mech/Weapon数据与战斗代码不变，仍读SO；未导表/生成/编译/测试/刷新Unity/提交，T1.12.1仍未最终验收。本节覆盖下方旧攻击效果名称及攻击Sheet行号记录。
+
+### 武器基础配置表（2026-11-01，静态建立，未导表）
+
+- 按开发者授权新增Defines/Weapon.xml及Datas/Weapon/Weapon.xlsx空表，Weapon.TbWeapon为id索引map。17个业务字段：id/name/description/icon/quality/category/kind/mountType/gripType/allowedMechClassIds/attackPower/accuracy/critical/weight/range/ammoCapacity/hitCount；range普通Bean展开shape/minRange/maxRange，共19个数据列。品质仅SS，暂不填Wiki样本或未知数值，环形射程、攻击力等级及连击结算口径待确认。
+- 武器细分类统一归入Weapon.WeaponKind，保留原Sword=0/MachineGun=1/SniperRifle=2，Skill三处类型及两份Excel中四处类型说明同步迁移；原六条技能、三条类别默认普攻映射及工作簿其他条目保持。武器不重复配置普攻ID/AP/倍率，角色天赋与形态后续按固有category/kind匹配，不增加角色专属武器分类。
+- 工作簿保持普通网格、100%缩放、黑11号字、白底及20行高，字段标题浅灰，说明48行高换行；四行表头、range分组P:R、冻结四行与标记/ID/名称。静态读回Schema类型/外键声明、17字段/19列空表、分组/冻结/样式及包内XML通过。允许机型非空去重、类别匹配、握持与安装匹配、射程上下限及弹药为-1或正数等跨字段规则已写README，尚无运行时校验器。
+- 不建立元件、武器附加技能及生效规则、成长、玩家武器实例或装配关系；背部武器只定义安装类别，不扩展Mech挂载点，负重暂不实现。旧Battle、Pilot、Mech数据与战斗代码保持，仍读取SO；未导表/生成/编译/测试/刷新Unity/提交，T1.12.1未据此最终验收。
+
+### 技能配置试表（2026-11-01，静态建立，未导表）
+
+- 测试普攻已静态建立：开发者确认刀剑/机枪/狙击枪，统一1AP、1倍武器伤害、射程由武器提供，仅配表。Skill.xlsx新增“武器普攻”Sheet及2001刀剑普攻、2002机枪普攻、2003狙击枪普攻；新增WeaponDefaultSkill.xlsx三条weaponKind/skillId映射，Skill共六条记录。最小扩展SourceWeaponUsable、SourceWeaponAttack和来源武器射程选择，绑定提供技能的已装备武器，不固定左右手，不依赖PilotSkill或角色技能携带。伤害/射程具体数值、完整武器及装备表、HUD与战斗接入后续处理，复杂技能旧三个Sheet和样式保持。
+- 普攻静态读回通过：六条技能字段树、多态/列表/空列表、枚举与范围有效；三条普攻均1AP/倍率10000、来源类别与选择/效果匹配，无额外状态或次数限制；类别映射唯一且技能引用有效，原三个Sheet及其他未修改条目保持。未执行Luban、生成、编译、测试、刷新Unity或提交，战斗仍读SO，不将新普攻视为已可运行。
+- 开发者确认暂时保留当前嵌套Bean及多行分组表头，用于熟悉复杂Luban配置；本轮不简化布局或修改Schema/数据，后续随实际技能继续评估编辑成本。
+- 用户批准按简化GAS职责重组Skill.definition：统一组合activation/costs/limits/effects/ongoingModifiers，替代旧ActiveAttack/Triggered/Persistent三种互斥定义。发动规则分别为ManualActivation/EventActivation/WhileGranted，使用条件、触发条件及持续条件各归对应位置；WeaponAttack和RestoreResource明确效果target，使用次数限制独立于发动方式。WhileGranted只提供持续规则，消耗/次数/即时内容为空，Runtime组合校验后续接入。
+- Skill.xlsx三个Sheet已迁移，保留公共内容、三条样例ID与数值、网格和原样式包。闪霎为手动双段攻击，明镜之心为事件触发回复自身AP及独立每回合限次，巅峰极诣在每次参与伤害计算时检查耐久条件，不成立、能力移除或禁用则停止提供修正。主动/持续Sheet数据从9行、事件Sheet从8行开始；Schema字段树、多态继承、列表与空列表、类型、中文说明、枚举、范围、关键数值及冻结静态读回通过。工作簿占用经用户保存关闭后解除；未执行Luban、编译、测试、Unity刷新或提交，实际解析与运行效果仍未验证。PilotSkill、角色、机兵、旧Battle域及战斗代码未改。
+- 根据开发者确认移除PilotSkill独立id，当前仅pilotId/skillId/displayOrder三个字段，TbPilotSkill改为list表及pilotId+skillId联合索引；同机师同技能关联唯一，展示顺序仍用于排序。Excel同步删除编号列，保留普通网格样式并调整冻结位置，仍为空表。字段/类型/注释、联合索引声明、包内XML及其余包条目静态核对通过，实际Luban解析待首次导表；本项覆盖下方初建四字段记录，未修改技能数据或运行逻辑。
+- 根据开发者反馈简化Skill.xlsx和PilotSkill.xlsx样式：恢复网格线与100%缩放，白底数据区、黑色11号字体、普通20行高，仅字段表头浅灰底；说明行保留48行高与换行。字段分组、冻结、列宽、所有单元格内容/类型/位置及其他包内容逐项静态核对保持，实际Excel显示待查看。未改Schema或运行逻辑，未导表、编译、测试或启动Unity。
+- 用户批准按简化GAS方案试配：新增Defines/Skill.xml及Datas/Skill/Skill.xlsx，Skill主表保留id/name/description/icon/category/definition；category为展示分类，definition用ActiveAttack、Triggered、Persistent三类多态Bean组合条件、消耗和效果。采用一张逻辑表、三个Sheet、多级分组标题展开参数，替代早期SkillRule/SkillStep固定拆表提案。
+- 填入独立ID1001闪霎（2AP、双刀剑两段各0.85）、1002明镜之心（原攻击目标有威压、自身AP≤4、1PP回复3AP、每回合1次）、1003巅峰极诣（耐久>50%、造成伤害+15%/遭受伤害-10%）。图标暂空；PP出击额度归角色资源，未复制进技能。耐久比例口径、Tag检查时点、回合次数重置及双武器细则待确认。
+- Pilot.xml新增PilotSkill关联表及Datas/Pilot/PilotSkill.xlsx，字段id/pilotId/skillId/displayOrder，引用新Pilot与Skill；新Pilot无角色，关联先空。技能池、解锁、携带与本场生效分开，未推定出战栏位数量；Pilot.xlsx、机兵域、旧Battle域和运行逻辑保持。
+- 静态读回通过：三条数据的多级字段树、多态继承、列表、枚举、范围和关键数值与Schema一致；关联四字段零行、外键声明目标存在，工作簿包内XML可解析。实际Luban解析及Excel显示仍待验证；未导表、生成、编译、测试、运行、刷新Unity或提交，T1.12.1仍未最终验收。
+
+### 技能配置规则梳理（2026-11-01，建表前讨论）
+
+- 技能解锁与携带边界确认：当前机师技能默认全解锁，后续由天赋养成逐步解锁；出战技能栏数量少于技能总数，玩家按战场选择携带。配置分别表达机师技能池与携带规则，玩家选择由出战方案保存，装配层读取本次选择。具体栏位数、分类限制及固定生效技能范围待确认，当前先设计扩展边界。
+- 形态能力归属确认：当前仅曜通过机师天赋获得人形与飞行形态的切换能力。装配层根据生效天赋装配形态能力及相关技能，技能按本场当前形态选择效果；机兵基础机型身份保持。适用机兵、切换消耗和具体形态参数随后续规则确认。
+- 开发者确认机师与机兵配置暂保持现状，当前转入技能配置。先以实际技能描述梳理效果、目标、范围、消耗和使用条件，再确定表结构。
+- 现有Battle.Ability为单体敌方直接伤害原型，包含AP消耗、固定伤害、射程及基础武器要求；作为过渡基线保留。首批技能范围与数据待确认，当前处于规则讨论阶段。
+
+### 架构员基础表建立（静态建立，未导表）
+
+- 机师后续扩展决策：主表保留基础定义，天赋通过独立定义与机师关联表组织，成长配置随养成扩展；统一机师结构按配置组合资源与行为。装配层创建专属资源并挂接天赋行为，资源当前值由本场Runtime维护。结论已整理至架构路线图“机师配置与天赋扩展”，配置说明同步引用，当前完成范围为文档记录。
+- 机师表排版完成：Pilot.xlsx采用蓝/绿/橙三块表头配色，冻结前三行及ID/名称列，调整列宽、说明换行、字号与对齐，添加列分组和有内容数据行的交替底色。保留用户现有中文说明与共享字符串，15字段、0数据行及48个单元格内容不变。包内XML、样式引用、冻结与分组静态核对通过；Excel实际显示待开发者查看，本批仅排版及文档更新。
+- 属性装配职责确认：机师等级、科研、芯片等模块分别提供本领域数据与属性贡献，独立装配层统一汇总，战斗与展示复用计算口径并保留来源。当前六属性取70级自身基础值，后续按当前等级及成长配置取得自身基础值。结论已写入架构路线图和配置说明，本次仅更新文档。
+- 属性数值口径确认：机师等级最高70级，会影响六项基础属性；当前不考虑养成，Pilot的格斗、突击、射击、战术、防御、工程直接配置70级满级基础值，不按1级值填写。不新增机师等级字段、成长表、经验或升级系统；驾驶等级仍为独立概念。当前仅明确数值口径，尚无角色数值可填。
+- 最新等级补充：开发者确认大师III=135%、大师IV=140%。DrivingRank追加ID5大师III=13500，原ID1大师IV=14000保持，其余ID2至4保持；当前共五条等级数据，逐项静态读回正确。大师I至IV分别为123%/129%/135%/140%，不推算其他等级或升级关系，未导表、编译、测试或运行。
+- 等级数据补充：开发者确认大师I=123%、大师II=129%，DrivingRank追加ID3大师I=12300、ID4大师II=12900，保留原ID1/2。四条数据逐项静态读回正确，无ID冲突；未推算大师III等未知等级，不改Schema或角色数据，未导表、编译、测试或运行。
+- 最新拆表：开发者批准独立驾驶等级Excel，新增Datas/Pilot/DrivingRank.xlsx及Pilot.TbDrivingRank（id/name/performanceRate），填截图确认的1大师IV=14000、2超适体III=13700；ID不表示等级高低。Pilot用drivingRankId引用，替换原名称/倍率两列，当前为15字段空表；驾驶许可仍独立保留。不扩充未知等级/升级关系，不实现倍率结算或养成。本项覆盖下述16字段阶段记录。
+- 拆表静态核对通过：两份工作簿表头、顺序、类型、注释与XML一致，等级两行逐项读回正确，Pilot仍无角色数据，外键声明及目标表存在；包内XML解析和文本空白检查通过。未执行Luban，实际导出与运行库兼容性仍未验证，未编译、测试、刷新Unity或提交。
+- 最新补充：开发者要求按驾驶许可/驾驶等级截图补齐字段。驾驶许可已有allowedMechClassIds，保留；新增drivingRankName与drivingPerformanceRate，共16字段并同步Excel。等级显示名如大师IV，倍率采用整数10000=100%、14000=140%；不推定倍率影响哪些属性，不改变驾驶资格或基础机型，不实现等级养成，截图未指定角色仍不填实际数据。
+- 开发者根据AP/PP截图确认基础结构并授权建立：新增Defines/Pilot.xml和Datas/Pilot/Pilot.xlsx，独立Pilot域，14字段为id、name、allowedMechClassIds、六项基础属性、initialActionPoint、maxActionPoint、actionPointRecoveryPerTurn、initialPotentialPoint、maxPotentialPoint。默认驾驶资格列表元素引用Mech.TbMechClass。
+- AP初始值/上限/回复量分别配置，PP初始值/上限分别配置且不自然回复。不将AP每回合回复量解释为PP转换量，不添加PP转AP字段或技能、养成配置。截图未指定角色，新表数据行为0，不套用截图数值或迁移旧角色占位数据。
+- 新工作簿已静态读回，14字段名称/顺序/类型/注释与XML一致，包内XML解析和跨域引用目标核对通过，新增文本空白及正式进度diff --check通过；实际Luban空表/列表引用解析仍待首次导表验证。
+- 旧Battle域、Deployment引用、机兵四表与战斗代码保持；当前战斗仍按原型AP逻辑运行，不将新配置字段视为新规则已实现。初始值不超过上限、驾驶资格去重等规则写入README，运行时校验随后续装配接入；未导表、生成、编译、测试、运行、刷新Unity或提交。
+
+### 架构员配置规则讨论（2026-10-31，以下为建表前记录）
+
+- 最新范围：开发者明确驾驶员基础配置与技能配置分开，技能后续单独处理。本轮不配置技能关系、携带、消耗或执行规则，不再以单次动作连续消耗PP的细则阻塞架构员基础表；目前仅收敛角色身份、基础属性、默认驾驶资格和个人资源基础值，尚未建表。
+- 机兵配置暂保持现状，转入架构员（Pilot）设计。开发者确认采用格斗、突击、射击、战术、防御、工程六项基础属性；先配置角色拥有的技能，携带规则后定，属性公式及数值尚未确定。
+- 开发者确认分别考虑AP上限、初始AP和每回合回复；首回合只用初始AP，此后己方回合开始时回复。AP不足时自动消耗PP补充，同一架构员同回合可多次使用，每次消耗1点PP；单次行动能否连续使用多点PP仍待确认。主计划中PP为单场个人资源且不自然回复，每点恢复AP的具体数值待提供。
+- 现有PilotData与Battle.TbPilot仅含id/name/maxActionPoint，当前Runtime仍按原型规则回合重置AP到上限，尚未实现上述新规则。本轮不新建架构员表、不改机兵表或战斗代码，不导表、编译、测试或运行；完整资源规则确认后再收敛字段与建表范围。
+
+### 机兵型号数据填入（2026-10-31，静态完成，未导表）
+
+- 按开发者提供顺序，在独立 Mech 域的 Datas/Mech/Mech.xlsx 填入型号：1疾啸（classId=1轻型）、2复仇女神（2中型）、3辉龙（3重型）、4星夜女神（1轻型）。型号ID与机型ID职责不同，也不与旧Battle域型号ID建立对应关系。
+- 已读回四行并逐项核对名称、ID唯一性和机型外键；README同步实际数据。部件与装配预设仍为空，未修改Schema、旧Battle配置或战斗代码，未推定部件属性。
+- 开发者确认机兵配置暂保持现状，后续有问题再调整；下一主题为架构员（Pilot）配置设计，具体属性、资源字段与技能配置范围待确认，不据此继续扩展机兵配置或提前实现天赋/养成。
+- 首次写入命令因未加载System.IO.Compression程序集在打开文件前失败，补充加载后写入与读回通过。未导表、生成、编译、测试、运行、刷新Unity或提交。
+
+### 独立机兵四表建立（2026-10-30，静态完成，未导表）
+
+- 开发者批准四张核心表，并选择独立 Mech 配置域：新增 Defines/Mech.xml 与 Datas/Mech 下 MechClass、Mech、MechPart、MechLoadout 四份 Excel。XML 仍为唯一 Schema 来源，沿用 Sheet1 与 ##var/##type/## 三行格式；不新增重复 Schema 工作簿。
+- MechClass 已填三条规则：ID 1/2/3 分别为轻/中/重，基础移动力4/3/3；轻与重默认左右手，中型另有左右肩挂载点。PartType 和 WeaponMount 分开，基础机型身份不等于战斗形态或天赋授予的权限。
+- 型号、部件、装配方案仅建立字段与引用，当前数据行数为0；不推定现有四型号的机型归属，不拆分原整机耐久，不填临时火力或闪避。字段采用已讨论结构：型号归属机型，部件归属型号并保存独立属性，装配显式引用四部位及机型。
+- 四份工作簿已用 .NET ZIP/XML 静态读回：包内XML可解析，表头/顺序/类型/注释与Schema一致，三条机型数值和挂载枚举正确，外键目标存在。部位匹配、同机型混搭、型号部位唯一等规则已写入说明，但没有数据行可供验证，也尚未实现运行时装配校验器。
+- Battle.xml、原七份Excel、Deployment.mechId和战斗代码保持；Battle.TbMech为过渡原型基线，Mech.TbMech为目标型号定义，不混用，不据新机型规则改变当前SO玩法。背包、武器、模组、天赋、形态与养成表不在本批。
+- README同步四表、空数据状态、后续校验与过渡关系；同时校正工具已存在的事实，source-revision为029f714f935ba58d7e33530da87e6371ee3c519f，不再将缺少生成器当作阻塞。首次导表仍需另行授权并验证空表、枚举列表和ByteBuf兼容性；未导表、生成C#/bytes、编译、运行测试、刷新Unity、修改meta或提交。
+
+### 机兵配表规则确认（2026-10-29，架构讨论，尚未实施）
+
+- 开发者明确：机兵由躯干、左臂、右臂、双足四部位组成，双足为一个部位；每个部件独立配置耐久、火力和闪避，负重暂不实现。轻/中/重基础移动力为4/3/3，中型可装备肩部武器。
+- 开发者进一步确认：允许同机型跨型号混搭部件，不允许跨轻/中/重混搭；属性先独立配置，合成与结算公式后定，不默认火力/闪避求和，也不默认闪避数值直接表示概率。
+- 本轮建议区分机型规则、机兵型号、部件定义、装配方案和武器定义；建议尚未作为实施授权。部位与武器挂载点分开，肩部武器不自动增加独立耐久部位；肩部武器与损毁部位的关联仍需后续明确。静态配置、未来玩家资产与单场Runtime保持分层，Battle不依赖Luban生成类型。
+- 后续补充为长期需求参考：每机一个拓展背包，可提供属性加成或携带战中互换的备用武器；天赋可能改变驾驶资格、特殊武器装配权限和战斗形态。形态变化不改变原始机型，不能自动放宽背包限制。部件还可能贡献模组等级，并存在单件/整套与品阶相关额外模组，具体激活和升级条件未定。当前仅讨论身份、权限、形态及效果来源的边界，不视为实施背包、天赋、模组或变形的授权；这些能力包含战斗规则，不全部属于养成。
+- 当前Mech配置与Runtime仍为单一耐久、一个基础攻击，四部位仅已有枚举；未改Schema、Excel或战斗代码，未导表、编译、测试或运行。现有原型移动值与4/3/3不全一致，实施新机型规则不能宣称完全等价迁移；下一步先收敛字段、装配约束和实际迁移范围，不将本次讨论视为提前实现养成与部位战斗的授权。
 
 ### UI Widget 创建入口收敛（2026-10-29，静态完成待运行验收）
 
@@ -13,6 +211,21 @@
 - 按开发者要求，统计页 BattleStatisticsUI 使用 CreateWidgetByTypeAsync<BattleUnitStatisticsItem> 替换手写异步实例加载与 Widget 注册两步，删除重复资源地址常量；保持统计字段、行顺序及全部条目就绪后开放导航的行为。
 - 检查其余手写 UI 创建位置：准备页仍保留显式战斗 token 和缓存分支迟到实例清理，行动序列 Widget 接收已经加载的实例，继续使用 CreateWidget(go)。事件转发与生成代码保持，不改基类、Prefab 或 meta。
 - 基类按类型异步入口内部使用类型名作为资源地址，转发按路径异步入口并传入 UI GameObject 销毁 token；不将其视为完整的取消与迟到实例处理保证。调用签名、资源名称与目标差异空白检查通过；未编译、测试、运行或刷新 Unity，待开发者验收 HUD 条目显示/点击以及统计行、返回/主页和重开统计页。开发者授权仅本地提交本轮 UI 源码及本节记录，Luban 工程和其他工作保留，T1.12 当前阶段不变。
+
+### Luban 获取脚本迁入（2026-10-27，未执行获取）
+
+- 开发者授权将 TEV 的 Luban 获取工具文件迁入本项目并适配路径。本轮新增仓库根 Tools/build-luban.bat、build-luban.sh 与 Luban/about.txt，源码检出固定在 Tools/luban-source，Release 输出为现有导表入口使用的 Tools/Luban。
+- 两个平台按脚本位置定位并引用含空格路径；不整目录删除旧输出，更新使用 fast-forward-only 且失败停止，构建成功后记录源码提交号。沿用官方源码更新方式，尚未固定生成器版本；实际构建与运行库兼容性仍未验证。
+- 已补充配置工程 README 和本地源码/构建产物忽略规则。本次仅迁入与静态核对，不克隆、更新、安装工具、构建、导表、刷新 Unity 或提交。T1.12.1 仍待首次真实导表，不扩大授权为执行获取。
+
+### T1.12.1 最小配置工程（2026-10-27，静态完成待首次导表）
+
+- 开发者确认上一轮已合并，并明确授权新建功能分支、直接建立最小数据工程，暂不下载工具或导表。已从 b858abf 创建 feature/t1-luban-config，在仓库根 Configs/GameConfig 新增14份文件：七份 Excel、唯一 XML Schema、luban.conf、四份 Windows/macOS/Linux 导出与菜单兼容脚本及 README。
+- 七表为 Scenario、Deployment、Pilot、Mech、BasicAttack、Ability、UnitAbility；共33条数据、187个数据字段。保留15×15棋盘、四台单位顺序/阵营/站位、全部驾驶员和机兵数据、四份独立普攻，以及技能ID 1/2/3/4/5/6/8/9和每单位技能顺序；Deployment.spawnOrder与UnitAbility.slotOrder显式表达顺序，不依赖字典遍历。
+- Excel已读回与源SO逐字段核对；父任务另核对七表XML与Excel列名/基础类型一致、32个外键值有效、站位边界/不重叠及攻击/技能射程合法。JSON/XML解析、新文本空白检查和进度文档diff --check通过；这些都是静态核对，不代表Luban或Unity实际运行通过。
+- 导出目标为GameConfig命名空间、GameProto/GameConfig代码及AssetRaw/Configs/bytes数据，格式cs-bin/bin。现有Unity菜单的lazyload同名脚本仅委托标准导出，不复制同步懒加载模板；不创建重复的__tables__/beans/enums工作簿，不手写生成代码或meta。跨行/跨字段约束仍需后续装配前校验。
+- 本机无可用Python，使用本地.NET ZIP/XML写标准XLSX，未安装依赖。生产Luban工具和版本尚未确定，实际XML/Excel解析及ByteBuf兼容性留待首次获授权导表；T1.12.1不据此标记最终验收通过，T1.12.2～.4未实施。
+- 未改业务源码、SO、资源或meta，当前战斗来源保持；未下载、导表、生成代码/二进制、编译、运行测试、刷新Unity、暂存、提交或推送。原三份.idea暂存及外部角色图集、生成器和ProjectSettings修改保持不动。下一步先确认工具版本与首次导表授权，再进入配置加载及装配替换。
 
 ### 字体与本地战斗配置基线保存（2026-10-27）
 
@@ -852,7 +1065,7 @@
     12. **Task T1.12 最小 Luban 战斗配置迁移**
        - 2026-10-19 当前 SO 入口已正式命名为 `MechStorm.Config.BattleScenarioConfig`，仍是同一聚合数据格式；去 Temp 命名不等于 Luban 数据迁移，以下任务继续保留。
        - 2026-10-10 用户授权提前迁移；2026-10-22 重排后改为 T1.10 结果/重战/统计闭环之后、T1.8/T1.13 镜头与 T1.11 完整回归之前。覆盖旧“T1.4 前迁移”顺序；保留 T1.1～T1.12 编号，迁移后各流程使用同一份正式配置数据。
-       - [ ] **T1.12.1 最小数据工程**：定位/建立项目 Luban 配置工程，只覆盖当前关卡、初始单位阵营/站位、驾驶员、机兵、普攻与技能定义；沿用现有数值，不新增属性、装备、Buff 或养成规则。验收：ID 与引用关系明确，原始四台单位和技能均可表达。
+       - [ ] **T1.12.1 最小数据工程**：定位/建立项目 Luban 配置工程，只覆盖当前关卡、初始单位阵营/站位、驾驶员、机兵、普攻与技能定义；沿用现有数值，不新增属性、装备、Buff 或养成规则。验收：ID 与引用关系明确，原始四台单位和技能均可表达。2026-10-27七表工程已静态完成，待确认工具版本与首次导表兼容性，不以静态检查代替最终验收。
        - [ ] **T1.12.2 配置加载**：生成代码归 GameProto、二进制数据由 YooAsset 管理；业务入口异步加载且配对释放资源，配置不可用时阻止战斗初始化并明确报错。生成/导表操作先与开发者确认，不自动运行。
        - [ ] **T1.12.3 装配替换**：在 GameLogic 侧将 Luban 行转换为现有 Battle Data，再创建独立 Runtime；Battle 不引用 Luban、Unity 或 GameProto。场景对象引用、材质与镜头调试参数留在表现层。
        - [ ] **T1.12.4 等价与隔离验收**：迁移前后的棋盘、站位、属性、技能与初始快照一致；运行时扣耐久/AP不污染配置，重战恢复初值；缺失引用、非法站位/数值不能留下半成品。等价验收后才退役正式路径中的临时配置，保留仍被测试使用的夹具。
@@ -862,7 +1075,7 @@
        - [ ] **T1.13.2 限幅缩放与输入整合**：滚轮在配置的最近/最远范围内缩放，俯角不变；UI 上的手势不穿透，明确提示/结算/离场启停与重战恢复规则。结合8个方位、多级缩放及平移验证选择/移动/攻击确认准确，无战斗动作误提交。
        - 先完成 T1.12，再按 T1.8 → T1.13.1 → T1.13.2 → T1 补漏/T1.11 回归推进；不包含角色拖拽部署、自由旋转、镜头碰撞或技能演出。
   - 扩展规则：T1.12 用于最小 Luban 迁移，T1.13 用于镜头交互扩展，后续新增任务从 T1.14 起追加；任务编号不代表执行顺序，以顶部已批准排期为准。硬前置可插入，但须同步依赖、验收标准及编号影响。
-  - 执行边界：AI 负责按顺序实现；默认仅源码/资源静态核对，不自动编译、测试、运行、刷新或更新，不预埋自动化。上述验收标准不代表已执行，未经开发者验收不标记完成。
+  - 执行边界：AI 负责按顺序实现；修改后可按需主动刷新与编译并核对结果，测试、运行、构建或更新仍须明确授权，不预埋延迟自动化。上述验收标准不代表已执行，未经开发者验收不标记完成。
   - 非目标：本阶段不新增角色库滑动选人、上下阵、拖拽布阵、地形 Cost、路径动画、`BattleDirector` 动画时序、完整 Luban 配表体系（仅允许 T1.12 最小迁移）、正式美术皮肤、Buff / Modifier / Trigger 或新的战斗规则
 
 - [ ] Sprint 5：地形 Cost 与路径查询
@@ -1018,7 +1231,7 @@
 ## 下一步
 
 1. T1.10.1 结果页、T1.10.2 撤退/重开及 T1.10.3 统计细项均由开发者运行确认通过，本轮 UI、菜单与异常行为反馈已收口；T1.11 完整回归仍未完成。HUD 尚未实现的缺项另明确范围；当前返回只打开 MainUI，未新增 main 物理场景回切。
-2. 执行 T1.12 最小 Luban 数据工程、异步加载、装配来源替换与等价/隔离验收，不改变现有数值或规则。
+2. T1.12.1七表数据工程已静态完成；先确认Luban工具版本与首次导表授权，再推进异步加载、装配来源替换与等价/隔离验收，不改变现有数值或规则。
 3. 执行 T1.8 八档镜头（每档45°、配置俯角、行动者居中），再执行 T1.13 拖拽平移、限幅缩放及输入整合；开工确认键位与角色移动后的跟随规则。
 4. 补齐 T1.4/T1.7/T1.9 的实际缺口，按开发者明确授权完成 T1.11 全流程回归；旧临时 HUD 已静态退役，不重复清理，也不把历史待验收项自动标记通过。
 5. T1 验收后进入 Sprint 5 地形 Cost、Dijkstra、A* 与调试可视化，仍保持瞬移；后续机制按 Sprint 推进，角色拖拽部署仍留 Sprint 9。
