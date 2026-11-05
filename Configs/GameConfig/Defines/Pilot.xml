@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<module name="Pilot">
+  <bean name="DrivingRank" comment="驾驶等级定义">
+    <var name="id" type="int#range=[1,)" comment="驾驶等级ID" />
+    <var name="name" type="string!" comment="驾驶等级显示名" />
+    <var name="performanceRate" type="int#range=[0,)" comment="作战能力倍率，10000表示100%，14000表示140%" />
+  </bean>
+  <bean name="Pilot" comment="架构员基础定义">
+    <var name="id" type="int#range=[1,)" comment="架构员配置ID" />
+    <var name="name" type="string!" comment="架构员名称" />
+    <var name="allowedMechClassIds" type="(list#sep=,),int#ref=Mech.TbMechClass" comment="默认可驾驶机型ID，英文逗号分隔" />
+    <var name="drivingRankId" type="int#ref=Pilot.TbDrivingRank" comment="基础驾驶等级ID" />
+    <var name="melee" type="int#range=[0,)" comment="基础格斗属性" />
+    <var name="assault" type="int#range=[0,)" comment="基础突击属性" />
+    <var name="shooting" type="int#range=[0,)" comment="基础射击属性" />
+    <var name="tactics" type="int#range=[0,)" comment="基础战术属性" />
+    <var name="defense" type="int#range=[0,)" comment="基础防御属性" />
+    <var name="engineering" type="int#range=[0,)" comment="基础工程属性" />
+    <var name="initialActionPoint" type="int#range=[0,)" comment="进场及首回合AP，须≤AP上限" />
+    <var name="maxActionPoint" type="int#range=[0,)" comment="基础AP最大值" />
+    <var name="actionPointRecoveryPerTurn" type="int#range=[0,)" comment="第二回合起己方回合开始时回复的AP，受AP上限约束" />
+    <var name="initialPotentialPoint" type="int#range=[0,)" comment="单场初始PP，须≤PP上限" />
+    <var name="maxPotentialPoint" type="int#range=[0,)" comment="基础PP上限" />
+  </bean>
+
+  <bean name="PilotSkill" comment="机师技能池">
+    <var name="pilotId" type="int#ref=Pilot.TbPilot" comment="机师ID" />
+    <var name="skillId" type="int#ref=Skill.TbSkill" comment="技能ID" />
+    <var name="displayOrder" type="int#range=[1,)" comment="技能池展示顺序" />
+  </bean>
+  <table name="TbPilotSkill" value="PilotSkill" input="Pilot/PilotSkill.xlsx" mode="list" index="pilotId+skillId" />
+  <table name="TbDrivingRank" value="DrivingRank" input="Pilot/DrivingRank.xlsx" mode="map" index="id" />
+  <table name="TbPilot" value="Pilot" input="Pilot/Pilot.xlsx" mode="map" index="id" />
+</module>

@@ -19,3 +19,8 @@
 
 .DS_Store
 Thumbs.db
+
+# Local Luban source checkout and build output.
+/Tools/luban-source/
+/Tools/Luban/*
+!/Tools/Luban/about.txt

@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<module name="Battle">
+  <enum name="CombatFaction" comment="单位所属阵营">
+    <var name="TeamA" value="0" />
+    <var name="TeamB" value="1" />
+    <var name="Neutral" value="2" />
+  </enum>
+
+  <bean name="Scenario" comment="关卡棋盘定义">
+    <var name="id" type="int#range=[1,)" comment="关卡ID" />
+    <var name="boardWidth" type="int#range=[1,)" comment="棋盘宽度" />
+    <var name="boardHeight" type="int#range=[1,)" comment="棋盘高度" />
+  </bean>
+  <bean name="Deployment" comment="关卡出战单位">
+    <var name="id" type="int#range=[1,)" comment="部署记录ID" />
+    <var name="scenarioId" type="int#ref=Battle.TbScenario" comment="所属关卡ID" />
+    <var name="unitId" type="int#range=[1,)" comment="本场单位ID" />
+    <var name="spawnOrder" type="int#range=[1,)" comment="出场顺序" />
+    <var name="faction" type="CombatFaction" comment="单位所属阵营" />
+    <var name="x" type="int#range=[0,)" comment="初始横坐标" />
+    <var name="y" type="int#range=[0,)" comment="初始纵坐标" />
+    <var name="pilotId" type="int#ref=Pilot.TbPilot" comment="架构员ID" />
+    <var name="mechLoadoutId" type="int#ref=Mech.TbMechLoadout" comment="机兵装配预设ID" />
+  </bean>
+  <bean name="UnitSkill" comment="本场单位携带的机师技能">
+    <var name="deploymentId" type="int#ref=Battle.TbDeployment" comment="部署记录ID" />
+    <var name="skillId" type="int#ref=Skill.TbSkill" comment="携带技能ID" />
+    <var name="slotOrder" type="int#range=[1,)" comment="携带技能顺序" />
+  </bean>
+
+  <table name="TbScenario" value="Scenario" input="Battle/Scenario.xlsx" mode="map" index="id" />
+  <table name="TbDeployment" value="Deployment" input="Battle/Deployment.xlsx" mode="map" index="id" />
+  <table name="TbUnitSkill" value="UnitSkill" input="Battle/UnitSkill.xlsx" mode="list" index="deploymentId+skillId" />
+</module>

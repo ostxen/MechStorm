@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="utf-8"?>
+<module name="Weapon">
+  <enum name="WeaponQuality" comment="武器品质，当前为SS">
+    <var name="SS" value="0" />
+  </enum>
+  <enum name="WeaponCategory" comment="武器大类">
+    <var name="Melee" value="0" comment="格斗" />
+    <var name="Assault" value="1" comment="突击" />
+    <var name="Shooting" value="2" comment="射击" />
+    <var name="Tactics" value="3" comment="战术" />
+    <var name="Special" value="4" comment="特殊" />
+  </enum>
+  <enum name="WeaponKind" comment="武器细分类">
+    <var name="Sword" value="0" comment="刀剑" />
+    <var name="MachineGun" value="1" comment="机枪" />
+    <var name="SniperRifle" value="2" comment="狙击步枪" />
+    <var name="Gauntlet" value="3" comment="拳套" />
+    <var name="PileBunker" value="4" comment="打桩机" />
+    <var name="Chainsaw" value="5" comment="电锯" />
+    <var name="Polearm" value="6" comment="长柄" />
+    <var name="LargeShield" value="7" comment="大盾" />
+    <var name="HandShield" value="8" comment="手盾" />
+    <var name="HeavyMachineGun" value="9" comment="重机枪" />
+    <var name="Shotgun" value="10" comment="霰弹枪" />
+    <var name="Flamethrower" value="11" comment="喷火器" />
+    <var name="LightSniperRifle" value="12" comment="轻型狙击步枪" />
+    <var name="Missile" value="13" comment="导弹" />
+    <var name="Rocket" value="14" comment="火箭" />
+    <var name="Railgun" value="15" comment="电磁炮" />
+    <var name="FloatingCannon" value="16" comment="浮游炮" />
+    <var name="ParticlePod" value="17" comment="粒子荚舱" />
+    <var name="FixedArmament" value="18" comment="固定武装" />
+  </enum>
+  <enum name="MountType" comment="武器安装类别">
+    <var name="Hand" value="0" comment="手持" />
+    <var name="Shoulder" value="1" comment="肩部" />
+    <var name="Back" value="2" comment="背部" />
+  </enum>
+  <enum name="GripType" comment="武器握持分类">
+    <var name="NotApplicable" value="0" comment="非手持武器" />
+    <var name="OneHanded" value="1" comment="单手" />
+    <var name="TwoHanded" value="2" comment="双手" />
+  </enum>
+  <enum name="RangeShape" comment="目标选取射程形状">
+    <var name="Diamond" value="0" comment="菱形，距离为abs(dx)+abs(dy)" />
+    <var name="Ring" value="1" comment="环形，距离为max(abs(dx),abs(dy))，一圈含周围8格" />
+  </enum>
+  <bean name="WeaponRange" comment="武器目标选取射程">
+    <var name="shape" type="RangeShape" comment="目标选取射程形状" />
+    <var name="minRange" type="int#range=[1,)" comment="最小选取距离，含边界" />
+    <var name="maxRange" type="int#range=[1,)" comment="最大选取距离，含边界，须≥最小距离" />
+  </bean>
+  <bean name="Weapon" comment="武器基础定义">
+    <var name="id" type="int#range=[1,)" comment="武器配置ID" />
+    <var name="name" type="string!" comment="武器名称" />
+    <var name="description" type="string" comment="展示说明，可空" />
+    <var name="icon" type="string" comment="图标资源标识，可空" />
+    <var name="quality" type="WeaponQuality" comment="武器品质，当前为SS" />
+    <var name="category" type="WeaponCategory" comment="武器大类" />
+    <var name="kind" type="WeaponKind" comment="武器细分类" />
+    <var name="mountType" type="MountType" comment="安装类别：手持、肩部或背部" />
+    <var name="gripType" type="GripType" comment="握持分类：OneHanded单手、TwoHanded双手，其余填NotApplicable" />
+    <var name="allowedMechClassIds" type="(list#sep=,),int#ref=Mech.TbMechClass" comment="允许机型ID列表，必填且唯一，英文逗号分隔；全机型填1,2,3" />
+    <var name="attackPower" type="int#range=[0,)" comment="基础攻击力" />
+    <var name="accuracy" type="int#range=[0,)" comment="基础命中属性值" />
+    <var name="critical" type="int#range=[0,)" comment="基础暴击属性值" />
+    <var name="weight" type="int#range=[0,)" comment="基础重量" />
+    <var name="range" type="WeaponRange" comment="武器目标选取射程" />
+    <var name="ammoCapacity" type="int#range=[-1,)" comment="基础弹药容量，-1为无限，其余须为正整数" />
+    <var name="hitCount" type="int#range=[1,)" comment="一次武器攻击的基础连击数" />
+  </bean>
+  <table name="TbWeapon" value="Weapon" input="Weapon/Weapon.xlsx" mode="map" index="id" />
+</module>

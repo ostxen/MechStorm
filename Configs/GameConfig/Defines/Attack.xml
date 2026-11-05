@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<module name="Attack">
+  <bean name="Classification" comment="攻击分类的主动性与对战性">
+    <var name="initiativeTag" type="string#set=Attack.Mode.Active,Attack.Mode.Reactive" comment="主动Attack.Mode.Active或非主动Attack.Mode.Reactive，二选一" />
+    <var name="interactionTag" type="string#set=Attack.Mode.Duel,Attack.Mode.NonDuel" comment="对战Attack.Mode.Duel或非对战Attack.Mode.NonDuel，二选一" />
+  </bean>
+  <bean name="WeaponUse" abstract="true" comment="攻击使用的武器来源" />
+  <bean name="SourceWeapon" parent="WeaponUse" comment="使用提供本能力的已装备武器" />
+  <bean name="SelectedWeapon" parent="WeaponUse" comment="使用本次技能选定的已装备武器">
+    <var name="weaponKind" type="Weapon.WeaponKind" comment="可选武器细分类" />
+  </bean>
+  <bean name="MountedWeapon" parent="WeaponUse" comment="取得指定挂载位置的武器，并要求类别匹配">
+    <var name="weaponMount" type="Mech.WeaponMount" comment="本段使用的实际武器挂载位置" />
+    <var name="weaponKind" type="Weapon.WeaponKind" comment="本段要求的武器细分类" />
+  </bean>
+  <bean name="Definition" comment="单条武器攻击定义">
+    <var name="classification" type="Classification" comment="本条攻击的分类" />
+    <var name="weapon" type="WeaponUse" comment="来源武器或指定挂载武器" />
+    <var name="damageRate" type="int#range=[0,)" comment="武器伤害倍率，10000表示1倍" />
+  </bean>
+</module>

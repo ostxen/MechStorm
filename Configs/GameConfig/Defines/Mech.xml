@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="utf-8"?>
+<module name="Mech">
+  <enum name="PartType" comment="机兵部位：躯干、左臂、右臂、双足">
+    <var name="Body" value="0" />
+    <var name="LeftArm" value="1" />
+    <var name="RightArm" value="2" />
+    <var name="Legs" value="3" />
+  </enum>
+  <enum name="WeaponMount" comment="武器挂载点">
+    <var name="LeftHand" value="1" />
+    <var name="RightHand" value="2" />
+    <var name="LeftShoulder" value="3" />
+    <var name="RightShoulder" value="4" />
+  </enum>
+
+  <bean name="MechClass" comment="机型默认规则">
+    <var name="id" type="int#range=[1,)" comment="稳定机型ID：1轻型、2中型、3重型" />
+    <var name="name" type="string!" comment="机型名称" />
+    <var name="baseMoveRange" type="int#range=[0,)" comment="基础移动力" />
+    <var name="weaponMounts" type="(list#sep=,),WeaponMount" comment="默认开放挂载点，英文逗号分隔且唯一" />
+  </bean>
+  <bean name="Mech" comment="机兵型号定义">
+    <var name="id" type="int#range=[1,)" comment="型号ID" />
+    <var name="name" type="string!" comment="型号名称" />
+    <var name="classId" type="int#ref=Mech.TbMechClass" comment="基础机型ID" />
+  </bean>
+  <bean name="MechPart" comment="机兵部件基础定义">
+    <var name="id" type="int#range=[1,)" comment="部件配置ID" />
+    <var name="mechId" type="int#ref=Mech.TbMech" comment="所属型号ID，机型由型号确定" />
+    <var name="partType" type="PartType" comment="躯干、左臂、右臂或双足" />
+    <var name="maxDurability" type="int#range=[1,)" comment="部件基础耐久上限" />
+    <var name="firepower" type="int#range=[0,)" comment="部件基础火力" />
+    <var name="evasion" type="int#range=[0,)" comment="部件基础闪避属性值" />
+  </bean>
+  <bean name="MechLoadout" comment="机兵装配预设">
+    <var name="id" type="int#range=[1,)" comment="装配方案ID" />
+    <var name="name" type="string!" comment="方案名称" />
+    <var name="classId" type="int#ref=Mech.TbMechClass" comment="方案机型，四部件必须同机型" />
+    <var name="bodyPartId" type="int#ref=Mech.TbMechPart" comment="躯干部件ID，须对应Body" />
+    <var name="leftArmPartId" type="int#ref=Mech.TbMechPart" comment="左臂部件ID，须对应LeftArm" />
+    <var name="rightArmPartId" type="int#ref=Mech.TbMechPart" comment="右臂部件ID，须对应RightArm" />
+    <var name="legsPartId" type="int#ref=Mech.TbMechPart" comment="双足部件ID，须对应Legs" />
+  </bean>
+
+  <bean name="MechLoadoutWeapon" comment="机兵装配预设的武器挂载">
+    <var name="loadoutId" type="int#ref=Mech.TbMechLoadout" comment="机兵装配预设ID" />
+    <var name="weaponMount" type="WeaponMount" comment="武器挂载位置" />
+    <var name="weaponId" type="int#ref=Weapon.TbWeapon" comment="武器配置ID" />
+  </bean>
+
+  <table name="TbMechLoadoutWeapon" value="MechLoadoutWeapon" input="Mech/MechLoadoutWeapon.xlsx" mode="list" index="loadoutId+weaponMount" />
+  <table name="TbMechClass" value="MechClass" input="Mech/MechClass.xlsx" mode="map" index="id" />
+  <table name="TbMech" value="Mech" input="Mech/Mech.xlsx" mode="map" index="id" />
+  <table name="TbMechPart" value="MechPart" input="Mech/MechPart.xlsx" mode="map" index="id" />
+  <table name="TbMechLoadout" value="MechLoadout" input="Mech/MechLoadout.xlsx" mode="map" index="id" />
+</module>

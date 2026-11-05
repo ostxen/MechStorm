@@ -1,0 +1,137 @@
+<?xml version="1.0" encoding="utf-8"?>
+<module name="Skill">
+  <enum name="SkillCategory" comment="技能展示分类">
+    <var name="Active" value="0" />
+    <var name="Command" value="1" />
+    <var name="Passive" value="2" />
+    <var name="PotentialPoint" value="3" />
+    <var name="BasicAttack" value="4" />
+  </enum>
+  <enum name="ResourceKind" comment="战斗资源类型">
+    <var name="ActionPoint" value="0" />
+    <var name="PotentialPoint" value="1" />
+  </enum>
+  <enum name="TargetSelection" comment="主动攻击的目标选择规则">
+    <var name="EnemyUnitInWeaponRange" value="0" />
+    <var name="EnemyUnitInSourceWeaponRange" value="1" />
+  </enum>
+  <enum name="TriggerTiming" comment="技能触发时点">
+    <var name="AfterOwnActiveAttack" value="0" />
+  </enum>
+  <enum name="DamageScope" comment="伤害修正作用环节">
+    <var name="Outgoing" value="0" />
+    <var name="Incoming" value="1" />
+  </enum>
+  <enum name="EffectTarget" comment="效果作用对象">
+    <var name="Self" value="0" />
+    <var name="SelectedTarget" value="1" />
+    <var name="EventTarget" value="2" />
+    <var name="SelectedAreaEnemies" value="3" />
+  </enum>
+  <enum name="UsageReset" comment="使用次数的重置周期">
+    <var name="Turn" value="0" comment="每回合重置" />
+  </enum>
+
+  <bean name="ResourceCost" comment="发动一次能力的资源消耗">
+    <var name="resource" type="ResourceKind" comment="消耗资源" />
+    <var name="amount" type="int#range=[1,)" comment="消耗点数" />
+  </bean>
+  <bean name="Condition" abstract="true" comment="条件列表中的各项须同时满足" />
+  <bean name="DualSwords" parent="Condition" comment="同时装备两把可用于本次攻击的刀剑" />
+  <bean name="EquippedWeaponUsable" parent="Condition" comment="存在可供本次技能选用的已装备武器">
+    <var name="weaponKind" type="Weapon.WeaponKind" comment="要求的武器细分类" />
+  </bean>
+  <bean name="AttackHasTag" parent="Condition" comment="当前伤害所属攻击携带指定Tag">
+    <var name="tag" type="string!" comment="攻击Tag" />
+  </bean>
+  <bean name="TargetPartDurabilityAtLeast" parent="Condition" comment="本次受击部位的当前耐久比例达到阈值">
+    <var name="rate" type="int#range=[0,10000]" comment="受击前部位耐久比例下限，5000表示50%，含等于" />
+  </bean>
+  <bean name="SourceWeaponUsable" parent="Condition" comment="来源武器可用且类别匹配">
+    <var name="weaponKind" type="Weapon.WeaponKind" comment="来源武器要求的类别" />
+  </bean>
+  <bean name="EventTargetHasTag" parent="Condition" comment="原攻击目标携带指定状态标识">
+    <var name="tag" type="string!" comment="状态Tag" />
+  </bean>
+  <bean name="ResourceAtMost" parent="Condition" comment="自身当前资源≤指定点数">
+    <var name="resource" type="ResourceKind" comment="检查资源" />
+    <var name="amount" type="int#range=[0,)" comment="当前点数上限，含等于" />
+  </bean>
+  <bean name="SelfDurabilityAbove" parent="Condition" comment="自身耐久比例严格高于阈值">
+    <var name="rate" type="int#range=[0,10000]" comment="耐久比例阈值，5000表示50%" />
+  </bean>
+  <bean name="Effect" abstract="true" comment="发动成功后依次执行的即时效果">
+    <var name="target" type="EffectTarget" comment="效果作用对象" />
+  </bean>
+  <bean name="AttackEffect" parent="Effect" comment="对指定目标执行有序武器攻击">
+    <var name="attacks" type="(list#size=[1,]),Attack.Definition" comment="按列表顺序执行的攻击定义，至少一条" />
+  </bean>
+  <bean name="FixedPartAttackEffect" parent="Effect" comment="对指定部位执行有序武器攻击">
+    <var name="partType" type="Mech.PartType" comment="固定受击部位" />
+    <var name="attacks" type="(list#size=[1,]),Attack.Definition" comment="按列表顺序执行的攻击定义，至少一条" />
+  </bean>
+  <bean name="RestoreResource" parent="Effect" comment="回复指定对象资源，受有效资源上限约束">
+    <var name="resource" type="ResourceKind" comment="回复资源" />
+    <var name="amount" type="int#range=[1,)" comment="回复点数" />
+  </bean>
+  <bean name="DamageModifier" comment="条件成立期间参与对应伤害计算">
+    <var name="scope" type="DamageScope" comment="造成或遭受伤害" />
+    <var name="rate" type="int#range=[-10000,)" comment="伤害修正，1500为提升15%，-1000为降低10%" />
+  </bean>
+
+  <bean name="Activation" abstract="true" comment="能力发动规则" />
+  <bean name="ManualActivation" parent="Activation" comment="玩家手动使用">
+    <var name="useConditions" type="list,Condition" comment="使用校验与提交时全部满足" />
+    <var name="selection" type="TargetSelection" comment="玩家目标选择规则" />
+  </bean>
+  <bean name="EventActivation" parent="Activation" comment="事件发生后检查触发条件">
+    <var name="timing" type="TriggerTiming" comment="触发时点" />
+    <var name="triggerConditions" type="list,Condition" comment="事件发生时须全部满足" />
+  </bean>
+  <bean name="FixedRangeManualActivation" parent="Activation" comment="手动选择指定射程内的单个敌方单位">
+    <var name="useConditions" type="list,Condition" comment="使用校验与提交时全部满足" />
+    <var name="range" type="Weapon.WeaponRange" comment="技能目标选取射程" />
+    <var name="allowFlyingTargets" type="bool" comment="允许选取飞行目标" />
+  </bean>
+  <bean name="WhileGranted" parent="Activation" comment="能力生效期间持续提供规则" />
+  <bean name="GridOffset" comment="相对施法者的格子偏移">
+    <var name="x" type="int" comment="横向格子偏移" />
+    <var name="y" type="int" comment="纵向格子偏移" />
+  </bean>
+  <bean name="AreaPattern" comment="一次方向选择对应的覆盖格子">
+    <var name="offsets" type="(list#size=[1,]),GridOffset" comment="相对施法者的覆盖格子列表" />
+  </bean>
+  <bean name="DirectionalAreaManualActivation" parent="Activation" comment="手动选择一个方向范围，作用于覆盖格内敌方单位">
+    <var name="useConditions" type="list,Condition" comment="使用校验与提交时全部满足" />
+    <var name="patterns" type="(list#size=[1,]),AreaPattern" comment="可选方向的覆盖模板" />
+  </bean>
+  <bean name="UsageLimit" comment="能力成功使用次数限制">
+    <var name="maxUses" type="int#range=[1,)" comment="每周期成功使用次数上限" />
+    <var name="reset" type="UsageReset" comment="使用次数重置周期" />
+  </bean>
+  <bean name="ConditionalDamageModifiers" comment="能力生效期间的条件伤害修正">
+    <var name="ongoingConditions" type="list,Condition" comment="每次伤害计算时须全部满足" />
+    <var name="modifiers" type="list,DamageModifier" comment="对自身造成或遭受伤害的修正" />
+  </bean>
+  <bean name="Definition" comment="能力的组合规则定义">
+    <var name="activation" type="Activation" comment="能力发动规则" />
+    <var name="costs" type="list,ResourceCost" comment="每次成功发动支付一次；空列表表示无消耗" />
+    <var name="limits" type="list,UsageLimit" comment="成功使用次数限制；空列表表示无限次" />
+    <var name="effects" type="list,Effect" comment="成功发动后依次执行的效果" />
+    <var name="ongoingModifiers" type="list,ConditionalDamageModifiers" comment="能力生效期间提供的条件修正" />
+  </bean>
+  <bean name="Skill" comment="技能公共信息及结构化玩法定义">
+    <var name="id" type="int#range=[1,)" comment="技能ID" />
+    <var name="name" type="string!" comment="技能名称" />
+    <var name="description" type="string!" comment="技能说明" />
+    <var name="icon" type="string" comment="图标资源标识，可空" />
+    <var name="category" type="SkillCategory" comment="展示分类" />
+    <var name="definition" type="Definition" comment="发动、消耗、限制、即时内容和持续修正的组合定义" />
+  </bean>
+  <table name="TbSkill" value="Skill" input="Skill/Skill.xlsx" mode="map" index="id" />
+  <bean name="WeaponDefaultSkill" comment="武器类别对应的默认普攻">
+    <var name="weaponKind" type="Weapon.WeaponKind" comment="提供默认普攻的武器类别" />
+    <var name="skillId" type="int#ref=Skill.TbSkill" comment="该类武器默认提供的普攻技能ID" />
+  </bean>
+  <table name="TbWeaponDefaultSkill" value="WeaponDefaultSkill" input="Skill/WeaponDefaultSkill.xlsx" mode="map" index="weaponKind" />
+</module>
