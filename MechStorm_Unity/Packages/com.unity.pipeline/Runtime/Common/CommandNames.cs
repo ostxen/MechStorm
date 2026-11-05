@@ -63,11 +63,8 @@ namespace Unity.Pipeline.Commands
         internal const string CaptureGameView = "capture game_view";
         internal const string CaptureSceneView = "capture scene_view";
         internal const string CaptureScreenshot = "capture screenshot";
-#if UNITY_6000_7_OR_NEWER
-        // Declared only on 6000.7+, like the commands themselves.
         internal const string CaptureEditorElement = "capture editor_element";
         internal const string CaptureRuntimeElement = "capture runtime_element";
-#endif
 
         // component
         internal const string ComponentAdd = "component add";

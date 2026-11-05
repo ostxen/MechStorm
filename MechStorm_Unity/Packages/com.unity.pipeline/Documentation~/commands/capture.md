@@ -79,7 +79,7 @@ Capture a UI Toolkit VisualElement (by selector) from an EditorWindow to a PNG; 
 | `output-path` | no | `–` | Output PNG path (absolute, or relative to the project root). Defaults to a timestamped file under <project>/Temp/pipeline-screenshots/. |
 
 **Returns:** `CaptureElementResponse`
-**Notes:** `MainThreadRequired = true`. Unity 6000.7+ only.
+**Notes:** `MainThreadRequired = true`. Unity 6000.7+ uses native element rendering (`captureMode=element_render`). This project's older-engine path crops the element's axis-aligned visible panel rectangle (`captureMode=panel_crop`), including background, siblings that overlap it, and clipping. It does not render an isolated subtree or reveal scrolled-off content. Editor capture uses the window's pixels and may temporarily select its tab; it requires an interactive Editor and GPU. DPI conversion is applied before cropping.
 
 ### `capture runtime_element`
 Capture a UI Toolkit VisualElement (by selector) from a live runtime panel (UIDocument or PanelRenderer) to a PNG; returns path + base64.
@@ -91,6 +91,6 @@ Capture a UI Toolkit VisualElement (by selector) from a live runtime panel (UIDo
 | `output-path` | no | `–` | Output PNG path (absolute, or relative to Application.persistentDataPath). Defaults to a timestamped file under Application.persistentDataPath. |
 
 **Returns:** `CaptureElementResponse`
-**Notes:** `MainThreadRequired = true`, tagged `runtime`. Unity 6000.7+ only.
+**Notes:** `MainThreadRequired = true`, tagged `runtime`. On Unity 2021, only `UIDocument` hosts exist. The older-engine path repaints the existing panel to a temporary render target (or reads its existing target texture), then crops the selected rectangle with `captureMode=panel_crop`; it does not change PanelSettings assets or move elements. It includes other content drawn in that rectangle within the same panel, not other panels or the final game composition. Detached, hidden or fully out-of-panel elements fail instead of reporting a successful empty capture. It relies on internal panel rendering interfaces and is verified in this project's Windows Unity 2021.3.45f2 Editor, including Play Mode, not in a standalone Player or other graphics backends. Unity 6000.7+ retains native element rendering. Both commands return PNG path + base64; use a local workspace path outside Assets for evidence that should not be imported.
 
 See [Creating commands](../creating-commands.md) and [Connectivity](../connectivity.md).

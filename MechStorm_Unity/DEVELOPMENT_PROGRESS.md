@@ -7,6 +7,16 @@
 - 当前状态：feature/t1-luban-config 上已建立14张逻辑表、14份工作簿，共26条数据。Battle收敛为Scenario/Deployment/UnitSkill，部署引用新Pilot和MechLoadout；机兵域五表含武器挂载关联，Skill共十条（含三条武器普攻）。保留15×15关卡、三条机型、四个型号、五条驾驶等级和三条默认普攻映射；架构员、部件、装配、武器和出战关联留空。Luban工具已由开发者构建，首次导表与运行库兼容性尚未验证；当前战斗仍读取SO，T1.11完整回归仍未完成
 - 最后更新：2026-11-05
 
+### Pipeline弹窗感知与单元素截图（2026-11-05）
+
+- 后续用户接受当前范围并授权将本版提交；本次仅本地提交Pipeline适配、相关测试与说明，不推送，不纳入原有资源、设置或IDE改动。沿用本节实际编译及8项测试结果，不重复运行Unity验证。
+- 用户选择先补两项，不安装Input System、不启用Player服务、不移植Build Profiles/MPPM/Multiplayer Roles；授权本次相关测试、进入并退出Play Mode及截图保存工作区，不构建、不保存用户场景、不提交推送。游戏阶段及Luban状态保持。
+- 开放capture editor_element/runtime_element，复用上游选择器、PNG路径与base64契约。2021通过Editor窗口或UIDocument面板像素裁剪，明确captureMode=panel_crop，不宣称独立元素渲染；保留背景、重叠内容和裁剪，不呈现滚动区外内容。6000.7+保留原生路径，旧版不引用PanelRenderer。临时渲染恢复RenderTexture/Camera/矩阵，不修改PanelSettings资产或移动节点。
+- Windows旧版通过250ms后台轮询同Editor进程的模态窗口接入现有DialogStateTracker/busy gate，主线程阻塞时仍可感知。只限时读取标题、Static文本和Button标签，不读取输入框、不自动关闭用户弹窗。source=WindowsNative，level未知，状态使用最近空闲快照；短弹窗、文件选择器、自绘窗口、非Windows平台不保证覆盖，非新版引擎事件等价实现。
+- 发现并修复复用窗口截图路径中的2021材质缺失：不再LoadRequired不存在的资源，缺失时按图形API执行Blit方向处理；明确复用已解析窗口实例，避免同类型窗口误选。新增PanelElementCapture及Assets/Tests/EditorMode/Pipeline测试程序集，meta全部由Unity正常刷新生成，不手写GUID。
+- 精确绑定本项目PID26604，正常刷新触发实际编译并完成，failed=false、errors=[]、compilationFailed=false。首轮7项6过1失败（缺失材质日志），修复后7/7通过，补非对称图案及Play Mode后最终8/8通过，零失败/跳过；包括选择器、DPI/越界坐标、脱离面板、Editor与Runtime PNG尺寸/颜色/方向、状态恢复及真实阻塞弹窗后台观察/清除。仅自动关闭唯一标题的测试弹窗，截图保存在Temp/pipeline-screenshots。
+- 最终Editor ready、compiling=false、domainReloadInProgress=false、Play Mode停止，main.unity仍isDirty=false、rootCount=3，测试对象/窗口已清理。独立Player、其他图形API、高DPI多屏及Unity6分支未实测；工具栏交互仍未专门验收，不扩大为全Pipeline或游戏回归通过。兼容说明、截图及连接文档同步限制。
+
 ### 按逻辑分批提交（2026-11-05）
 
 - 用户授权分批提交并推送当前分支，范围包含Luban配置及相关架构文档，排除美术资源、项目设置、IDE文件、运行记录与构建缓存。

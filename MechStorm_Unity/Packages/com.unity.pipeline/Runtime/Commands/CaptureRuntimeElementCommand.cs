@@ -1,4 +1,3 @@
-#if UNITY_6000_7_OR_NEWER
 using System.Collections.Generic;
 using System.Linq;
 using Unity.Pipeline.Commands;
@@ -114,7 +113,8 @@ namespace Unity.Pipeline.Runtime.Commands
                 });
             }
 
-            // PanelRenderer is a 6000.5+ UI Toolkit API; on older editors only UIDocument panels exist.
+#if UNITY_6000_5_OR_NEWER
+            // On older editors only UIDocument panels exist.
             foreach (var renderer in PipelineUtils.FindObjectsByType<PanelRenderer>())
             {
                 var r = renderer;
@@ -126,10 +126,12 @@ namespace Unity.Pipeline.Runtime.Commands
                     GetRoot = () => GetPanelRendererRoot(r)
                 });
             }
+#endif
 
             return hosts;
         }
 
+#if UNITY_6000_5_OR_NEWER
         // PanelRenderer.rootVisualElement is internal; the public route to its root is a UI-reload
         // callback, which fires synchronously when the panel is already initialized. Register, capture
         // the root, and immediately unregister. PanelRenderer is a 6000.5+ API.
@@ -141,6 +143,6 @@ namespace Unity.Pipeline.Runtime.Commands
             renderer.UnregisterUIReloadCallback(callback);
             return captured;
         }
+#endif
     }
 }
-#endif

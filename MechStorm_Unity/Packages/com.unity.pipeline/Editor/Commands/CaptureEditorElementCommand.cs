@@ -1,4 +1,4 @@
-#if UNITY_6000_7_OR_NEWER
+using System;
 using System.IO;
 using System.Linq;
 using Unity.Pipeline.Commands;
@@ -53,8 +53,35 @@ namespace Unity.Pipeline.Editor.Commands
             var defaultDir = Path.Combine(projectRoot, "Temp", "pipeline-screenshots");
             return VisualElementCaptureSupport.CaptureAndRespond(
                 element, selector, $"window:{window}", output,
-                relativeBaseDir: projectRoot, defaultDir: defaultDir, prefix: "element");
+                relativeBaseDir: projectRoot, defaultDir: defaultDir, prefix: "element"
+#if !UNITY_6000_7_OR_NEWER
+                , capture: (VisualElement e, out int w, out int h) => CaptureWindowElement(target, e, out w, out h)
+#endif
+                );
         }
+
+#if !UNITY_6000_7_OR_NEWER
+        static byte[] CaptureWindowElement(EditorWindow window, VisualElement element, out int width, out int height)
+        {
+            var image = Capture.CaptureCommands.CaptureWindow(window, Resources.FindObjectsOfTypeAll<EditorWindow>(),
+                $"window:{window.titleContent.text}", null, true, 0);
+            var texture = new Texture2D(2, 2, TextureFormat.RGBA32, false);
+            try
+            {
+                if (!texture.LoadImage(Convert.FromBase64String(image.Base64)))
+                    throw new InvalidOperationException("The Editor window capture could not be decoded.");
+
+                var root = window.rootVisualElement;
+                var bounds = root.worldBound;
+                var scale = new Vector2(texture.width / bounds.width, texture.height / bounds.height);
+                return PanelElementCapture.Crop(texture, element, bounds, scale, out width, out height);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(texture);
+            }
+        }
+#endif
 
         /// <summary>
         /// Find an open EditorWindow whose runtime type name or title matches <paramref name="window"/>.
@@ -77,4 +104,3 @@ namespace Unity.Pipeline.Editor.Commands
         }
     }
 }
-#endif

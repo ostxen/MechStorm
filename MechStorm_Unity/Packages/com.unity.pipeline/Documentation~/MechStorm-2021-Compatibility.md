@@ -25,6 +25,9 @@
 - CompilationPipeline使用全限定名，避免与Unity.CompilationPipeline命名空间冲突。
 - 经开发者授权，将Runtime/Plugins/CodeAnalysis下五份DLL meta的PluginImporter v3字典格式转换为v2平台列表格式，兼容2021导入器；保留GUID、宏约束与平台状态，明确保留WindowsStoreApps禁用。DLL内容与解释器代码不变。实际导入前的Bee编译响应缺少这些插件，造成ILOpCode/MetadataReader等连锁缺失。
 - 当前项目未安装Input System，移除无条件程序集引用，不改变项目输入模式。输入注入仍由上游条件编译返回缺少Input System的信息；将来安装该包时须恢复Unity.InputSystem引用。
+- 单元素截图命令已开放：复用上游选择器，Editor通过窗口像素裁剪，Runtime通过UIDocument现有面板绘制后裁剪；返回captureMode=panel_crop，路径与base64契约保留。包含同一区域的面板背景、重叠兄弟节点与裁剪，不是独立子树渲染，不显示滚动区域外内容，不包含其他Runtime面板或最终游戏合成。处理DPI及纹理坐标方向，恢复活动RenderTexture/Camera/矩阵，不改PanelSettings资产或移动元素。Unity6000.7+保留原生element_render，PanelRenderer仅在对应新版编译。
+- 窗口截图不再强制加载2021不存在的BlitSceneViewCapture.mat；资源不存在时用旧版Blit并按图形API处理上下方向。单元素截图复用明确窗口实例，避免同类型多窗口重新解析到别处。
+- Windows旧版弹窗感知通过250ms后台轮询本Editor进程的可见模态窗口，筛选同进程且已禁用的owner，写入现有Dialogs/busy gate，source=WindowsNative；不依赖被阻塞的Editor.update，不自动关闭用户弹窗。只限时读取标题、Static文本和Button标签，不读输入框。文字可能为空，level未知，短弹窗可能漏报；状态来自最近空闲快照，非引擎显示前事件。文件选择器/自绘模态及其他操作系统不保证支持，不能宣称等价EditorDialogEvents。重载/退出停止轮询并清理该观察器登记状态。
 
 ## 安装与验证边界
 
@@ -34,7 +37,9 @@
 - 已用Unity自带Roslyn、本机程序集、项目.NET4.8引用与脚本宏进行五个包程序集离线编译，退出码均0。仅包级检查，未启动Editor、刷新项目、进入Play Mode、构建游戏或运行游戏测试。
 - 初次连接曾不可达；插件导入修复后，开发者确认Console不再报错，CLI已对本项目实际通过pipeline editors、editor status、scene list_open和打开Console菜单。后续Python工作流的项目/PID绑定、预览、用户审批和一次Console执行也通过。此处覆盖首次安装的不可达状态，不代表全部命令验收。新增源码的meta由Unity生成，不手写。
 - 首次导入失败后，使用实际Unity编译响应文件的临时副本，补齐Metadata、Immutable与Unsafe插件引用，IlInterpreter编译退出0；五份meta随后按授权修复并由开发者确认无错误。Cecil1.11.6已在实际UPM缓存与Bee引用中确认。
-- 本轮新增旧版工具栏仅做源码、2021 API文档契约和静态结构检查，未主动刷新、编译或操作Unity。开发者正常刷新后需检查：右侧按钮显示/端口提示，按钮启停与菜单状态双向同步，布局切换和脚本域重载后无重复按钮，现有场景切换/资源模式控件正常。Unity6.3+分支未做实际编译或运行验证。
+- 旧版工具栏最初仅做静态检查，后续已随本项目正常刷新编译，无编译失败；按钮显示/端口提示、启停与菜单同步、布局及重载无重复等真实交互仍未专门验收。Unity6.3+分支未做实际编译或运行验证。
+- 2026-11-05弹窗/单元素截图适配实际编译完成，failed=false、errors=[]、compilationFailed=false。新增Assets/Tests/EditorMode/Pipeline程序集，仅运行该程序集：最终8/8通过，零失败/跳过；覆盖选择器、DPI/越界坐标、脱离面板、Editor/Runtime PNG尺寸和颜色、非对称方向标记、渲染目标恢复、Play Mode捕获，以及真实阻塞模态弹窗的后台观察与关闭后清理。首轮7项中1项因窗口材质缺失失败，修复后通过，再扩展为8项；未屏蔽错误或放宽断言。
+- 测试截图保存在Temp/pipeline-screenshots，测试只自动关闭唯一标题的自有弹窗，临时窗口/对象已清理。最终Editor ready、Play Mode停止，main.unity仍isDirty=false、rootCount=3；未保存场景、构建、安装包或开启Player服务。meta由Unity正常生成。独立Player、其他图形API、高DPI多屏实机及Unity6原生分支仍未验证。
 - 已检查相邻版本分支：预览导入使用旧版instance ID/文件输出，Runtime构建处理器使用IPreprocessBuildWithReport，Profiler保存使用旧版void返回适配，均保留原功能路径；Build Profiles和MPPM场景依赖新版引擎/扩展，不伪造旧版实现。本轮没有逐条验证其他命令。
 - 上游默认在Editor加载时启动本地Pipeline服务，保留回环地址绑定、令牌校验和浏览器来源限制；未开启远程网络访问。
 - 当前项目未设置ENABLE_RUNTIME_PIPELINE或ENABLE_RUNTIME_PIPELINE_DEV，本任务未开启Player服务。上游Runtime相关功能未做Player验证；Editor接入不代表热重载、截图、测试、构建等所有命令已运行验收。

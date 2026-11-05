@@ -248,7 +248,7 @@ namespace Unity.Pipeline.Editor.Commands.Capture
         /// buffer holds the window when it is read, then the tab that was in front is put back.
         /// <paramref name="windows"/> are the open windows, to find that tab.
         /// </summary>
-        private static CaptureResult CaptureWindow(UnityEditor.EditorWindow target, IEnumerable<UnityEditor.EditorWindow> windows,
+        internal static CaptureResult CaptureWindow(UnityEditor.EditorWindow target, IEnumerable<UnityEditor.EditorWindow> windows,
             string source, string savePath, bool includeInlineImage, int maxResolution)
         {
             var previousFront = target.hasFocus ? null : windows.FirstOrDefault(w => w != target && w.hasFocus && SameHost(w, target));
@@ -335,14 +335,14 @@ namespace Unity.Pipeline.Editor.Commands.Capture
             {
                 parent = HostView(window);
                 grab = parent?.GetType().GetMethod("GrabPixels", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public);
-                blit = EditorGUIUtility.LoadRequired("SceneView/BlitSceneViewCapture.mat") as Material;
+                blit = EditorGUIUtility.Load("SceneView/BlitSceneViewCapture.mat") as Material;
             }
             catch
             {
                 // Internal API changed: fall back to the public capture below.
             }
 
-            if (grab == null || blit == null)
+            if (grab == null)
             {
                 // Through reflection too: the public method is newer than the oldest supported Editor.
                 var capture = typeof(UnityEditorInternal.InternalEditorUtility).GetMethod("CaptureEditorWindow",
@@ -354,7 +354,11 @@ namespace Unity.Pipeline.Editor.Commands.Capture
             try
             {
                 grab.Invoke(parent, new object[] { grabbed, new Rect(0, 0, target.width, target.height) });
-                Graphics.Blit(grabbed, target, blit);
+                if (blit != null)
+                    Graphics.Blit(grabbed, target, blit);
+                else
+                    Graphics.Blit(grabbed, target, new Vector2(1, SystemInfo.graphicsUVStartsAtTop ? -1 : 1),
+                        new Vector2(0, SystemInfo.graphicsUVStartsAtTop ? 1 : 0));
                 return true;
             }
             finally

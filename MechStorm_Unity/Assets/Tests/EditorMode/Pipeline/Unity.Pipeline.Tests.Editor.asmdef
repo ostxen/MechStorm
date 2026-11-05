@@ -1,0 +1,7 @@
+{
+    "name": "Unity.Pipeline.Tests.Editor",
+    "references": ["Unity.Pipeline", "Unity.Pipeline.Editor"],
+    "includePlatforms": ["Editor"],
+    "optionalUnityReferences": ["TestAssemblies"],
+    "autoReferenced": false
+}
