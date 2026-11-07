@@ -18,6 +18,7 @@ if errorlevel 1 (
 )
 
 dotnet "%LUBAN_DLL%" -t client -c cs-bin -d bin --conf "%~dp0luban.conf" ^
+    --customTemplateDir "%~dp0CustomTemplate" ^
     -x code.lineEnding=crlf ^
     -x "outputCodeDir=%WORKSPACE%\MechStorm_Unity\Assets\GameScripts\HotFix\GameProto\GameConfig" ^
     -x "outputDataDir=%WORKSPACE%\MechStorm_Unity\Assets\AssetRaw\Configs\bytes"

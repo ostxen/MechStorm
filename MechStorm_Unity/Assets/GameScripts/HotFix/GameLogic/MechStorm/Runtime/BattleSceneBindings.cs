@@ -1,5 +1,4 @@
 using System;
-using MechStorm.Config;
 using UnityEngine;
 
 namespace MechStorm.Runtime
@@ -10,7 +9,6 @@ namespace MechStorm.Runtime
     [DisallowMultipleComponent]
     public sealed class BattleSceneBindings : MonoBehaviour
     {
-        [SerializeField] private BattleScenarioConfig _scenarioConfig;
         [SerializeField] private Transform _plane;
         [SerializeField] private Camera _camera;
         [SerializeField] private Transform _unitParent;
@@ -22,7 +20,6 @@ namespace MechStorm.Runtime
         [SerializeField] private Color _gridFocusColor = new Color(1f, 0.85f, 0.1f);
         [SerializeField] private LayerMask _battleInputLayerMask = Physics.DefaultRaycastLayers;
 
-        public BattleScenarioConfig ScenarioConfig => _scenarioConfig;
         public Transform Plane => _plane;
         public Camera BattleCamera => _camera;
         public Transform UnitParent => _unitParent;
@@ -36,10 +33,10 @@ namespace MechStorm.Runtime
 
         public void Validate()
         {
-            if (_scenarioConfig == null || _plane == null || _camera == null || _unitParent == null)
+            if (_plane == null || _camera == null || _unitParent == null)
             {
                 throw new InvalidOperationException(
-                    "BattleSceneBindings 缺少战斗配置、地面、相机或单位父节点，请先完成场景绑定。");
+                    "BattleSceneBindings 缺少地面、相机或单位父节点，请先完成场景绑定。");
             }
         }
     }

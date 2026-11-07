@@ -1,0 +1,45 @@
+using System;
+using System.IO;
+using Luban;
+
+{{namespace_with_grace_begin __namespace}}
+public partial class {{__name}}
+{
+    private readonly Func<string, ByteBuf> _loader;
+    private bool _failed;
+
+    {{~for table in __tables ~}}
+    private {{table.full_name}} m_{{table.name}};
+    public {{table.full_name}} {{format_property_name __code_style table.name}} =>
+        LoadTable(ref m_{{table.name}}, "{{table.output_data_file}}",
+            buffer => new {{table.full_name}}(buffer), table => table.ResolveRef(this));
+    {{~end~}}
+
+    public {{__name}}(Func<string, ByteBuf> loader)
+    {
+        _loader = loader ?? throw new ArgumentNullException(nameof(loader));
+    }
+
+    private T LoadTable<T>(ref T cached, string name, Func<ByteBuf, T> deserialize, Action<T> resolve) where T : class
+    {
+        if (_failed) throw new InvalidOperationException("配置表加载已失败，当前Tables不可继续使用。");
+        if (cached != null) return cached;
+        try
+        {
+            var buffer = _loader(name);
+            var table = deserialize(buffer);
+            if (buffer.ReaderIndex != buffer.WriterIndex)
+                throw new InvalidDataException($"配置二进制未完整解析：{name}。");
+            // 先登记以支持跨表循环引用；解析失败后整个Tables失效，不发布可继续访问的半成品。
+            cached = table;
+            resolve(table);
+            return table;
+        }
+        catch
+        {
+            _failed = true;
+            throw;
+        }
+    }
+}
+{{namespace_with_grace_end __namespace}}

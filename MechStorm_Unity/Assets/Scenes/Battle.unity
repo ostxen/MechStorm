@@ -232,7 +232,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 0bdee9b8eba25594f9735e5a04a2f9bf, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _scenarioConfig: {fileID: 11400000, guid: 9835cf0430e09f9429cc6dc6f6e5b5ba, type: 2}
   _plane: {fileID: 1900000001}
   _camera: {fileID: 758806041}
   _unitParent: {fileID: 638093063}

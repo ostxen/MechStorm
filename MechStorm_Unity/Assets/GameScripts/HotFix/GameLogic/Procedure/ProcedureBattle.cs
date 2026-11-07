@@ -4,6 +4,7 @@ using Cysharp.Threading.Tasks;
 using MechStorm.Battle.Statistics;
 using MechStorm.Battle.Units;
 using MechStorm.Runtime;
+using MechStorm.Config;
 using TEngine;
 using UnityEngine.SceneManagement;
 
@@ -204,7 +205,8 @@ namespace GameLogic
         private void CreateRuntime(Scene scene)
         {
             var bindings = GetSceneBindings(scene);
-            _runtime = new BattleRuntime(bindings.ScenarioConfig, bindings.Plane, bindings.BattleCamera,
+            var scenario = new LubanBattleScenarioBuilder().Build(ConfigSystem.Instance.Tables, 1);
+            _runtime = new BattleRuntime(scenario, bindings.Plane, bindings.BattleCamera,
                 bindings.UnitParent, bindings.CellSize, bindings.BoardOrigin, bindings.BoardColor);
             _runtime.InitializePresentation(bindings);
         }

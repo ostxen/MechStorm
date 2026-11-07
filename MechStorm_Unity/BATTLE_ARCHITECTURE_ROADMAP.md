@@ -77,7 +77,7 @@ MechStorm 后续战斗系统应保持以下方向：
 | `BattleBoardInputReader` | `Presentation/Input` / `MechStorm.Presentation.Input` | 读取棋盘点击，将命中转换为单位或格子，不判断行动合法性 |
 | `BattleUnitStatusPresenter` | `Presentation/Units` / `MechStorm.Presentation.Units` | 刷新单位头顶耐久/AP 条及其朝向，不管理单位全部表现 |
 | `BattleHUDPresenter` | `UI/Battle` / `GameLogic` | 将 HUD 意图转给交互控制器，将本场状态转换为 HUD 显示 |
-| `BattleScenarioConfig/Builder/Validator` | `Config` / `MechStorm.Config` | 保存初始配置、校验并构建独立逻辑实例，不保存运行中状态 |
+| `LubanBattleScenarioBuilder` / `BattleScenarioBuildResult` | `Config` / `MechStorm.Config` | 将Luban配置校验并转换为独立逻辑实例，不保存或回写运行中状态；旧SO链路已移除 |
 
 `Runtime`、`Config` 和 `UI/Battle` 仍归 `GameLogic` 程序集；`Presentation` 保持独立程序集，不反向依赖 `GameLogic`。命名调整不意味着新增层级、接口或状态机。`PilotRuntime` / `MechRuntime` 等位于 Battle 内的纯逻辑状态也不因 `Runtime` 后缀而依赖客户端容器。
 
@@ -130,7 +130,7 @@ HUD 显示许可由 OnCreate 关闭、进入 Playing 开启、退出 Playing 关
 
 重战由本场生命周期所有者释放旧场并创建全新 Session，不局部重填旧场属性；正常失败读取 Outcome，程序异常不伪装成战败。正常返回是否切回 main 场景在对应任务开工时确认；当前异常返回仅打开 MainUI 的实现事实不变。统计从权威日志构建只读数据，不回写战斗。
 
-最小 Luban 迁移放在可重复闭环之后、地形和新机制扩展之前，只替换当前数据来源。生成代码归 GameProto，二进制由 YooAsset 管理并异步加载、明确资源释放；GameLogic 单向转换为既有 Battle Data，Battle 不依赖 Luban、GameProto 或 Unity。场景引用、材质与镜头调试参数仍为表现配置；不直接采用同步懒加载模板。迁移必须证明初始快照、数值、技能和重战恢复等价，不同时改玩法或预建完整地形/属性/装备/Buff Schema；后续地形规则确定后再扩表。
+最小 Luban 迁移放在可重复闭环之后、地形和新机制扩展之前。生成代码归 GameProto，二进制由 YooAsset 管理并明确资源释放；GameLogic 单向转换为既有 Battle Data，Battle 不依赖 Luban、GameProto 或 Unity。按2026-11-07最新选择，配置使用同步按表懒加载，允许首次访问阻塞主线程，读取TextAsset后立即配对UnloadAsset；此处覆盖原启动异步预加载约束，其他资源IO规范不变。场景引用、材质与镜头调试参数仍为表现配置，不再保留SO战斗数据及旧构建入口。当前流程验收数据与旧SO的移动力、射程、技能等存在已授权差异，不宣称数值等价；具体数据范围与正式验收以DEVELOPMENT_PROGRESS.md为准，完整后置机制不因配置接入而视为实现。
 
 ## 分阶段路线
 

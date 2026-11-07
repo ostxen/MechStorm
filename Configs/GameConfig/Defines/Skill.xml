@@ -36,7 +36,7 @@
     <var name="resource" type="ResourceKind" comment="消耗资源" />
     <var name="amount" type="int#range=[1,)" comment="消耗点数" />
   </bean>
-  <bean name="Condition" abstract="true" comment="条件列表中的各项须同时满足" />
+  <bean name="Condition" comment="条件列表中的各项须同时满足" />
   <bean name="DualSwords" parent="Condition" comment="同时装备两把可用于本次攻击的刀剑" />
   <bean name="EquippedWeaponUsable" parent="Condition" comment="存在可供本次技能选用的已装备武器">
     <var name="weaponKind" type="Weapon.WeaponKind" comment="要求的武器细分类" />
@@ -60,7 +60,7 @@
   <bean name="SelfDurabilityAbove" parent="Condition" comment="自身耐久比例严格高于阈值">
     <var name="rate" type="int#range=[0,10000]" comment="耐久比例阈值，5000表示50%" />
   </bean>
-  <bean name="Effect" abstract="true" comment="发动成功后依次执行的即时效果">
+  <bean name="Effect" comment="发动成功后依次执行的即时效果">
     <var name="target" type="EffectTarget" comment="效果作用对象" />
   </bean>
   <bean name="AttackEffect" parent="Effect" comment="对指定目标执行有序武器攻击">
@@ -79,7 +79,7 @@
     <var name="rate" type="int#range=[-10000,)" comment="伤害修正，1500为提升15%，-1000为降低10%" />
   </bean>
 
-  <bean name="Activation" abstract="true" comment="能力发动规则" />
+  <bean name="Activation" comment="能力发动规则" />
   <bean name="ManualActivation" parent="Activation" comment="玩家手动使用">
     <var name="useConditions" type="list,Condition" comment="使用校验与提交时全部满足" />
     <var name="selection" type="TargetSelection" comment="玩家目标选择规则" />
@@ -120,7 +120,7 @@
     <var name="effects" type="list,Effect" comment="成功发动后依次执行的效果" />
     <var name="ongoingModifiers" type="list,ConditionalDamageModifiers" comment="能力生效期间提供的条件修正" />
   </bean>
-  <bean name="Skill" comment="技能公共信息及结构化玩法定义">
+  <bean name="SkillDefinition" comment="技能公共信息及结构化玩法定义">
     <var name="id" type="int#range=[1,)" comment="技能ID" />
     <var name="name" type="string!" comment="技能名称" />
     <var name="description" type="string!" comment="技能说明" />
@@ -128,7 +128,7 @@
     <var name="category" type="SkillCategory" comment="展示分类" />
     <var name="definition" type="Definition" comment="发动、消耗、限制、即时内容和持续修正的组合定义" />
   </bean>
-  <table name="TbSkill" value="Skill" input="Skill/Skill.xlsx" mode="map" index="id" />
+  <table name="TbSkill" value="SkillDefinition" input="Skill/Skill.xlsx" mode="map" index="id" />
   <bean name="WeaponDefaultSkill" comment="武器类别对应的默认普攻">
     <var name="weaponKind" type="Weapon.WeaponKind" comment="提供默认普攻的武器类别" />
     <var name="skillId" type="int#ref=Skill.TbSkill" comment="该类武器默认提供的普攻技能ID" />

@@ -46,16 +46,11 @@ namespace MechStorm.Runtime
         public BattleUnitStatusPresenter UnitStatusPresenter { get; private set; }
         public BattleInteractionController InteractionController { get; private set; }
 
-        public BattleRuntime(BattleScenarioConfig config, Transform plane, Camera battleCamera,
+        public BattleRuntime(BattleScenarioBuildResult scenario, Transform plane, Camera battleCamera,
             Transform unitParent, float cellSize, Vector3 boardOrigin, Color boardColor)
         {
             var renderer = ValidateSceneBindings(plane, battleCamera, unitParent, cellSize, boardOrigin);
-            var builder = new BattleScenarioBuilder();
-            if (!builder.TryBuild(config, out var scenario, out var validation))
-            {
-                throw new ArgumentException($"Battle scenario is invalid:{Environment.NewLine}{validation.ErrorMessage}", nameof(config));
-            }
-
+            if (scenario == null) throw new ArgumentNullException(nameof(scenario));
             _plane = plane;
             _planeRenderer = renderer;
             _originalPlanePosition = plane.position;
@@ -67,7 +62,7 @@ namespace MechStorm.Runtime
             BattleCamera = battleCamera;
             try
             {
-                CreateSceneObjects(unitParent, config.BoardWidth, config.BoardHeight, cellSize, boardOrigin, boardColor);
+                CreateSceneObjects(unitParent, Session.Grid.Width, Session.Grid.Height, cellSize, boardOrigin, boardColor);
                 CreateUnitViews(scenario.Units, cellSize);
                 UnitStatusPresenter = new BattleUnitStatusPresenter(_healthBarAnchors, BattleCamera);
             }

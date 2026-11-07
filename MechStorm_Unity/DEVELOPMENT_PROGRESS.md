@@ -3,9 +3,86 @@
 ## 当前阶段
 
 - 当前里程碑：P1.5 / Sprint T1（进行中）；Sprint 4 已完成并验收
-- 当前任务：T1.12 最小 Luban 配置迁移，先执行 T1.12.1 数据工程
-- 当前状态：feature/t1-luban-config 上已建立14张逻辑表、14份工作簿，共26条数据。Battle收敛为Scenario/Deployment/UnitSkill，部署引用新Pilot和MechLoadout；机兵域五表含武器挂载关联，Skill共十条（含三条武器普攻）。保留15×15关卡、三条机型、四个型号、五条驾驶等级和三条默认普攻映射；架构员、部件、装配、武器和出战关联留空。Luban工具已由开发者构建，首次导表与运行库兼容性尚未验证；当前战斗仍读取SO，T1.11完整回归仍未完成
-- 最后更新：2026-11-05
+- 当前任务：T1.12 最小 Luban 运行接入与流程验收已通过；配置加载已切换为TE模板式同步按表懒加载，下一步为T1.8/T1.13镜头任务（另行确认交互规则）
+- 当前状态：feature/t1-luban-config 上14张逻辑表、14份工作簿、71条数据，生成78份C#及14份bytes。正式ProcedureBattle已使用Luban Scenario 1装配独立对局，不再读取SO。新增45条明确标注的流程验收数据，不视为正式策划数值；仅桥接当前原型规则，完整四部位、属性公式、双武器、被动及PP等后置。实际胜利、失败、统计、返回、再进入、重战和撤退闭环通过；T1.11完整交互回归仍未完成。配置Tables构造不再启动时全表预加载，首次访问`TbXxx`时同步读取单表，依赖表按ResolveRef继续懒加载；首次阻塞和错误延迟到访问点是本次明确选择。
+- 最后更新：2026-11-07
+
+### Luban变更本地提交整理（2026-11-07）
+
+- 用户要求提交当前Luban相关代码及对应文档，仅本地提交、不推送。范围包含Schema兼容修正、流程验收工作簿、自定义懒加载模板、生成C#/bytes及meta、ConfigSystem、战斗装配、旧SO清理、专项测试和场景旧引用清理，连同配置README、架构、配置规范及本进度文档。
+- 排除IDE、美术/字体/图集、生成器设置、Packages/ProjectSettings和临时验证缓存，原3份.idea暂存保持。提交前XML/工作簿包内XML/asmdef结构及78份生成C#/14份bytes配对检查通过。
+- 沿用最近合并ConfigSystem后的Unity编译结果；310项测试及短暂Play属于合并前清理阶段的已记录证据，本次提交整理不重跑测试/Play、不改变玩法或配置数据。
+- 本批原始差异247个路径（含生成产物和meta）；暂存范围已核对，手写代码/文档无空白错误。全量diff-check报告的524处空白提示均来自Luban生成代码及Unity meta，按生成产物维护约束保留，不手工重写生成文件。
+
+### ConfigSystem加载逻辑合并（2026-11-07）
+
+- 按用户要求将ConfigTableLoader.Create合并为ConfigSystem.CreateTables，删除独立ConfigTableLoader脚本及配对meta；ConfigSystem统一负责Tables创建、字节校验及TE资源读取/释放。同步按表懒加载、失败语义与finally配对UnloadAsset保持不变，不增加释放状态防御。
+- 专项测试调用迁至ConfigSystem.CreateTables，并通过Unity AssetDatabase将测试文件配对重命名为ConfigSystemTests.cs，原GUID保持。Assets中ConfigTableLoader引用已无残留；不改数据、生成模板、场景或玩法。
+- Unity已自动刷新编译，codeLoadCount由16增至17；显式recompile及最终status为up_to_date、failed=false、errors=[]、compilationFailed=false，Editor ready、Play Mode stopped、无编译/域重载。本轮未运行测试或Play Mode，上一轮310项通过不是本轮重跑结果。未提交推送，其他用户改动保持。
+
+### 旧SO战斗配置清理（2026-11-07，通过）
+
+- 用户确认移除旧SO链路并授权编译、相关EditMode及短暂进出战斗验证。通过Unity AssetDatabase删除BattleScenarioConfig.asset、4份SO生产源码（Config/Builder/Validator/ValidationResult）和4份旧测试源码，资源及meta配对删除，未手改meta/GUID。Runtime移除SO重载和BuildLegacyScenario，Bindings移除旧字段与属性；BattleScenarioBuildResult继续服务Luban与Runtime，纯Battle未改。
+- 通过Editor仅保存Battle/Test场景清除旧序列化字段；Battle仅该字段删除，Test额外有Editor字段顺序整理及4行空白规范化，无其他值变化。Assets全量旧类型、字段及SO GUID搜索无残留。覆盖此前“保留SO供历史/测试”的决定，不保留兼容或回退链路；历史验收事实不改写。
+- 将完整对局结束后重新构建的回归迁至Luban测试，真实规则执行移动、普攻、技能并在第3回合TeamA获胜，再从同一Tables构建全满、初始站位、第1回合、空日志的新Session；加强全单位Data/Runtime/技能对象隔离断言。移除14个SO专项用例、增加1个Luban闭环用例，总数由323变310，不削减纯Battle用例。
+- Unity自动刷新完成新源码编译，新测试实际可发现；随后显式recompile与status均up_to_date、failed=false、errors=[]、compilationFailed=false，不冒称该请求强制重编。实际MechStorm EditMode completed，310/310逐项Passed，0失败/跳过/不确定，3.21秒（Battle232、Presentation55、Config23）；8项Pipeline不属本轮。
+- 本项目PID11936实际Play：启动ConfigSystem._tables为空；真实开始/出战按钮进入Preparation后Tables创建、4单位/4部署、配置资源SpawnCount非零项0；准备菜单撤退回ProcedureMain，BattleCombatUnits根0。正常退出后ready、Play Mode stopped、无编译/域重载、codeLoadCount15，main.unity isDirty=false/rootCount3。Console同session cursor1126→1182无Error/Exception、无丢弃/重置，保留33条既有字体/I2等Warn。不将EditMode完整对局视为真实UI胜负闭环重跑，不覆盖Player/物理鼠标/镜头/T1.11全回归。
+- 配置README和架构职责表同步当前唯一Luban链路及懒加载决策；未改配置数据/生成产物、玩法、用户其他资源/设置、外部已修改的ConfigSystem，未提交推送，原3份.idea暂存保持。
+
+### ConfigSystem防御精简（2026-11-07）
+
+- 按用户要求删除`_released`、`ThrowIfReleased`及重复释放状态检查，`Tables`恢复简单懒加载属性。信任GameApp先停止业务、Singleton基类释放并清除静态实例的生命周期契约，不为违约持有旧引用增加守卫。
+- 保留资源加载失败检查及`finally`配对`UnloadAsset`；同步按表加载、缓存和生成Tables的失败语义不变，不改数据、玩法或场景。
+- 本轮实际Unity编译completed、failed=false、errors=[]、compilationFailed=false；Editor最终ready、Play Mode stopped、无编译/域重载，codeLoadCount=12。本轮未运行测试或Play Mode，不沿用上一任务授权；无提交推送，原暂存保持。
+- 补记上一轮懒加载已完成的验证：323/323 MechStorm EditMode Passed，0失败/跳过/不确定；真实Play验证启动时`_tables`为空、进入战斗后创建Tables并装配4单位、配置资源SpawnCount为0，正常退出且main.unity未脏，Console cursor853→1121无新增Error/Exception。单表加载粒度由专项测试覆盖，未在懒加载版本重跑胜负全闭环；此为上一轮证据，不代表本轮重新执行。
+
+### T1.12 Luban战斗运行接入（2026-11-07，流程验收通过）
+
+- 用户要求继续把Luban加载到战斗并跑完验收，明确允许本任务全部资源读写，并允许数据缺失/不正确时自主处理以优先跑通。此授权覆盖此前“不补占位数据、保留SO正式入口”的本轮限制；不代表授权安装更新、提交推送或扩展完整新机制。
+- 在既有工作簿追加45条流程验收数据，当前14表71行：4部署、4机师、16部件、4装配、4武器挂载、4武器、4技能池关联、4携带关联和1技能；验收实体ID9001～9004，部件90010段，技能9001“验收强击”。原10条复杂/普攻技能保留，复杂技能不配入本场。名称/说明标注流程验收，不伪装为正式角色数值。标准gen_code_bin_to_project.bat导出退出0，通过Luban范围/枚举/外键校验，仅9份bytes数据变化，生成C#和Schema结构未改。
+- GameLogic新增LubanBattleScenarioBuilder，按Scenario和spawnOrder转换为纯Battle的独立Session、单位和AbilityDefinition。校验2v2、单位ID/顺序/站位、部件位置/机型、驾驶资格、挂载与武器许可、技能池和栏位等；不支持的技能组合、次数/持续修正、PP、非满AP恢复、环形范围、有限弹药、连击、命中/暴击/重量、非零部件火力/闪避等显式拒绝。缺失必需引用直接失败，不发布半成品，不回退SO或伪装成功。
+- BattleRuntime新增已构建对局入口，保留SO构造供原测试；ProcedureBattle正式使用ConfigSystem已预加载的Tables构建Scenario 1。Battle仍不引用Luban/GameProto/Unity。BattleSceneBindings仅校验表现引用，不再要求SO；旧SO字段/资源/场景引用保留用于历史对照，未手改场景YAML或meta/GUID。
+- 本轮不是旧SO数值等价迁移：保留15×15、4台站位、耐久200/150/200/300、AP9/10/8/9；移动按已有机型为4/3/3/4（旧5/4/5/5），普攻100/100/500/500但统一菱形1～3、消耗1AP；每台仅“验收强击”3AP、1.5倍唯一武器伤害。当前以躯干耐久投影整机，其他部位只校验装配而不独立结算；机师六属性、驾驶等级倍率、品质/大类等未接入公式。分类Tag仅校验可映射形态，不表示已经实现Duel反击/触发链或飞行系统。技能/武器射程必须相同，避免现有TargetFirst武器射程语义造成误投影。正式策划数据和完整组合执行仍由后续Sprint承担。
+- 实际Unity编译通过；首轮新增测试因Vector2Int歧义和IReadOnlyList写API误用失败，修正别名/测试集合转换后completed、failed=false、errors=[]、compilationFailed=false。首次317项MechStorm EditMode全部Passed（Battle232/Presentation69/Config16），0失败/跳过/不确定，4.04秒。随后补齐站位/缺引用/真实规则扣耐久AP隔离测试，最终结果见本节后续验证记录；Pipeline8不属本轮，不将发现数当作执行数。
+- 本项目PID11936真实Play Mode：StartUI开始→MainUI出战→Preparation正确显示“流程验收”四机师，读到Luban移动力/攻击/资源值；准备确认后经目标与阵营提示进入Playing。移动/选敌走现有Controller点击入口，普攻、验收强击、待机与导航均走真实按钮事件，不直接改耐久/AP/胜负；敌方由脚本操作，不代表AI或物理鼠标/遮挡/焦点验收。
+- 最终补充4项坏站位（边界/重叠）、缺机师引用、经真实规则扣耐久/AP后重建隔离测试，实际321/321通过，逐项Passed、0失败/跳过/不确定、4.19秒（Battle232、Presentation69、Config20）。本地结果Temp/pipeline_test_status.json；补测前编译completed/failed=false/errors=[]/compilationFailed=false。生产代码未因补测试再变化，无需重复Play Mode闭环。
+- 收尾再次核对Editor ready、Play Mode stopped、无编译/域重载、codeLoadCount=8；main.unity仍isDirty=false/rootCount=3，追加Console至cursor853无Error/Exception、无丢弃/重置。限定差异git diff --check退出0；纯Battle中无GameConfig/Luban/UnityEngine引用，新增meta均由Editor生成；原暂存仍仅3份.idea。正式进度及配置README已同步，当前任务工作台重置。
+- 随后按用户选择切换为TE模板式同步按表懒加载：新增GameConfig自定义`tables.sbn`并让标准导表脚本传入`--customTemplateDir`；删除启动阶段`InitializeAsync`门控，`ConfigSystem.Tables`首次访问时创建懒加载Tables，单表访问通过`GameModule.Resource.LoadAsset<TextAsset>`同步读取并立即`UnloadAsset`。生成Tables在单表解析/ResolveRef失败后整体失效，防止半成品继续使用。此处覆盖此前本节和T1.12.2中“启动异步预加载全部表”的加载策略描述，旧Play Mode数据仍是切换前的历史验收；懒加载专项已完成，结果见上方补记。
+- 胜利局第3回合TeamA胜，HP200/150/0/0、AP6/7/8/9，18条行动日志。统计真实显示艾达300伤害/0杀、洛莎200伤害/2杀，敌方承伤200+300；普攻对剩余50耐久的过量部分未计入，合计实际伤害500。统计返回结果，再点胜利背景回Main，再次出战为全满、第1回合、空日志的新Runtime。
+- 失败局第1回合敌方两次合法普攻击破我方，显示“作战失败”，敌方AP7/8；失败页再战创建独立Runtime/Session，满耐久/AP、第1回合、空日志且单位根仅1个。准备页菜单撤退回Main后单位根0。配置Tables重复初始化对象相同，最终配置缓存项已自然回收为0，无在用引用；旧检查脚本错误要求必须始终保留14缓存项，调整为只读核对后确认不是资源泄漏。临时统计脚本一次ReferenceEquals未限定编译失败后修正，均未重放已执行动作。
+- Play Mode已正常退出；Editor ready、compiling=false、domainReloadInProgress=false、codeLoadCount=7、compilationFailed=false；main.unity恢复isDirty=false/rootCount=3。相同Console session cursor522→851无丢弃/重置，49条Log、280条既有字体/I2等Warn，0新增Error/Exception。不宣称历史Console零错误，未覆盖Player/真机、完整新机制、物理鼠标射线/镜头或长循环异常注入；HUD原有占位和禁用指令保持，T1.11不标完成。未保存用户场景/设置、安装更新、提交推送，三份.idea暂存和无关用户改动保持。
+
+### T1.12.2 异步配置加载（2026-11-07，通过；保留SO战斗）
+
+- 用户进一步确认采用启动阶段显式预加载：异步读取全部配置并完成解析后才进入业务，业务同步查询内存中的Tables，不在属性访问时加载。当前不以微信小游戏5秒首屏为目标，不采用先进入场景、实际需要时才加载配置的按需方案；未来出现该目标时另行评估分组预加载/按需加载，不将同步属性懒加载等同于非阻塞首屏优化。现有实现符合此决定，无需改代码或重复运行验证。
+- 用户选择先实现异步配置加载、保留SO，并批准本轮专项测试及短暂Play Mode验证。本轮不填缺失数据、不导表、不改变玩法或替换SO、不构建、安装更新、保存场景/设置、提交推送；不沿用此前单次运行授权扩大范围。
+- 新增GameLogic/Config/ConfigTableLoader和ConfigSystem。先通过GameModule.Resource.LoadAssetAsync<TextAsset>逐份异步读取14份bytes，复制字节后finally配对UnloadAsset，再由生成Tables从内存反序列化/ResolveRef；检查缺失、空数据与尾部未消费字节，完成前不发布Tables。GameProto生成代码与Battle边界保持，不引入同步IO/同步懒加载或反射发现表。
+- GameApp入口等待初始化成功后才RestartProcedure进入业务流程；失败原样传播至Forget，不回退、重试或自动返回。配置由既有SingletonSystem管理，释放时取消在途加载并清除Tables；缓存分支可能忽略取消，读取完成后检查取消且释放成功取得的资源，阻止迟到结果发布。重复初始化复用现有Tables，并发初始化显式拒绝。原SO战斗路径保持。
+- 新增MechStorm.Config.Tests程序集及8项EditMode测试，实际全部通过（0失败/跳过/不确定，1.18秒）：14表读取与引用解析、等待异步读取、缺失/截断/尾部损坏数据、预取消、取消后迟到读取以及重复加载对象独立。初次编译因全局SourceGenerator需TEngine.Runtime引用失败，补齐后测试代码SetResult误用改为TrySetResult；最终实际编译completed、failed=false、errors=[]、compilationFailed=false。所有meta均由Editor正常生成。
+- 本项目PID11936实际Play Mode验证：配置加载成功后处于ProcedureLogin；14表、10技能、15×15关卡、0出战关联，重复初始化对象相同。通过真实开始/出战按钮进入Preparation，SO仍构建4单位；实际验证释放后Tables不可访问、并发初始化拒绝、缓存加载中释放后取消且不发布、重新初始化成功。两次检查14份配置资源SpawnCount全部0（仅归还使用计数，不声称框架缓存立即物理卸载）。临时验证脚本一次内部类型引用编译失败、一次MainUI尚未就绪失败，调整只读反射与等待后通过，未改游戏状态或设置。
+- 正常退出后Editor ready、compiling=false、domainReloadInProgress=false、Play Mode stopped、codeLoadCount=5；main.unity isDirty=false/rootCount=3。运行增量日志同session cursor470→513无丢弃/重置，无Error/Exception；I2 CSV、字体Underline缺失等既有警告保留。未重跑昨日301项全套，仅执行本轮8项专项；未覆盖独立Player/真机、真实缺失资源注入或启动中断全流程，缺失/损坏与迟到取消由专项测试覆盖，取消释放另有真实资源路径验证。
+- T1.12.2加载范围通过不等于可装配战斗数据就绪。T1.12.1仍缺正式数据，T1.12.3/.4及T1.11完整回归保持未完成。配置README同步，规范同步模板冲突记录于.claude/memory/problem_2026-11-07.md。
+
+### 现有SO战斗闭环实际运行（2026-11-06，自动化范围通过）
+
+- 用户要求由AI运行整个流程，并明确批准本次直接CLI、临时界面读取/真实按钮事件脚本，以及现有Controller棋盘点击入口调用；不扩大通用白名单，不直接修改血量/AP/胜负，不保存场景或设置、不构建、安装更新、提交或推送。全程绑定本项目PID11936，不操作另一项目。
+- 在真实Play Mode中通过StartUI开始按钮、MainUI出战按钮进入固定2人准备，显示艾达/洛莎与“全灭敌方单位”；确认后实际经过Starting、Playing和阵营TurnTransition，最终进入Result。棋盘移动/选敌调用既有点击处理入口，取消、技能选择、攻击确认与待机均触发真实Button事件。敌方同样由验证脚本操作，不代表自动AI验收；不等于物理鼠标射线、UI遮挡、焦点或动画视觉验收。
+- 首场第3回合TeamA胜利，最终四台耐久200/150/0/0，AP5/6/8/9，17条行动日志（含验证时的规则拒绝记录）；镜心、虚无、苍穹斩、复仇均经原规则结算。统计四行显示艾达250伤害/0击杀、洛莎250伤害/2击杀、索妮亚承伤200、曜承伤300，实际伤害合计500，过量伤害未计入；统计返回结果页，再点击胜利背景回MainUI。
+- 从MainUI再次进入，准备阶段断言第1回合、空日志、全员满耐久通过。第二场以合法移动及敌方普通攻击真实击败我方，第1回合显示“作战失败”；阵营提示实际读取到“敌方回合/01”。失败页“再战”重建独立Runtime，断言第1回合、空日志、全员满耐久且仅1个BattleCombatUnits根通过；准备页Esc打开菜单，菜单撤退回MainUI后该根数量为0。返回仍仅切ProcedureMain打开MainUI，不新增物理main场景回切。
+- EditMode实际发现309项，按MechStorm名称筛选执行301项：Battle232项、Presentation69项，全部Passed，failed/skipped/inconclusive均0，耗时2.97秒；逐项终态核对，无零用例或全跳过。8项Pipeline测试不属本轮范围。覆盖Session、移动/攻击/技能/胜负、回合、统计、快照、SO构建与隔离、选择状态机及表现组件，不将纯逻辑测试替代真实界面验收。结果见本地忽略文件Temp/pipeline_test_status.json。
+- 增量Console按同一session从cursor118读取至463，无丢弃/重置、无游戏业务Error或Exception。唯一新增Error来自AI误写未注册命令editor playmode stop，未执行退出；更正为editor.playmode stop后正常退出。临时脚本曾有编译、玩法路线和断言错误（攻击自动结束行动/额外日志、切阶段时序、私有结果随后被重置、Esc实际打开菜单），均先检查实际状态再续走，未重复已完成行动，也未改游戏代码。保留全部日志，不宣称Console零错误。
+- 现存警告包括I2内置CSV缺失、EditorSimulateMode/热更入口标记，以及重复的SourceHanSansSC-Regular SDF-Static缺Underline字符；未在验证任务中擅自修复。HUD仍显示“战斗目标：待接入”“回合 — / 阵营 —”，部位耐久10000、等级70与交战预览仍为占位；菜单/结束阵营/回溯/威胁/倍速/自动等仍禁用。长时间循环、加载取消/异常注入、镜头及物理鼠标交互未验收，T1.11完整回归不标完成。
+- 最终Editor ready、compiling=false、domainReloadInProgress=false、Play Mode stopped、compilationFailed=false；恢复Assets/Scenes/main.unity，isDirty=false、rootCount=3。仅新增Temp中的临时验证脚本和本条运行记录，不修改游戏逻辑/资源/设置或原3份.idea暂存。战斗仍读SO，本轮不代表Luban运行接入，T1.12.1完整数据与T1.12.2～.4状态保持。
+
+### T1.12.1 首次导表与兼容性验证（2026-11-06，通过；完整出战数据待补）
+
+- 用户授权继续主线，并明确选择导表、编译和配置读回校验；不补占位数据、不运行游戏或Play Mode、不构建或安装更新、不提交推送。使用开发者已构建的Luban提交029f714f935ba58d7e33530da87e6371ee3c519f与本机.NET8运行时，不更新工具。
+- 首次导表因Schema的abstract属性不受支持退出1。核对工具源码确认有子类的父Bean自动视为抽象类型，移除Attack.WeaponUse及Skill.Condition/Effect/Activation的4处abstract属性，继承、多态和玩法内容保持；技能文档冲突记入.claude/memory/problem_2026-11-06.md。
+- 随后导出成功，但离线编译发现模块与同名行Bean遮蔽导致CS0426。经用户明确批准，将4个行Bean改为SkillDefinition/MechDefinition/PilotDefinition/WeaponDefinition；模块、Tb表名、字段、ID、Excel和输出目录不变。仅修改Schema并由工具重生成，未手改生成代码或LubanLib。4个本轮生成的旧源码与Editor已生成的meta配对重命名，meta内容/GUID保持，不手写meta。
+- 最终标准脚本完成Schema、14份工作簿读取、内置校验和cs-bin/bin输出，退出0；共78份C#、14份bytes。使用本机Roslyn、C#9和.NET10引用编译生成代码及项目原有4份LubanLib，退出0，无需更换运行库。
+- 通过Temp/luban-validation/Readback.cs执行离线读回，121条断言通过，退出0：14表/26行、全缓冲消费、10个跨Sheet技能ID、枚举列表、空表/空列表、多态、关键费用/倍率/Tag、8方向各3格模板、固定Body，以及现有非空外键对象引用。此校验不等于战斗效果执行、YooAsset加载或空表未来数据的装配合法性验收。
+- 初次doctor因服务不可达退出1；随后只读发现本项目PID11936已恢复可达，预检ready、Play Mode stopped。仅发送一次script recompile，返回compiling；最终recompile_status返回completed、failed=false、errors=[]、compilationFailed=false。Editor最终ready、compiling=false、domainReloadInProgress=false、Play Mode stopped，codeLoadCount由1增至2；未启动/关闭Editor。
+- README与正式状态同步。完整出战关联仍为空，新模型与原型规则仍有差异，T1.12.1不能标为全部完成；下一步先确认正式出战数据及迁移验收边界，再推进异步加载和装配替换。原有资源/设置/IDE改动及3份.idea暂存保持。
 
 ### Pipeline弹窗感知与单元素截图（2026-11-05）
 
@@ -1075,10 +1152,10 @@
     12. **Task T1.12 最小 Luban 战斗配置迁移**
        - 2026-10-19 当前 SO 入口已正式命名为 `MechStorm.Config.BattleScenarioConfig`，仍是同一聚合数据格式；去 Temp 命名不等于 Luban 数据迁移，以下任务继续保留。
        - 2026-10-10 用户授权提前迁移；2026-10-22 重排后改为 T1.10 结果/重战/统计闭环之后、T1.8/T1.13 镜头与 T1.11 完整回归之前。覆盖旧“T1.4 前迁移”顺序；保留 T1.1～T1.12 编号，迁移后各流程使用同一份正式配置数据。
-       - [ ] **T1.12.1 最小数据工程**：定位/建立项目 Luban 配置工程，只覆盖当前关卡、初始单位阵营/站位、驾驶员、机兵、普攻与技能定义；沿用现有数值，不新增属性、装备、Buff 或养成规则。验收：ID 与引用关系明确，原始四台单位和技能均可表达。2026-10-27七表工程已静态完成，待确认工具版本与首次导表兼容性，不以静态检查代替最终验收。
-       - [ ] **T1.12.2 配置加载**：生成代码归 GameProto、二进制数据由 YooAsset 管理；业务入口异步加载且配对释放资源，配置不可用时阻止战斗初始化并明确报错。生成/导表操作先与开发者确认，不自动运行。
-       - [ ] **T1.12.3 装配替换**：在 GameLogic 侧将 Luban 行转换为现有 Battle Data，再创建独立 Runtime；Battle 不引用 Luban、Unity 或 GameProto。场景对象引用、材质与镜头调试参数留在表现层。
-       - [ ] **T1.12.4 等价与隔离验收**：迁移前后的棋盘、站位、属性、技能与初始快照一致；运行时扣耐久/AP不污染配置，重战恢复初值；缺失引用、非法站位/数值不能留下半成品。等价验收后才退役正式路径中的临时配置，保留仍被测试使用的夹具。
+       - [x] **T1.12.1 最小数据工程**：2026-11-07依最新授权补齐明确标注的流程验收数据，14表71行可装配2v2，标准导表通过；正式策划数值与复杂机制并未验收，原26行/121断言为历史工具链验证。
+       - [x] **T1.12.2 配置加载**：2026-11-07实现并验证14表异步读取、配对释放、完整解析后发布及业务启动门控；8项加载专项与实际YooAsset路径通过。生成代码归GameProto，加载器归GameLogic；后续本轮已按授权接入Luban装配，SO仅保留历史/测试入口。未来导表仍按具体任务授权执行，不将本次资源读写许可扩大为通用授权。
+       - [x] **T1.12.3 装配替换**：2026-11-07正式Procedure改用LubanBattleScenarioBuilder→独立BattleScenarioBuildResult→Runtime，SO只保留历史/测试入口；纯Battle和场景表现边界保持。
+       - [x] **T1.12.4 差异与隔离验收（本轮范围）**：最新用户授权优先跑通，覆盖旧SO全数值/技能等价要求，改为明确记录机型移动/普攻射程/AP及验收技能差异；真实胜负、统计、返回再入、全新重战与资源归还通过，自动化覆盖坏配置拒绝及扣耐久/AP不污染配置。不表示四部位/属性/复杂技能的正式玩法等价或T1.11完整回归通过。
        - 此任务仅提前建立现有数据的最小闭环；Sprint 11 的完整配表与实体装配范围不变，不把整个长期配置系统提前搬入 T1。
     13. **Task T1.13 战斗镜头拖拽、缩放与输入整合（2026-10-22 新增，待实现）**
        - [ ] **T1.13.1 拖拽平移**：在 T1.8 八档镜头基础上沿棋盘平面移动视野，配置焦点边界并保证边缘行动者可居中；开工确认拖拽键位/阈值。若用左键，先区分点击/拖拽再提交棋盘输入，不能按下就执行动作、拖完再撤销。
@@ -1241,7 +1318,7 @@
 ## 下一步
 
 1. T1.10.1 结果页、T1.10.2 撤退/重开及 T1.10.3 统计细项均由开发者运行确认通过，本轮 UI、菜单与异常行为反馈已收口；T1.11 完整回归仍未完成。HUD 尚未实现的缺项另明确范围；当前返回只打开 MainUI，未新增 main 物理场景回切。
-2. T1.12.1七表数据工程已静态完成；先确认Luban工具版本与首次导表授权，再推进异步加载、装配来源替换与等价/隔离验收，不改变现有数值或规则。
+2. T1.12已完成当前原型的Luban运行接入与流程验收，详见顶部2026-11-07记录；当前ID9001段是流程验收数据，不作为正式策划平衡值。完整四部位、属性、武器、AP/PP与复杂技能组合按后续Sprint逐步替换最小投影，不在镜头任务中顺带扩展。
 3. 执行 T1.8 八档镜头（每档45°、配置俯角、行动者居中），再执行 T1.13 拖拽平移、限幅缩放及输入整合；开工确认键位与角色移动后的跟随规则。
 4. 补齐 T1.4/T1.7/T1.9 的实际缺口，按开发者明确授权完成 T1.11 全流程回归；旧临时 HUD 已静态退役，不重复清理，也不把历史待验收项自动标记通过。
 5. T1 验收后进入 Sprint 5 地形 Cost、Dijkstra、A* 与调试可视化，仍保持瞬移；后续机制按 Sprint 推进，角色拖拽部署仍留 Sprint 9。

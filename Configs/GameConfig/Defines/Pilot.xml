@@ -5,7 +5,7 @@
     <var name="name" type="string!" comment="驾驶等级显示名" />
     <var name="performanceRate" type="int#range=[0,)" comment="作战能力倍率，10000表示100%，14000表示140%" />
   </bean>
-  <bean name="Pilot" comment="架构员基础定义">
+  <bean name="PilotDefinition" comment="架构员基础定义">
     <var name="id" type="int#range=[1,)" comment="架构员配置ID" />
     <var name="name" type="string!" comment="架构员名称" />
     <var name="allowedMechClassIds" type="(list#sep=,),int#ref=Mech.TbMechClass" comment="默认可驾驶机型ID，英文逗号分隔" />
@@ -30,5 +30,5 @@
   </bean>
   <table name="TbPilotSkill" value="PilotSkill" input="Pilot/PilotSkill.xlsx" mode="list" index="pilotId+skillId" />
   <table name="TbDrivingRank" value="DrivingRank" input="Pilot/DrivingRank.xlsx" mode="map" index="id" />
-  <table name="TbPilot" value="Pilot" input="Pilot/Pilot.xlsx" mode="map" index="id" />
+  <table name="TbPilot" value="PilotDefinition" input="Pilot/Pilot.xlsx" mode="map" index="id" />
 </module>

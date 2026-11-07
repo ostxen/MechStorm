@@ -19,7 +19,7 @@
     <var name="baseMoveRange" type="int#range=[0,)" comment="基础移动力" />
     <var name="weaponMounts" type="(list#sep=,),WeaponMount" comment="默认开放挂载点，英文逗号分隔且唯一" />
   </bean>
-  <bean name="Mech" comment="机兵型号定义">
+  <bean name="MechDefinition" comment="机兵型号定义">
     <var name="id" type="int#range=[1,)" comment="型号ID" />
     <var name="name" type="string!" comment="型号名称" />
     <var name="classId" type="int#ref=Mech.TbMechClass" comment="基础机型ID" />
@@ -50,7 +50,7 @@
 
   <table name="TbMechLoadoutWeapon" value="MechLoadoutWeapon" input="Mech/MechLoadoutWeapon.xlsx" mode="list" index="loadoutId+weaponMount" />
   <table name="TbMechClass" value="MechClass" input="Mech/MechClass.xlsx" mode="map" index="id" />
-  <table name="TbMech" value="Mech" input="Mech/Mech.xlsx" mode="map" index="id" />
+  <table name="TbMech" value="MechDefinition" input="Mech/Mech.xlsx" mode="map" index="id" />
   <table name="TbMechPart" value="MechPart" input="Mech/MechPart.xlsx" mode="map" index="id" />
   <table name="TbMechLoadout" value="MechLoadout" input="Mech/MechLoadout.xlsx" mode="map" index="id" />
 </module>

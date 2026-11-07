@@ -1,6 +1,38 @@
 # MechStorm 战斗配置工程
 
-本工程属于 T1.12.1，配置域已按关卡出战、架构员、机兵装配、武器和技能分工。当前只更新结构，出战单位与装配关联留空。尚未运行 Luban，未生成 C# 或二进制，现有战斗仍读取 `BattleScenarioConfig.asset`。
+本工程属于 T1.12，配置域已按关卡出战、架构员、机兵装配、武器和技能分工。2026-11-07已完成Luban战斗装配与真实胜负/统计/重战/返回验收，正式ProcedureBattle不再读取 `BattleScenarioConfig.asset`。当前14表71行，生成78份C#及14份bytes；新增45条明确标注的流程验收数据，不是正式策划数值。当前配置运行时采用TE模板式同步按表懒加载：首次访问某个`Tables.TbXxx`时读取对应bytes，外键解析按依赖继续加载并缓存；完整新机制和正式平衡数据仍待后续Sprint。
+
+## 配置加载策略（2026-11-07）
+
+- `GameConfig.Tables`使用`CustomTemplate/cs-bin/tables.sbn`生成。构造`Tables`本身不读取任何表；首次访问某个表属性才同步读取对应二进制，允许首次访问阻塞主线程，之后复用缓存对象。
+- 表的`ResolveRef`在该表首次加载时执行。引用的其他表会按需递归加载，因此“按表懒加载”不是“完全没有依赖加载”；一次业务访问可能带出它的外键依赖。
+- `GameLogic.ConfigSystem`只负责创建Tables和通过`GameModule.Resource.LoadAsset<TextAsset>`读取单表。每次读取后立即`UnloadAsset`，不把TextAsset长期缓存；生成的Tables缓存的是解析后的托管表对象。
+- 若单表缺失、截断、尾部有未消费数据或引用解析失败，当前Tables标记为不可继续使用，后续访问直接失败，不继续暴露已部分构建的配置状态，也不回退SO。
+- 这覆盖此前“启动阶段异步预加载全部14表后进入业务”的决策。现在GameApp不再等待`InitializeAsync`；业务入口创建ConfigSystem后，具体流程首次访问需要的表时同步加载。同步按表懒加载是本次用户明确选择，首次阻塞和配置错误延迟到实际访问点属于已接受差异。
+- 这不是把所有配置IO改成同步通用规则。配置表按本次策略使用TE模板同步API；其他资源、UI和普通业务IO仍遵循项目的UniTask异步规范。若未来需要无阻塞首屏，应另行改为异步按表加载并传播等待边界，不能把当前同步懒加载称为异步优化。
+
+## 当前运行范围与验收数据（2026-11-07）
+
+- 最新用户授权允许缺数据时自主补齐并完成流程，覆盖此前留空要求。9份工作簿追加数据，原有数据、Schema结构及8个Skill Sheet保持；标准导表退出0，9份bytes更新，生成C#不手改。
+- 机师/部署/装配/武器使用9001～9004，部件90010～90043，携带技能9001“验收强击”。名称和技能/武器说明标注“流程验收”，原1001～1007复杂技能不参与本场。默认普攻仍由唯一武器kind映射2001取得，不塞入机师携带栏。
+- `LubanBattleScenarioBuilder`在GameLogic单向转换为纯Battle对象。按关卡筛选、出场顺序装配；每次重战构建新Session/单位/技能定义，运行状态不回写Tables。场景引用、材质、镜头仍留表现层。旧SO资源、配置类型、Builder/Validator及Runtime旧入口已删除，Battle/Test场景不再保留SO引用；无加载失败回退。
+- 当前桥接以躯干耐久代表整机，四部件校验部位/机型但不独立结算；机师六属性与驾驶倍率不参与尚未确定的公式。每机恰好一把单手手持武器，无限弹药、单段、无命中/暴击/重量公式。PP与非满AP恢复、双武器、被动、触发、持续修正、次数限制、范围/固定部位技能等组合显式拒绝。
+- 只转换来源武器默认普攻与唯一武器的固定菱形单目标技能，技能/武器射程必须一致。主动/对战Tag只校验当前可投影形态，不代表已经实现反击或触发链；飞行系统未实现。伤害为武器attackPower×damageRate/10000，要求精确非负整数，不擅定舍入和正式伤害公式。
+
+| 单位 | 机型移动 | 整机投影耐久 | AP初始/上限/每回合回复 | 普攻伤害 | 普攻/技能射程 | 验收强击 |
+|---|---:|---:|---:|---:|---|---|
+| 艾达·流程验收 | 4 | 200 | 9 | 100 | 菱形1～3 | 3AP，150伤害 |
+| 洛莎·流程验收 | 3 | 150 | 10 | 100 | 菱形1～3 | 3AP，150伤害 |
+| 索妮亚·流程验收 | 3 | 200 | 8 | 500 | 菱形1～3 | 3AP，750伤害 |
+| 曜·流程验收 | 4 | 300 | 9 | 500 | 菱形1～3 | 3AP，750伤害 |
+
+普攻消耗1AP。棋盘15×15与原4台站位保留；移动力、普攻射程/AP和携带技能不与旧SO等价，依最新“优先跑通”授权记录差异，不伪称完整原型等价迁移。
+
+最新清理旧SO后的MechStorm EditMode为310/310 Passed（Battle232、Presentation55、Config23，0失败/跳过/不确定，3.21秒）。相较懒加载版323项，移除14个旧SO用例，新增1个Luban完整对局后重建用例，并保留/加强对象图隔离断言；覆盖同步按表读取、缺失/损坏、装配与拒绝规则及状态不回写配置。清理后短暂Play Mode验证启动不读表、按需装配4单位、配置资源无在用引用，撤退返回Main后单位根0；退出后main未脏、运行增量无Error/Exception。此前321项为异步预加载阶段历史证据，323项为切换懒加载后的历史证据；旧真实Play胜利第3回合、统计伤害500、失败/重战闭环未在本次短暂验证重跑。未覆盖Player/真机、物理鼠标射线/镜头、完整后置机制或T1.11全回归。
+
+下文各主题的“空表/尚未接入/首次导表待验证”描述保留为历史配表批次记录；当前数据与运行边界以上段、下表和DEVELOPMENT_PROGRESS.md为准。
+
+本次导出修正：当前Luban通过子Bean的`parent`关系自动识别抽象父类，不接受`abstract`属性；四个同模块名的行Bean使用`SkillDefinition`、`MechDefinition`、`PilotDefinition`、`WeaponDefinition`避免生成C#类型遮蔽。`TbSkill`等表名、字段、ID和Excel数据保持，生成代码只由导表工具维护。下文“首次导表待验证”等为各历史配表批次状态，以本段及末尾验证结果为准。
 
 ## 定义与数据
 
@@ -16,19 +48,19 @@
 | 表 | 用途 | 数据行数 |
 |---|---|---:|
 | `Battle.TbScenario` | 关卡 ID 与棋盘宽高 | 1 |
-| `Battle.TbDeployment` | 关卡单位、阵营、站位、顺序、架构员与机兵装配引用 | 0 |
-| `Battle.TbUnitSkill` | 本场单位携带的机师技能及顺序 | 0 |
+| `Battle.TbDeployment` | 关卡单位、阵营、站位、顺序、架构员与机兵装配引用 | 4 |
+| `Battle.TbUnitSkill` | 本场单位携带的机师技能及顺序 | 4 |
 | `Mech.TbMechClass` | 机型规则 | 3 |
 | `Mech.TbMech` | 机兵型号 | 4 |
-| `Mech.TbMechPart` | 四部位基础定义 | 0 |
-| `Mech.TbMechLoadout` | 四部件装配预设 | 0 |
-| `Mech.TbMechLoadoutWeapon` | 预设的实际武器挂载 | 0 |
-| `Pilot.TbPilot` | 架构员基础定义 | 0 |
+| `Mech.TbMechPart` | 四部位基础定义 | 16 |
+| `Mech.TbMechLoadout` | 四部件装配预设 | 4 |
+| `Mech.TbMechLoadoutWeapon` | 预设的实际武器挂载 | 4 |
+| `Pilot.TbPilot` | 架构员基础定义 | 4 |
 | `Pilot.TbDrivingRank` | 驾驶等级与倍率 | 5 |
-| `Pilot.TbPilotSkill` | 机师技能池 | 0 |
-| `Skill.TbSkill` | 技能组合定义 | 10 |
+| `Pilot.TbPilotSkill` | 机师技能池 | 4 |
+| `Skill.TbSkill` | 技能组合定义 | 11 |
 | `Skill.TbWeaponDefaultSkill` | 武器类别默认普攻 | 3 |
-| `Weapon.TbWeapon` | 武器基础定义 | 0 |
+| `Weapon.TbWeapon` | 武器基础定义 | 4 |
 
 ## 关卡与出战关联
 
@@ -267,9 +299,9 @@ MountType.Back不扩展现有Mech挂载点，中型肩部许可不自动成为�
 
 武器表结构、空表状态、分组与样式、枚举及默认普攻映射已静态核对；首次导表与运行时接入待后续执行。
 
-## 导出入口（需另行授权后执行）
+## 导出入口（后续执行仍需授权）
 
-开发者已自行构建 Luban，`Tools/Luban/source-revision.txt` 记录提交 `029f714f935ba58d7e33530da87e6371ee3c519f`。工具已存在，但尚未执行首次导表；仍需验证与现有 `GameProto/LubanLib` 的兼容性，不能据此宣称导出链已验证。
+开发者已自行构建 Luban，`Tools/Luban/source-revision.txt` 记录提交 `029f714f935ba58d7e33530da87e6371ee3c519f`。2026-11-06使用该工具完成首次导出，生成代码与现有 `GameProto/LubanLib` 的离线编译、Unity实际编译及读回通过。工具要求.NET8，本机使用已有8.0.3运行时，未更新工具或运行库；后续换版本须重新验证。
 
 工具预期位于仓库根 `Tools/Luban/Luban.dll`，并保留其所需依赖；也可将 `LUBAN_DLL` 环境变量设为完整工具路径。运行生成器需要对应的 .NET 运行时。下列导表脚本不下载工具或安装依赖。
 
@@ -291,22 +323,37 @@ Windows：从仓库根运行 `Configs\GameConfig\gen_code_bin_to_project.bat`。
 
 macOS/Linux：从仓库根运行 `bash Configs/GameConfig/gen_code_bin_to_project.sh`。
 
-现有 Unity 转表菜单调用 `gen_code_bin_to_project_lazyload`，因此保留同名兼容入口，但它只委托标准脚本，不复制 Skill 示例中的同步懒加载模板。直接调用和 Unity 菜单均会实际导表，本批次未执行。
+现有 Unity 转表菜单调用 `gen_code_bin_to_project_lazyload`，因此保留同名兼容入口，但它只委托标准脚本，不复制 Skill 示例中的同步懒加载模板。本次执行标准Windows脚本，菜单入口和macOS/Linux脚本未实测。
 
 固定导出目标：
 
 - 格式：`cs-bin` + `bin`。
 - C#：`MechStorm_Unity/Assets/GameScripts/HotFix/GameProto/GameConfig/`。
 - 二进制：`MechStorm_Unity/Assets/AssetRaw/Configs/bytes/`。
-- 不手写生成代码或数据；新建 Unity 目录与文件的 `.meta` 等待开发者正常刷新生成。
+- 不手写生成代码或数据；新建 Unity 目录与文件的 `.meta` 由Unity正常刷新生成。本次已通过正常导入生成，不手写GUID；重命名时保持源码与meta配对及原GUID。
 - 脚本没有设置导出后自动刷新、编译或运行，也没有删除旧输出目录的步骤。
 
 ## 后续接入边界
 
-1. T1.12.2：YooAsset 异步加载二进制，明确资源句柄释放；配置未就绪或失败时不创建战斗，不采用同步懒加载，不擅自增加异常恢复或自动返回。
+当前加载策略已由开发者确认：**启动时显式预加载，全部就绪后进入业务，业务同步读内存配置**。异步仅用于资源读取，Tables属性不触发加载。当前不采用先进入场景、使用时才加载的按需策略；微信小游戏快速首屏不是本阶段目标，如后续有该需求，再评估分组预加载或按需加载，不把同步属性懒加载本身视为非阻塞首屏方案。
+
+1. T1.12.2已完成：GameLogic/Config/ConfigSystem显式InitializeAsync，通过GameModule.Resource异步加载14份二进制，复制bytes后finally归还资源，再由ConfigTableLoader在内存构建生成Tables并ResolveRef；不手改生成代码，不做同步IO或属性懒加载。GameApp等待初始化成功才启动业务流程，失败明确暴露，无自动回退/重试；SingletonSystem退出取消加载并清除配置。Tables未就绪时访问报错，完成后的重复初始化复用配置，并发请求拒绝。SO战斗仍保留。
 2. T1.12.3：GameLogic承担配置转换与单位装配，创建全新Session/Runtime；新四部位、武器及技能组合需要对应Battle数据与执行规则后才能使用。GameProto不依赖GameLogic/Battle，Battle不依赖GameProto、Luban或Unity。
 3. T1.12.4：先明确新配置与原型规则的差异及验收范围，再按确认的数据核对初始快照、技能顺序、资源与执行行为，确认配置不受战斗修改、重战恢复初值。SO在新路径验收后退役，测试夹具保留；当前仅保留15×15关卡，尚无完整出战数据，不能按旧七表宣称等价迁移完成。
 
 XML声明主键、联合索引、单字段范围、枚举与外键。站位边界/不重叠、关卡内unitId与出场顺序唯一、携带技能顺序唯一及所属机师技能池匹配、驾驶许可、部件与武器装配合法性、`maxRange >= minRange`等跨字段或跨行约束，须在填数据后核对并在后续装配入口校验。
 
-首次导出时还需实际验证 XML Schema、Excel 解析（含空表与枚举列表）、输出命名与现有 ByteBuf 的兼容性，不以静态核对替代这一步。所有任务状态以 `MechStorm_Unity/DEVELOPMENT_PROGRESS.md` 为准。
+### 首次导出验证结果（2026-11-06）
+
+- 标准Windows脚本退出0，实际完成XML Schema、Excel读取（含八个技能Sheet、空表、多态及枚举列表）、内置校验和输出。
+- 78份生成C#与现有4份LubanLib使用本机Roslyn/C#9离线编译通过；Unity2021.3.45f2实际编译完成，failed=false、errors=[]、compilationFailed=false。
+- 临时离线读回入口位于`MechStorm_Unity/Temp/luban-validation/Readback.cs`，不进入游戏程序集。121条断言通过：14表26行、全部bytes完整消费、10技能ID、关键费用/倍率/Tag、多态与空列表、八方向三格模板、固定躯干及现有非空外键对象引用。
+- 未运行游戏、Play Mode或完整Unity测试集；未验证YooAsset加载、完整出战装配或技能运行效果。空表没有覆盖未来数据的驾驶/装配/站位等业务约束；不将读回通过等同T1.12.1最终验收。
+
+### 异步加载验证结果（2026-11-07）
+
+- 新增8项EditMode专项全部通过，覆盖14表读取与引用解析、异步等待、缺失/截断/尾部损坏数据、取消/迟到读取及重复加载对象独立；最终Unity实际编译通过。
+- 真实Play Mode经YooAsset加载14表，10技能、15×15关卡、0出战关联；重复初始化复用Tables，14份资源的SpawnCount全部归零（框架缓存可继续保留）。释放后访问拒绝、并发初始化拒绝、加载中释放取消及再次初始化通过。
+- SO仍创建4单位，未将空出战表当成可装配数据。正常退出Play Mode，main.unity无未保存修改。未验证真机/独立Player或真实缺失资源注入，不将加载通过视为技能执行或T1.12.3/.4通过。
+
+所有任务状态以 `MechStorm_Unity/DEVELOPMENT_PROGRESS.md` 为准。

@@ -50,7 +50,7 @@
     <var name="minRange" type="int#range=[1,)" comment="最小选取距离，含边界" />
     <var name="maxRange" type="int#range=[1,)" comment="最大选取距离，含边界，须≥最小距离" />
   </bean>
-  <bean name="Weapon" comment="武器基础定义">
+  <bean name="WeaponDefinition" comment="武器基础定义">
     <var name="id" type="int#range=[1,)" comment="武器配置ID" />
     <var name="name" type="string!" comment="武器名称" />
     <var name="description" type="string" comment="展示说明，可空" />
@@ -69,5 +69,5 @@
     <var name="ammoCapacity" type="int#range=[-1,)" comment="基础弹药容量，-1为无限，其余须为正整数" />
     <var name="hitCount" type="int#range=[1,)" comment="一次武器攻击的基础连击数" />
   </bean>
-  <table name="TbWeapon" value="Weapon" input="Weapon/Weapon.xlsx" mode="map" index="id" />
+  <table name="TbWeapon" value="WeaponDefinition" input="Weapon/Weapon.xlsx" mode="map" index="id" />
 </module>

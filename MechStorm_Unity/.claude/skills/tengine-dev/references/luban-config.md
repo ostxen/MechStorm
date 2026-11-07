@@ -15,7 +15,7 @@
 
 ### ConfigSystem 加载器
 
-> `ConfigSystem.cs` 需从 Luban 模板生成（`luban-dev` skill 的 CustomTemplate/），不在 Assets 默认目录中。
+> TEngine 本身不提供内置 ConfigModule/IConfigModule。以下是通用模板示意；MechStorm当前实际使用GameLogic侧的资源桥接器和自定义按表懒加载Tables模板。
 
 ```csharp
 // ConfigSystem.cs（GameProto/ 中，桥接 Luban 与 YooAsset）
@@ -68,11 +68,12 @@ public class ConfigSystem
 ```
 
 **关键点**：
-- 使用 `ModuleSystem.GetModule<IResourceModule>()`（非 `GameModule.Resource`），因为 ConfigSystem 在 GameProto 程序集中，不依赖 GameLogic
-- `_resourceModule` 延迟获取并缓存，避免构造时模块未就绪
-- `Tables` 属性懒加载，首次访问自动调用 `Load()`
+- 该示例代表旧的GameProto同步模板，不是TEngine内置模块，也不是MechStorm唯一实现。
+- MechStorm的ConfigSystem位于GameLogic，使用`GameModule.Resource`，GameProto只保存生成的Tables和LubanLib。
+- MechStorm的Tables构造不读取表，`TbXxx`属性首次访问时按表读取并缓存；外键解析会带出依赖表。
+- 配置TextAsset必须在读取后配对`UnloadAsset`。上述旧示例未体现释放，不能直接复制到生产代码。
 
-初始化时机：`ProcedurePreload` 预加载 PRELOAD 资源后，在 `GameApp.Entrance` 中调用 `ConfigSystem.Instance.Load()`。
+初始化时机：MechStorm当前不在`GameApp.Entrance`预加载全部表；`GameApp`进入业务后，由实际访问的`ConfigSystem.Instance.Tables.TbXxx`属性按需同步加载对应表。若未来改为异步按表加载，必须重新设计调用方等待边界。
 
 ---
 

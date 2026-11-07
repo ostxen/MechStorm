@@ -4,7 +4,7 @@
     <var name="initiativeTag" type="string#set=Attack.Mode.Active,Attack.Mode.Reactive" comment="主动Attack.Mode.Active或非主动Attack.Mode.Reactive，二选一" />
     <var name="interactionTag" type="string#set=Attack.Mode.Duel,Attack.Mode.NonDuel" comment="对战Attack.Mode.Duel或非对战Attack.Mode.NonDuel，二选一" />
   </bean>
-  <bean name="WeaponUse" abstract="true" comment="攻击使用的武器来源" />
+  <bean name="WeaponUse" comment="攻击使用的武器来源" />
   <bean name="SourceWeapon" parent="WeaponUse" comment="使用提供本能力的已装备武器" />
   <bean name="SelectedWeapon" parent="WeaponUse" comment="使用本次技能选定的已装备武器">
     <var name="weaponKind" type="Weapon.WeaponKind" comment="可选武器细分类" />
