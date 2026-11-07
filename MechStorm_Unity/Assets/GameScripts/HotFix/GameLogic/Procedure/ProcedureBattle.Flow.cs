@@ -2,6 +2,10 @@ using System;
 using System.Threading;
 using Cysharp.Threading.Tasks;
 using TEngine;
+using UnityEngine;
+using UnityEngine.EventSystems;
+using UnityEngine.UI;
+using TMPro;
 
 namespace GameLogic
 {
@@ -106,11 +110,46 @@ namespace GameLogic
             {
                 return;
             }
-            _runtime.Tick(CanAcceptBattleInput() && _hud.Visible);
+            UpdateCameraInput();
+            _runtime.Tick(CanAcceptPointerInput());
             if (!TryLeavePlaying())
             {
                 _hudPresenter.RefreshIfChanged();
             }
+        }
+
+        private void UpdateCameraInput()
+        {
+            if (!CanAcceptPointerInput()) return;
+            bool left = UnityEngine.Input.GetKeyDown(KeyCode.Q);
+            bool right = UnityEngine.Input.GetKeyDown(KeyCode.E);
+            if (left != right) OnCameraRotationRequested(left ? -1 : 1);
+            float scroll = UnityEngine.Input.mouseScrollDelta.y;
+            if (scroll != 0f) OnCameraZoomRequested(scroll);
+        }
+
+        private bool CanAcceptPointerInput()
+        {
+            if (!Application.isFocused || !CanAcceptCameraInput()) return false;
+            var selected = EventSystem.current?.currentSelectedGameObject;
+            return selected == null || (selected.GetComponent<InputField>() == null &&
+                selected.GetComponent<TMP_InputField>() == null);
+        }
+
+        private bool CanAcceptCameraInput()
+        {
+            return CanAcceptBattleInput() && _hud.Visible &&
+                !GameModule.UI.HasWindow<BattleMenuUI>() && !GameModule.UI.HasWindow<SettingsUI>();
+        }
+
+        private void OnCameraRotationRequested(int direction)
+        {
+            if (CanAcceptCameraInput()) _runtime.RotateCamera(direction);
+        }
+
+        private void OnCameraZoomRequested(float scrollDelta)
+        {
+            if (CanAcceptCameraInput()) _runtime.ZoomCamera(scrollDelta);
         }
 
         private bool TryLeavePlaying()
@@ -153,6 +192,7 @@ namespace GameLogic
         {
             if (phase == BattleFlowPhase.Playing)
             {
+                _runtime.CancelPointerGesture();
                 _hud.SetDisplayEnabled(false);
             }
         }

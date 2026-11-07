@@ -6,6 +6,7 @@ using MechStorm.Battle.Units;
 using MechStorm.Runtime;
 using MechStorm.Config;
 using TEngine;
+using UnityEngine;
 using UnityEngine.SceneManagement;
 
 namespace GameLogic
@@ -43,6 +44,8 @@ namespace GameLogic
             }
 
             UpdateBattleFlow();
+            // 输入和目标同步后再推进镜头；阶段内提前返回不阻断已接受的缓动，加载期间Runtime可为空。
+            _runtime?.TickCamera(UnityEngine.Time.unscaledDeltaTime);
         }
 
         private bool IsCurrent(CancellationTokenSource lifetime)
@@ -52,7 +55,7 @@ namespace GameLogic
 
         private async UniTask InitializeBattleAsync(CancellationTokenSource lifetime, CancellationToken cancellationToken)
         {
-            var loading = await ShowWindowAsync<LoadingUI>("LoadingUI", cancellationToken);
+            var loading = await ShowWindowAsync<LoadingUI>(cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
             _loading = loading;
             if (!GameModule.Resource.CheckLocationValid(SceneLocation))
@@ -82,7 +85,7 @@ namespace GameLogic
 
         private async UniTask ShowObjectiveAsync(CancellationToken cancellationToken)
         {
-            var objective = await ShowWindowAsync<BattleObjectiveUI>("BattleObjectiveUI", cancellationToken);
+            var objective = await ShowWindowAsync<BattleObjectiveUI>(cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
             await objective.PlayAsync("全灭敌方单位", cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
@@ -93,7 +96,7 @@ namespace GameLogic
         {
             int roundNumber = _runtime.Session.CurrentRoundNumber;
             var faction = _runtime.Session.CurrentFaction;
-            var round = await ShowWindowAsync<BattleRoundIntroUI>("BattleRoundIntroUI", cancellationToken);
+            var round = await ShowWindowAsync<BattleRoundIntroUI>(cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
             await round.PlayAsync(roundNumber, faction == CombatFaction.TeamA, cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
@@ -104,7 +107,7 @@ namespace GameLogic
 
         private async UniTask WaitForBattleStartAsync(CancellationToken cancellationToken)
         {
-            var preparation = await ShowWindowAsync<BattlePreparationUI>("BattlePreparationUI", cancellationToken);
+            var preparation = await ShowWindowAsync<BattlePreparationUI>(cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
             var enterBattle = new UniTaskCompletionSource();
             preparation.EnterBattleRequested += () => enterBattle.TrySetResult();
@@ -126,7 +129,7 @@ namespace GameLogic
 
         private async UniTask ShowBattleMenuAsync(CancellationToken cancellationToken)
         {
-            var menu = await ShowWindowAsync<BattleMenuUI>("BattleMenuUI", cancellationToken);
+            var menu = await ShowWindowAsync<BattleMenuUI>(cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
             menu.ExitRequested += ReturnToMain;
             menu.RestartRequested += RestartBattle;
@@ -134,9 +137,10 @@ namespace GameLogic
 
         private async UniTask InitializeHUDAsync(CancellationToken cancellationToken)
         {
-            var hud = await ShowWindowAsync<BattleHUDUI>("BattleHUDUI", cancellationToken);
+            var hud = await ShowWindowAsync<BattleHUDUI>(cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
             _hud = hud;
+            _hud.CameraRotationRequested += OnCameraRotationRequested;
             int maxAbilityCount = 0;
             foreach (var abilities in _runtime.Scenario.AbilitiesByUnitId.Values)
             {
@@ -151,6 +155,7 @@ namespace GameLogic
         private void ShowBattleHUD()
         {
             _runtime.InteractionController.SelectCurrentCombatUnit();
+            _runtime.RefreshCameraFocus();
             _hudPresenter.RefreshIfChanged(true);
             _hud.SetDisplayEnabled(true);
         }
@@ -158,7 +163,7 @@ namespace GameLogic
         private async UniTask ShowResultAsync(CancellationToken cancellationToken)
         {
             _statisticsReport = BattleStatisticsBuilder.Build(_runtime.Session);
-            var result = await ShowWindowAsync<BattleResultUI>("BattleResultUI", cancellationToken);
+            var result = await ShowWindowAsync<BattleResultUI>(cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
             result.ShowOutcome(_runtime.Session.Outcome.WinningFaction == CombatFaction.TeamA);
             result.StatisticsRequested += OnStatisticsRequested;
@@ -177,7 +182,7 @@ namespace GameLogic
 
         private async UniTask ShowStatisticsAsync(CancellationToken cancellationToken)
         {
-            var statistics = await ShowWindowAsync<BattleStatisticsUI>("BattleStatisticsUI", cancellationToken);
+            var statistics = await ShowWindowAsync<BattleStatisticsUI>(cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
             statistics.BackRequested += CloseStatistics;
             statistics.HomeRequested += ReturnToMain;
@@ -233,18 +238,12 @@ namespace GameLogic
             return bindings;
         }
 
-        private async UniTask<T> ShowWindowAsync<T>(string location, CancellationToken cancellationToken) where T : UIWindow, new()
+        private async UniTask<T> ShowWindowAsync<T>(CancellationToken cancellationToken) where T : UIWindow, new()
         {
-            if (!GameModule.Resource.CheckLocationValid(location))
-            {
-                throw new GameFrameworkException($"{location} 资源地址无效，请检查 YooAsset 收集配置。");
-            }
             var window = await GameModule.UI.ShowUIAsyncAwait<T>().AttachExternalCancellation(cancellationToken);
-            // TE 超时会返回未加载完成的窗口，此处显式报错，不自动退出战斗。
-            // IsLoadDone 只表示资源加载完成，不保证后续绑定和 OnCreate 成功。
             if (!window.IsLoadDone)
             {
-                throw new GameFrameworkException($"{location} 加载未完成，请检查 YooAsset 收集配置或加载耗时。");
+                throw new GameFrameworkException($"{typeof(T).Name} 加载未完成，请检查 YooAsset 收集配置或加载耗时。");
             }
             return window;
         }

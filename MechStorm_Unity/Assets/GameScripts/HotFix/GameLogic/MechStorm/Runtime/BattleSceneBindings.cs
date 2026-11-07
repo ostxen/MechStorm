@@ -1,4 +1,5 @@
 using System;
+using MechStorm.Presentation.Cameras;
 using UnityEngine;
 
 namespace MechStorm.Runtime
@@ -19,6 +20,7 @@ namespace MechStorm.Runtime
         [SerializeField] private Color _gridCellColor = new Color(0.2f, 0.23f, 0.26f);
         [SerializeField] private Color _gridFocusColor = new Color(1f, 0.85f, 0.1f);
         [SerializeField] private LayerMask _battleInputLayerMask = Physics.DefaultRaycastLayers;
+        [SerializeField] private BattleCameraSettings _cameraSettings = new();
 
         public Transform Plane => _plane;
         public Camera BattleCamera => _camera;
@@ -30,6 +32,7 @@ namespace MechStorm.Runtime
         public Color GridCellColor => _gridCellColor;
         public Color GridFocusColor => _gridFocusColor;
         public int BattleInputLayerMask => _battleInputLayerMask.value;
+        public BattleCameraSettings CameraSettings => _cameraSettings;
 
         public void Validate()
         {

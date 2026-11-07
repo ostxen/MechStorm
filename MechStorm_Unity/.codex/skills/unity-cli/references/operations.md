@@ -35,7 +35,7 @@ $project = (Resolve-Path -LiteralPath '.').Path
 
 ## 2. 编辑器修改与授权
 
-任务内按需刷新/编译按第3节直接执行，不需预览/审批；以下审批流程适用于其他编辑器写入。
+任务内常规校验（静态检查、刷新/编译、EditMode/PlayMode测试及短暂运行验证）按第3节直接执行，不需逐次预览/审批；以下审批流程适用于其他编辑器写入。
 
 说明具体项目、对象/资源路径、参数、覆盖及保存影响，确认后只执行该范围。包装入口已迁入，操作参数通过JSON文件提供，避免PowerShell转义差异。
 以下以打开Console演示；先准备参数文件 `{"path":"Window/General/Console"}`。路径占位符需替换为实际输出，不可原样执行：
@@ -57,7 +57,7 @@ python .codex/scripts/workflow.py report --run <运行目录>
 | 查询 | `editor status`、`scene list_open`、`scene get_hierarchy`、`asset find`、`build get_settings` |
 | 预览/审批/执行 | `asset delete`、`asset move`、`build set_settings`、仅打开Console的`editor invoke_menu` |
 
-白名单基于当前包源码契约适配，不代表每个写入已真实运行验收。构建、测试、包设置、任意菜单、eval和自定义烘焙不透传；需要时先按任务审核实现与结果契约，再补策略和测试，不用底层CLI绕过拒绝。
+白名单基于当前包源码契约适配，不代表每个写入已真实运行验收。构建、测试、包设置、任意菜单、eval和自定义烘焙不由包装入口任意透传；第3节已开放的常规校验可在核对命令实现及副作用后直接使用原生CLI，不需为验证扩展包装白名单。其他写入仍按任务授权及审批执行，不用校验名义绕过拒绝。
 预览/审批只绑定磁盘工作区与该命令的预览结果，不检测所有未保存Editor状态，也不能恢复用户数据。设置操作前仍应检查潜在的全局保存影响。
 
 下面的菜单命令已在本项目实测，但只在用户要求对应窗口操作时执行：
@@ -75,9 +75,9 @@ python .codex/scripts/workflow.py report --run <运行目录>
 - 修改后可按需主动刷新和编译，无需逐次确认。包装尚未开放此入口时，可直接调用已核对的 `script recompile`，再查询 `script recompile_status` 和 `editor status`；这是明确允许的例外，不扩大到其他白名单外写入。
 - `script recompile` 会调用AssetDatabase.Refresh，导入待处理磁盘改动并按需编译/域重载。先绑定本项目当前PID，确认Editor空闲且Play Mode停止，串行发送一次请求；重载期间允许短暂连接中断，只查询状态，不重复发送。最终核对status、failed、errors及compilationFailed；up_to_date表示本次未触发新编译，不能当作强制重编通过。
 - 可用的命令格式为 `unity command script recompile --project-path <本项目绝对路径> --pid <当前PID>`，随后将 `script recompile` 替换为 `script recompile_status` 查询。程序须使用本项目Tools/UnityCLI/unity.exe，遵守第1节路径、JSON及非交互参数规范。无需主动聚焦Editor；不自动启动/关闭Editor，不强制全量重新导入或清缓存。
-- 测试、Play Mode、截图和构建仍仅在明确授权范围内执行，不因新增/修改代码自动运行。
+- 当前任务相关的静态检查、EditMode/PlayMode测试及短暂运行验证（含进出Play Mode）已获长期授权，可按需主动执行，无需逐次确认；不接管用户已开始的运行/测试，不自动运行全量回归。验证脚本先核对实现及副作用，仅读取状态或触发正常交互，不借机保存场景/Prefab/资源/设置或做破坏性操作；结束后恢复停止状态。构建、安装更新和其他持久化写入仍单独授权，不预埋延迟自动化任务。
 - 执行前查当前命令及包内文档，不假定来源项目自定义的 `tengine_validate_assets` 或 `tengine_bake_ugui` 已存在。
-- 测试先发现相关用例，再分别执行授权的EditMode/PlayMode范围；若异步返回，确认启动响应并查询最终状态，不重复发送启动命令。
+- 测试先发现相关用例，再分别执行当前任务所需的EditMode/PlayMode范围；若异步返回，确认启动响应并查询最终状态，不重复发送启动命令。
 - 核对测试名称/程序集、实际执行数、失败、跳过与汇总；零用例或全部跳过不能算通过。
 - 记录真实退出码和业务结果。CLI成功并不自动代表构建、测试或生成成功；未运行项写清原因。
 - 截图可能写文件或改变窗口状态，先确认输出路径和影响；按包内当前capture文档检查Overlay UI支持，不复制旧版渲染限制当作事实。

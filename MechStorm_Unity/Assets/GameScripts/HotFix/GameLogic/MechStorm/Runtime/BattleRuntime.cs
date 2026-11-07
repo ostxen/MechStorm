@@ -4,6 +4,7 @@ using MechStorm.Battle.Units;
 using MechStorm.Battle;
 using MechStorm.Config;
 using MechStorm.Presentation.Board;
+using MechStorm.Presentation.Cameras;
 using MechStorm.Presentation.Controllers;
 using MechStorm.Presentation.Input;
 using MechStorm.Presentation.Units;
@@ -34,6 +35,7 @@ namespace MechStorm.Runtime
         private GameObject _highlightTemplate;
         private bool _ownsHighlightTemplate;
         private bool _templateWasActive;
+        private BattleBoardInputReader _boardInputReader;
 
         public BattleScenarioBuildResult Scenario { get; private set; }
         public BattleSession Session => Scenario?.BattleSession;
@@ -45,6 +47,7 @@ namespace MechStorm.Runtime
         public IReadOnlyDictionary<CombatUnit, Transform> HealthBarAnchors => _healthBarAnchors;
         public BattleUnitStatusPresenter UnitStatusPresenter { get; private set; }
         public BattleInteractionController InteractionController { get; private set; }
+        public BattleCameraController CameraController { get; private set; }
 
         public BattleRuntime(BattleScenarioBuildResult scenario, Transform plane, Camera battleCamera,
             Transform unitParent, float cellSize, Vector3 boardOrigin, Color boardColor)
@@ -86,15 +89,20 @@ namespace MechStorm.Runtime
 
             try
             {
+                bindings.CameraSettings.Validate();
+                CameraController = new BattleCameraController(BattleCamera, Coordinates,
+                    bindings.CameraSettings, new Rect(Coordinates.Origin.x, Coordinates.Origin.z,
+                        Session.Grid.Width * Coordinates.CellSize, Session.Grid.Height * Coordinates.CellSize));
                 CreateHighlightTemplate(bindings.RangeHighlightTemplate);
                 _rangeHighlighter = new BattleRangeHighlighter(Session.Grid.Width, Session.Grid.Height,
                     bindings.CellSize, Coordinates, _highlightTemplate, bindings.GridCellColor);
                 _gridFocusIndicator = new BattleGridFocusIndicator(bindings.CellSize, Coordinates,
                     _highlightTemplate.GetComponent<Renderer>().sharedMaterial, bindings.GridFocusColor);
-                var inputReader = new BattleBoardInputReader(BattleCamera, _plane.GetComponent<Collider>(),
-                    Coordinates, _combatUnitColliders, bindings.BattleInputLayerMask, IsPointerOverUI);
+                _boardInputReader = new BattleBoardInputReader(BattleCamera, _plane.GetComponent<Collider>(),
+                    Coordinates, _combatUnitColliders, bindings.BattleInputLayerMask,
+                    bindings.CameraSettings.DragThreshold, CameraController.Pan, IsPointerOverUI);
                 InteractionController = new BattleInteractionController(Session, _combatUnitVisuals,
-                    inputReader, _rangeHighlighter, _gridFocusIndicator, Scenario.AbilitiesByUnitId);
+                    _boardInputReader, _rangeHighlighter, _gridFocusIndicator, Scenario.AbilitiesByUnitId);
             }
             catch
             {
@@ -135,16 +143,46 @@ namespace MechStorm.Runtime
 
         public void Tick(bool acceptInput)
         {
-            if (_disposed)
-            {
-                return;
-            }
-            if (acceptInput && InteractionController != null &&
-                InteractionController.Tick(out _) != BattleInputAction.None)
+            if (!acceptInput) CancelPointerGesture();
+            if (acceptInput && InteractionController.Tick(out _) != BattleInputAction.None)
             {
                 UnitStatusPresenter.RefreshAll();
             }
-            UnitStatusPresenter?.RefreshFacing();
+            if (acceptInput)
+            {
+                RefreshCameraFocus();
+            }
+            UnitStatusPresenter.RefreshFacing();
+        }
+
+        public void RefreshCameraFocus()
+        {
+            CameraController.SynchronizeActor(Session.CurrentCombatUnit);
+            UnitStatusPresenter.RefreshFacing();
+        }
+
+        public void CancelPointerGesture()
+        {
+            _boardInputReader.CancelGesture();
+        }
+
+        public void TickCamera(float unscaledDeltaTime)
+        {
+            CameraController.Tick(unscaledDeltaTime);
+            UnitStatusPresenter.RefreshFacing();
+        }
+
+        public void RotateCamera(int direction)
+        {
+            CameraController.SynchronizeActor(Session.CurrentCombatUnit);
+            CameraController.Rotate(direction);
+            UnitStatusPresenter.RefreshFacing();
+        }
+
+        public void ZoomCamera(float scrollDelta)
+        {
+            if (IsPointerOverUI()) return;
+            CameraController.Zoom(scrollDelta);
         }
 
         private static Renderer ValidateSceneBindings(Transform plane, Camera battleCamera, Transform unitParent,
@@ -238,6 +276,9 @@ namespace MechStorm.Runtime
             _disposed = true;
             // 交互状态随本场对象一并丢弃，释放时不再重画可能已经卸载的棋盘。
             InteractionController = null;
+            _boardInputReader = null;
+            CameraController?.Dispose();
+            CameraController = null;
             _gridFocusIndicator?.Dispose();
             _rangeHighlighter?.Dispose();
             _gridFocusIndicator = null;

@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using Cysharp.Threading.Tasks;
 using TEngine;
+using UnityEngine.UI;
 
 namespace GameLogic
 {
@@ -15,6 +16,15 @@ namespace GameLogic
 		public event Action ConfirmRequested;
 		public event Action CancelRequested;
 		public event Action StandbyRequested;
+		public event Action<int> CameraRotationRequested;
+		private Button _rotateLeft;
+		private Button _rotateRight;
+
+		protected override void BindMemberProperty()
+		{
+			_rotateLeft = transform.Find("CameraControls/m_btnRotateLeft").GetComponent<Button>();
+			_rotateRight = transform.Find("CameraControls/m_btnRotateRight").GetComponent<Button>();
+		}
 
 		public void SetDisplayEnabled(bool enabled)
 		{
@@ -33,10 +43,15 @@ namespace GameLogic
 
 		protected override void RegisterEvent()
 		{
+			_rotateLeft.onClick.AddListener(OnRotateLeft);
+			_rotateRight.onClick.AddListener(OnRotateRight);
 			_actionControl.Confirmed += () => ConfirmRequested?.Invoke();
 			_actionControl.Cancelled += () => CancelRequested?.Invoke();
 			_actionControl.Standby += () => StandbyRequested?.Invoke();
 		}
+
+		private void OnRotateLeft() => CameraRotationRequested?.Invoke(-1);
+		private void OnRotateRight() => CameraRotationRequested?.Invoke(1);
 
 		protected override void OnCreate()
 		{
@@ -128,6 +143,9 @@ namespace GameLogic
 
 		protected override void OnDestroy()
 		{
+			_rotateLeft.onClick.RemoveListener(OnRotateLeft);
+			_rotateRight.onClick.RemoveListener(OnRotateRight);
+			CameraRotationRequested = null;
 			// 子 Widget 已由 TE 回收，此处只清除窗口持有的引用。
 			_weaponItem = null;
 			_abilityItems.Clear();

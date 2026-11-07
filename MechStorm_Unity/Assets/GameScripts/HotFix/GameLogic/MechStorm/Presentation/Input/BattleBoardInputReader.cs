@@ -22,27 +22,83 @@ namespace MechStorm.Presentation.Input
         private readonly IReadOnlyDictionary<Collider, CombatUnit> _combatUnitColliders;
         private readonly int _layerMask;
         private readonly Func<bool> _isPointerBlocked;
+        private readonly Action<Vector2, Vector2> _panCamera;
+        private readonly float _dragThresholdSquared;
+        private bool _pressed;
+        private bool _dragging;
+        private Vector2 _pressPosition;
+        private Vector2 _lastPosition;
 
         public BattleBoardInputReader(Camera camera, Collider boardCollider, GridCoordinateConverter coordinateConverter,
             IReadOnlyDictionary<Collider, CombatUnit> combatUnitColliders, int layerMask,
+            float dragThreshold, Action<Vector2, Vector2> panCamera,
             Func<bool> isPointerBlocked = null)
         {
-            _camera = camera ? camera : throw new ArgumentNullException(nameof(camera));
-            _boardCollider = boardCollider ? boardCollider : throw new ArgumentNullException(nameof(boardCollider));
-            _coordinateConverter = coordinateConverter ?? throw new ArgumentNullException(nameof(coordinateConverter));
-            _combatUnitColliders = combatUnitColliders ?? throw new ArgumentNullException(nameof(combatUnitColliders));
+            _camera = camera;
+            _boardCollider = boardCollider;
+            _coordinateConverter = coordinateConverter;
+            _combatUnitColliders = combatUnitColliders;
             _layerMask = layerMask;
             _isPointerBlocked = isPointerBlocked;
+            _dragThresholdSquared = dragThreshold * dragThreshold;
+            _panCamera = panCamera;
         }
 
         public bool Tick(out CombatUnit combatUnit, out Vector2Int gridPosition)
         {
+            return ProcessPointer(UnityInput.mousePosition, UnityInput.GetMouseButtonDown(0),
+                UnityInput.GetMouseButton(0), UnityInput.GetMouseButtonUp(0),
+                _isPointerBlocked?.Invoke() == true, out combatUnit, out gridPosition);
+        }
+
+        public void CancelGesture()
+        {
+            _pressed = false;
+            _dragging = false;
+        }
+
+        /// <summary>
+        /// 按下只记录候选点击；超过阈值后独占为拖拽，只有未拖拽的松开才提交棋盘射线。
+        /// </summary>
+        public bool ProcessPointer(Vector2 position, bool down, bool held, bool up, bool blocked,
+            out CombatUnit combatUnit, out Vector2Int gridPosition)
+        {
             combatUnit = null;
             gridPosition = default;
+            if (blocked || !_camera.pixelRect.Contains(position))
+            {
+                CancelGesture();
+                return false;
+            }
+            if (down)
+            {
+                _pressed = true;
+                _dragging = false;
+                _pressPosition = _lastPosition = position;
+            }
+            if (!_pressed) return false;
+            if (!held && !up)
+            {
+                CancelGesture();
+                return false;
+            }
+            if ((position - _pressPosition).sqrMagnitude > _dragThresholdSquared) _dragging = true;
+            if (_dragging)
+            {
+                _panCamera(_lastPosition, position);
+                _lastPosition = position;
+            }
+            if (!up) return false;
+            bool clicked = !_dragging;
+            CancelGesture();
+            return clicked && ReadHit(position, out combatUnit, out gridPosition);
+        }
 
-            if (!UnityInput.GetMouseButtonDown(0) || _isPointerBlocked?.Invoke() == true) return false;
-
-            var ray = _camera.ScreenPointToRay(UnityInput.mousePosition);
+        private bool ReadHit(Vector2 position, out CombatUnit combatUnit, out Vector2Int gridPosition)
+        {
+            combatUnit = null;
+            gridPosition = default;
+            var ray = _camera.ScreenPointToRay(position);
             if (!Physics.Raycast(ray, out var hitInfo, MAX_RAY_DISTANCE, _layerMask, QueryTriggerInteraction.Ignore))
             {
                 return false;
