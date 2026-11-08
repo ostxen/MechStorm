@@ -11,7 +11,7 @@ namespace MechStorm.Presentation.Cameras
     /// </summary>
     /// <remarks>
     /// <para>每段缓动保存三类值：start是固定起点，current是当前画面状态，target是最终目标。</para>
-    /// <para>旋转、缩放和居中采用定时缓动，连续操作从当前画面接续；拖拽焦点立即跟手。</para>
+    /// <para>旋转、缩放和居中采用定时缓动，连续操作从当前画面接续；拖拽和键盘平移立即更新焦点。</para>
     /// <para>相机位姿由焦点、观察角度和距离共同决定，不直接对世界位置做直线插值。</para>
     /// </remarks>
     public sealed class BattleCameraController : IDisposable
@@ -164,11 +164,28 @@ namespace MechStorm.Presentation.Cameras
 
             // 同一相机位姿下，旧、新屏幕点投影为P、Q；焦点加P-Q，让原来抓住的地图点跟随鼠标。
             var focus = _currentFocus + previousRay.GetPoint(previousDistance) - ray.GetPoint(distance);
+            SetManualFocus(focus);
+        }
+
+        /// <summary>按当前画面水平朝向平移焦点；x向右、y向前，组合输入不额外加速。</summary>
+        public void Move(Vector2 direction, float unscaledDeltaTime)
+        {
+            if (direction == Vector2.zero || unscaledDeltaTime == 0f) return;
+            direction = Vector2.ClampMagnitude(direction, 1f);
+            // 只用当前水平角，不用目标档位或带俯角的forward；旋转途中也与眼前画面一致。
+            var yaw = Quaternion.Euler(0f, _currentAzimuth, 0f);
+            var offset = yaw * new Vector3(direction.x, 0f, direction.y) * (_settings.MoveSpeed * unscaledDeltaTime);
+            SetManualFocus(_currentFocus + offset);
+        }
+
+        /// <summary>手动平移共用焦点限幅；逐轴截断越界分量，保留沿边移动。</summary>
+        private void SetManualFocus(Vector3 focus)
+        {
             // 只限制焦点的世界XZ，Y固定为棋盘高度；Rect.y存的是世界z，不是高度。
             focus.x = Mathf.Clamp(focus.x, _focusBounds.xMin, _focusBounds.xMax);
             focus.y = _coordinates.Origin.y;
             focus.z = Mathf.Clamp(focus.z, _focusBounds.yMin, _focusBounds.yMax);
-            // 将焦点的目标、当前值和起点统一为拖后位置，下帧Lerp两端相同，不会被旧焦点过渡拉回。
+            // 将焦点的目标、当前值和起点统一为手动位置，下帧Lerp两端相同，不会被旧焦点过渡拉回。
             // 不重置角度、距离和计时，尚未完成的旋转与缩放继续推进。
             Focus = _currentFocus = _startFocus = focus;
             ApplyPose();

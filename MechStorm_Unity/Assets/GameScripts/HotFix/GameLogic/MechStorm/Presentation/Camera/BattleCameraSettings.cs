@@ -49,6 +49,9 @@ namespace MechStorm.Presentation.Cameras
         /// </summary>
         [SerializeField] private float _dragThreshold = 8f;
 
+        /// <summary>键盘平移焦点的速度（世界单位/秒，非缩放时间），须大于0。</summary>
+        [SerializeField] private float _moveSpeed = 6f;
+
         public float InitialAzimuth => _initialAzimuth;
         public float Elevation => _elevation;
         public float InitialDistance => _initialDistance;
@@ -57,11 +60,12 @@ namespace MechStorm.Presentation.Cameras
         public float MaxDistance => _maxDistance;
         public float ZoomStep => _zoomStep;
         public float DragThreshold => _dragThreshold;
+        public float MoveSpeed => _moveSpeed;
 
         // 代码侧创建参数；场景侧通过Inspector编辑序列化字段。
         public BattleCameraSettings(float initialAzimuth = 0f, float elevation = 45f, float initialDistance = 10f,
             float transitionDuration = 0.25f, float minDistance = 6f, float maxDistance = 18f,
-            float zoomStep = 1f, float dragThreshold = 8f)
+            float zoomStep = 1f, float dragThreshold = 8f, float moveSpeed = 6f)
         {
             _initialAzimuth = initialAzimuth;
             _elevation = elevation;
@@ -71,6 +75,7 @@ namespace MechStorm.Presentation.Cameras
             _maxDistance = maxDistance;
             _zoomStep = zoomStep;
             _dragThreshold = dragThreshold;
+            _moveSpeed = moveSpeed;
         }
 
         // Runtime装配时校验一次。
@@ -88,6 +93,8 @@ namespace MechStorm.Presentation.Cameras
                 throw new ArgumentOutOfRangeException(nameof(TransitionDuration));
             if (!IsFinite(_dragThreshold) || _dragThreshold <= 0f)
                 throw new ArgumentOutOfRangeException(nameof(DragThreshold));
+            if (!IsFinite(_moveSpeed) || _moveSpeed <= 0f)
+                throw new ArgumentOutOfRangeException(nameof(MoveSpeed));
         }
 
         private static bool IsFinite(float value) => !float.IsNaN(value) && !float.IsInfinity(value);

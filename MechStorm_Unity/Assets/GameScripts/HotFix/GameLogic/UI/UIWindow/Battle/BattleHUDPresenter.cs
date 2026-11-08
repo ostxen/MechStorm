@@ -28,6 +28,8 @@ namespace GameLogic
         private bool _lastEnded;
         private bool _lastSelected;
         private bool _lastCanConfirm;
+        private int _lastRoundNumber;
+        private CombatFaction _lastFaction;
 
         public BattleHUDPresenter(BattleSession session, BattleInteractionController controller,
             BattleUnitStatusPresenter unitStatusPresenter, BattleHUDUI view, Func<bool> canAcceptInput)
@@ -74,6 +76,7 @@ namespace GameLogic
                 !ReferenceEquals(_controller.SelectedTarget, _lastTarget) ||
                 (target?.PilotRuntime.CurrentActionPoint ?? 0) != _lastTargetActionPoint ||
                 _session.IsBattleEnded != _lastEnded ||
+                _session.CurrentRoundNumber != _lastRoundNumber || _session.CurrentFaction != _lastFaction ||
                 _controller.IsCurrentUnitSelected != _lastSelected ||
                 _controller.CanConfirmSelectedAction != _lastCanConfirm;
         }
@@ -81,6 +84,7 @@ namespace GameLogic
         private void RefreshStatus(CombatUnit unit, CombatUnit target)
         {
             int cost = GetActionCost(_controller.SelectedAction, unit);
+            _view.SetBattleState(_session.CurrentRoundNumber, _session.CurrentFaction == CombatFaction.TeamA ? "我方回合" : "敌方回合");
             _view.SetPilotName(unit.Pilot.Name);
             _view.SetActionPoint(unit.PilotRuntime.CurrentActionPoint, unit.Pilot.MaxActionPoint);
             _view.SetActionPointPreview(cost);
@@ -137,6 +141,8 @@ namespace GameLogic
             _lastEnded = _session.IsBattleEnded;
             _lastSelected = _controller.IsCurrentUnitSelected;
             _lastCanConfirm = _controller.CanConfirmSelectedAction;
+            _lastRoundNumber = _session.CurrentRoundNumber;
+            _lastFaction = _session.CurrentFaction;
         }
 
         private bool CanAcceptInput()

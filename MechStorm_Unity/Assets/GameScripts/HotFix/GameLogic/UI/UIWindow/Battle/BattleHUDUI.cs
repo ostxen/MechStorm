@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using Cysharp.Threading.Tasks;
 using TEngine;
+using TMPro;
 using UnityEngine.UI;
 
 namespace GameLogic
@@ -16,14 +17,16 @@ namespace GameLogic
 		public event Action ConfirmRequested;
 		public event Action CancelRequested;
 		public event Action StandbyRequested;
-		public event Action<int> CameraRotationRequested;
-		private Button _rotateLeft;
-		private Button _rotateRight;
+		public event Action MenuRequested;
+		private Button _menu;
+		private TextMeshProUGUI _roundFaction;
+		private TextMeshProUGUI _objective;
 
 		protected override void BindMemberProperty()
 		{
-			_rotateLeft = transform.Find("CameraControls/m_btnRotateLeft").GetComponent<Button>();
-			_rotateRight = transform.Find("CameraControls/m_btnRotateRight").GetComponent<Button>();
+			_roundFaction = m_rectBattleStateRegion.Find("m_tmpRoundFaction").GetComponent<TextMeshProUGUI>();
+			_objective = m_rectBattleStateRegion.Find("m_tmpObjective").GetComponent<TextMeshProUGUI>();
+			_menu = m_rectBattleAuxiliaryRegion.Find("m_btnMenu").GetComponent<Button>();
 		}
 
 		public void SetDisplayEnabled(bool enabled)
@@ -43,19 +46,30 @@ namespace GameLogic
 
 		protected override void RegisterEvent()
 		{
-			_rotateLeft.onClick.AddListener(OnRotateLeft);
-			_rotateRight.onClick.AddListener(OnRotateRight);
+			_menu.onClick.AddListener(OnMenu);
 			_actionControl.Confirmed += () => ConfirmRequested?.Invoke();
 			_actionControl.Cancelled += () => CancelRequested?.Invoke();
 			_actionControl.Standby += () => StandbyRequested?.Invoke();
 		}
 
-		private void OnRotateLeft() => CameraRotationRequested?.Invoke(-1);
-		private void OnRotateRight() => CameraRotationRequested?.Invoke(1);
+		private void OnMenu() => MenuRequested?.Invoke();
+
+		public void SetBattleState(int roundNumber, string factionName)
+		{
+			_roundFaction.text = $"回合 {roundNumber:00}    /    {factionName}";
+		}
+
+		public void SetObjective(string description)
+		{
+			_objective.text = $"战斗目标：{description}";
+		}
 
 		protected override void OnCreate()
 		{
 			SetDisplayEnabled(false);
+			transform.Find("CameraControls").gameObject.SetActive(false);
+			_menu.interactable = true;
+			_menu.transform.Find("Availability").gameObject.SetActive(false);
 			// 动态条目准备完毕并绑定 Presenter 前不开放输入。
 			_combatInfo.Visible = false;
 			m_rectBattleStateRegion.gameObject.SetActive(true);
@@ -143,9 +157,8 @@ namespace GameLogic
 
 		protected override void OnDestroy()
 		{
-			_rotateLeft.onClick.RemoveListener(OnRotateLeft);
-			_rotateRight.onClick.RemoveListener(OnRotateRight);
-			CameraRotationRequested = null;
+			_menu.onClick.RemoveListener(OnMenu);
+			MenuRequested = null;
 			// 子 Widget 已由 TE 回收，此处只清除窗口持有的引用。
 			_weaponItem = null;
 			_abilityItems.Clear();

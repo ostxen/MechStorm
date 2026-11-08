@@ -9,6 +9,8 @@ namespace GameLogic
 	{
 		public event Action ExitRequested;
 		public event Action RestartRequested;
+		// 仅供镜头滚轮过滤；不改变遮罩的UI射线或关闭行为。
+		public UnityEngine.GameObject CameraScrollPassthrough => m_btnClose.gameObject;
 
 		protected override void OnDestroy()
 		{

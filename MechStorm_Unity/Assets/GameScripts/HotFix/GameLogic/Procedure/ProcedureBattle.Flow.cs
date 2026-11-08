@@ -120,17 +120,26 @@ namespace GameLogic
 
         private void UpdateCameraInput()
         {
-            if (!CanAcceptPointerInput()) return;
-            bool left = UnityEngine.Input.GetKeyDown(KeyCode.Q);
-            bool right = UnityEngine.Input.GetKeyDown(KeyCode.E);
+            if (!CanAcceptCameraInput()) return;
+            bool left = Input.GetKeyDown(KeyCode.LeftArrow);
+            bool right = Input.GetKeyDown(KeyCode.RightArrow);
             if (left != right) OnCameraRotationRequested(left ? -1 : 1);
-            float scroll = UnityEngine.Input.mouseScrollDelta.y;
+            var movement = new Vector2(
+                (Input.GetKey(KeyCode.D) ? 1f : 0f) - (Input.GetKey(KeyCode.A) ? 1f : 0f),
+                (Input.GetKey(KeyCode.W) ? 1f : 0f) - (Input.GetKey(KeyCode.S) ? 1f : 0f));
+            if (movement != Vector2.zero) _runtime.MoveCamera(movement, Time.unscaledDeltaTime);
+            float scroll = Input.mouseScrollDelta.y;
             if (scroll != 0f) OnCameraZoomRequested(scroll);
         }
 
         private bool CanAcceptPointerInput()
         {
-            if (!Application.isFocused || !CanAcceptCameraInput()) return false;
+            return CanAcceptBattleInput() && _hud.Visible && HasInputFocus();
+        }
+
+        private static bool HasInputFocus()
+        {
+            if (!Application.isFocused) return false;
             var selected = EventSystem.current?.currentSelectedGameObject;
             return selected == null || (selected.GetComponent<InputField>() == null &&
                 selected.GetComponent<TMP_InputField>() == null);
@@ -138,8 +147,8 @@ namespace GameLogic
 
         private bool CanAcceptCameraInput()
         {
-            return CanAcceptBattleInput() && _hud.Visible &&
-                !GameModule.UI.HasWindow<BattleMenuUI>() && !GameModule.UI.HasWindow<SettingsUI>();
+            // 菜单只阻止战斗操作和拖拽；设置仍阻止镜头新输入，不依赖底层HUD是否被遮挡。
+            return IsPlayingInputAvailable() && !GameModule.UI.HasWindow<SettingsUI>() && HasInputFocus();
         }
 
         private void OnCameraRotationRequested(int direction)
@@ -149,7 +158,10 @@ namespace GameLogic
 
         private void OnCameraZoomRequested(float scrollDelta)
         {
-            if (CanAcceptCameraInput()) _runtime.ZoomCamera(scrollDelta);
+            if (!CanAcceptCameraInput()) return;
+            var passthrough = GameModule.UI.HasWindow<BattleMenuUI>() && _battleMenu != null
+                ? _battleMenu.CameraScrollPassthrough : null;
+            _runtime.ZoomCamera(scrollDelta, passthrough);
         }
 
         private bool TryLeavePlaying()
@@ -176,9 +188,20 @@ namespace GameLogic
 
         private bool CanAcceptBattleInput()
         {
+            return IsPlayingInputAvailable() && !IsBattleModalOpen();
+        }
+
+        private bool IsPlayingInputAvailable()
+        {
             // Session 变更后立即拒绝输入，不必等待下一帧才切阶段。
             return CurrentPhase == BattleFlowPhase.Playing &&
                 !_runtime.Session.IsBattleEnded && !NeedsRoundAnnouncement();
+        }
+
+        private static bool IsBattleModalOpen()
+        {
+            // TE先入栈再异步加载，因此窗口尚未显示时也已阻止战斗输入。
+            return GameModule.UI.HasWindow<BattleMenuUI>() || GameModule.UI.HasWindow<SettingsUI>();
         }
 
         private void StopBattleFlow()

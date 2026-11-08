@@ -17,10 +17,12 @@ namespace GameLogic
     public sealed partial class ProcedureBattle : ProcedureBase, IDisposable
     {
         private const string SceneLocation = "Battle";
+        private const string ObjectiveDescription = "全灭敌方单位";
         private CancellationTokenSource _lifetime;
         private BattleRuntime _runtime;
         private LoadingUI _loading;
         private BattleHUDUI _hud;
+        private BattleMenuUI _battleMenu;
         private BattleHUDPresenter _hudPresenter;
         private BattleStatisticsReport _statisticsReport;
         private int _announcedRound;
@@ -87,7 +89,7 @@ namespace GameLogic
         {
             var objective = await ShowWindowAsync<BattleObjectiveUI>(cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
-            await objective.PlayAsync("全灭敌方单位", cancellationToken);
+            await objective.PlayAsync(ObjectiveDescription, cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
             GameModule.UI.CloseUI<BattleObjectiveUI>();
         }
@@ -112,11 +114,10 @@ namespace GameLogic
             var enterBattle = new UniTaskCompletionSource();
             preparation.EnterBattleRequested += () => enterBattle.TrySetResult();
             preparation.MenuRequested += OnBattleMenuRequested;
-            await preparation.DisplayAsync(_runtime.Session.GetFactionCombatUnits(CombatFaction.TeamA), cancellationToken);
+            await preparation.DisplayAsync(_runtime.Session.GetFactionCombatUnits(CombatFaction.TeamA), ObjectiveDescription, cancellationToken);
             _loading.SetProgress(1f);
             await UniTask.Yield(cancellationToken);
             CloseLoading();
-            Log.Info("战前准备已就绪，等待点击进入战斗。");
             await enterBattle.Task.AttachExternalCancellation(cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
             GameModule.UI.CloseUI<BattlePreparationUI>();
@@ -124,13 +125,18 @@ namespace GameLogic
 
         private void OnBattleMenuRequested()
         {
+            if (IsBattleModalOpen() || (CurrentPhase != BattleFlowPhase.Preparation && !CanAcceptBattleInput())) return;
+            _runtime.CancelPointerGesture();
             ShowBattleMenuAsync(_lifetime.Token).Forget();
         }
 
         private async UniTask ShowBattleMenuAsync(CancellationToken cancellationToken)
         {
+            // 新菜单加载期间不复用上次已关闭窗口的遮罩引用。
+            _battleMenu = null;
             var menu = await ShowWindowAsync<BattleMenuUI>(cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
+            _battleMenu = menu;
             menu.ExitRequested += ReturnToMain;
             menu.RestartRequested += RestartBattle;
         }
@@ -140,7 +146,8 @@ namespace GameLogic
             var hud = await ShowWindowAsync<BattleHUDUI>(cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
             _hud = hud;
-            _hud.CameraRotationRequested += OnCameraRotationRequested;
+            _hud.MenuRequested += OnBattleMenuRequested;
+            _hud.SetObjective(ObjectiveDescription);
             int maxAbilityCount = 0;
             foreach (var abilities in _runtime.Scenario.AbilitiesByUnitId.Values)
             {
@@ -278,6 +285,7 @@ namespace GameLogic
             StopBattleFlow();
             GameModule.UI.CloseUI<SettingsUI>();
             GameModule.UI.CloseUI<BattleMenuUI>();
+            _battleMenu = null;
             GameModule.UI.CloseUI<BattlePreparationUI>();
             GameModule.UI.CloseUI<BattleObjectiveUI>();
             GameModule.UI.CloseUI<BattleRoundIntroUI>();

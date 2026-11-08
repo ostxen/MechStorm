@@ -20,6 +20,7 @@ namespace MechStorm.Presentation.Tests.Cameras
             Assert.AreEqual(18f, settings.MaxDistance);
             Assert.AreEqual(1f, settings.ZoomStep);
             Assert.AreEqual(8f, settings.DragThreshold);
+            Assert.AreEqual(6f, settings.MoveSpeed);
         }
 
         [TestCase(0f, 45f, 0f)]
@@ -65,6 +66,16 @@ namespace MechStorm.Presentation.Tests.Cameras
         public void Validate_InvalidDragThresholdThrows(float threshold)
         {
             var settings = new BattleCameraSettings(dragThreshold: threshold);
+            Assert.Throws<ArgumentOutOfRangeException>(settings.Validate);
+        }
+
+        [TestCase(0f)]
+        [TestCase(-1f)]
+        [TestCase(float.NaN)]
+        [TestCase(float.PositiveInfinity)]
+        public void Validate_InvalidMoveSpeedThrows(float speed)
+        {
+            var settings = new BattleCameraSettings(moveSpeed: speed);
             Assert.Throws<ArgumentOutOfRangeException>(settings.Validate);
         }
     }

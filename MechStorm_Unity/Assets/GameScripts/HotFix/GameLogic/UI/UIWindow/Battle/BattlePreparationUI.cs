@@ -27,10 +27,10 @@ namespace GameLogic
 		/// <summary>
 		/// 展示本场固定队伍；所有条目就绪后才允许开始，不提供角色替换或排序。
 		/// </summary>
-		public async UniTask DisplayAsync(IReadOnlyList<CombatUnit> units, CancellationToken cancellationToken)
+		public async UniTask DisplayAsync(IReadOnlyList<CombatUnit> units, string objectiveDescription, CancellationToken cancellationToken)
 		{
 			m_tmpParticipantCount.text = $"参战人数：{units.Count}";
-			m_tmpObjectiveDescription.text = "全灭敌方单位";
+			m_tmpObjectiveDescription.text = objectiveDescription;
 			for (int i = 0; i < units.Count; i++)
 			{
 				var unit = units[i];

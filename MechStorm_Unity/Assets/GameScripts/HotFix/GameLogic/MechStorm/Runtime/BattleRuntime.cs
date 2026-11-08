@@ -128,6 +128,11 @@ namespace MechStorm.Runtime
 
         private static bool IsPointerOverUI()
         {
+            return IsPointerOverUI(null);
+        }
+
+        private static bool IsPointerOverUI(GameObject ignoredGraphic)
+        {
             var eventSystem = EventSystem.current;
             if (eventSystem == null)
             {
@@ -138,7 +143,7 @@ namespace MechStorm.Runtime
             var pointer = new PointerEventData(eventSystem) { position = UnityEngine.Input.mousePosition };
             var hits = new List<RaycastResult>();
             eventSystem.RaycastAll(pointer, hits);
-            return hits.Exists(hit => hit.module is GraphicRaycaster);
+            return hits.Exists(hit => hit.module is GraphicRaycaster && hit.gameObject != ignoredGraphic);
         }
 
         public void Tick(bool acceptInput)
@@ -179,10 +184,16 @@ namespace MechStorm.Runtime
             UnitStatusPresenter.RefreshFacing();
         }
 
-        public void ZoomCamera(float scrollDelta)
+        public void ZoomCamera(float scrollDelta, GameObject ignoredGraphic = null)
         {
-            if (IsPointerOverUI()) return;
+            if (IsPointerOverUI(ignoredGraphic)) return;
             CameraController.Zoom(scrollDelta);
+        }
+
+        public void MoveCamera(Vector2 direction, float unscaledDeltaTime)
+        {
+            CameraController.SynchronizeActor(Session.CurrentCombatUnit);
+            CameraController.Move(direction, unscaledDeltaTime);
         }
 
         private static Renderer ValidateSceneBindings(Transform plane, Camera battleCamera, Transform unitParent,
