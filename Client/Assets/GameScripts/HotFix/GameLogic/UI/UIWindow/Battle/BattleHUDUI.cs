@@ -13,12 +13,17 @@ namespace GameLogic
 		private bool _displayEnabled;
 		private WeaponItem _weaponItem;
 		private readonly List<AbilityItem> _abilityItems = new();
+		private readonly List<CommandItem> _commandItems = new();
 		public event Action<int> ActionRequested;
+		public event Action<int> CommandRequested;
 		public event Action ConfirmRequested;
 		public event Action CancelRequested;
 		public event Action StandbyRequested;
 		public event Action MenuRequested;
+		public event Action EndFactionTurnRequested;
 		private Button _menu;
+		private Button _endFactionTurn;
+		private TextMeshProUGUI _endFactionTurnLabel;
 		private TextMeshProUGUI _roundFaction;
 		private TextMeshProUGUI _objective;
 
@@ -27,6 +32,8 @@ namespace GameLogic
 			_roundFaction = m_rectBattleStateRegion.Find("m_tmpRoundFaction").GetComponent<TextMeshProUGUI>();
 			_objective = m_rectBattleStateRegion.Find("m_tmpObjective").GetComponent<TextMeshProUGUI>();
 			_menu = m_rectBattleAuxiliaryRegion.Find("m_btnMenu").GetComponent<Button>();
+			_endFactionTurn = transform.Find("FactionTurnControlRegion/m_btnEndFactionTurn").GetComponent<Button>();
+			_endFactionTurnLabel = _endFactionTurn.transform.Find("Label").GetComponent<TextMeshProUGUI>();
 		}
 
 		public void SetDisplayEnabled(bool enabled)
@@ -47,12 +54,20 @@ namespace GameLogic
 		protected override void RegisterEvent()
 		{
 			_menu.onClick.AddListener(OnMenu);
+			_endFactionTurn.onClick.AddListener(OnEndFactionTurn);
 			_actionControl.Confirmed += () => ConfirmRequested?.Invoke();
 			_actionControl.Cancelled += () => CancelRequested?.Invoke();
 			_actionControl.Standby += () => StandbyRequested?.Invoke();
 		}
 
 		private void OnMenu() => MenuRequested?.Invoke();
+		private void OnEndFactionTurn() => EndFactionTurnRequested?.Invoke();
+
+		public void SetEndFactionTurn(bool interactable, string factionName)
+		{
+			_endFactionTurn.interactable = interactable;
+			_endFactionTurnLabel.text = $"结束{factionName}回合";
+		}
 
 		public void SetBattleState(int roundNumber, string factionName)
 		{
@@ -91,6 +106,26 @@ namespace GameLogic
 				item.Clicked += () => ActionRequested?.Invoke(index);
 				_abilityItems.Add(item);
 			}
+			for (int i = _commandItems.Count; i < maxAbilityCount; i++)
+			{
+				var item = await CreateWidgetByTypeAsync<CommandItem>(m_rectCommands, false);
+				int index = i;
+				item.Clicked += () => CommandRequested?.Invoke(index);
+				_commandItems.Add(item);
+			}
+		}
+
+		public void SetCommandCount(int count)
+		{
+			for (int i = 0; i < _commandItems.Count; i++)
+			{
+				_commandItems[i].Visible = i < count;
+			}
+		}
+
+		public void SetCommand(int index, string title, int cost, bool interactable, bool selected)
+		{
+			_commandItems[index].SetData(title, cost, interactable, selected);
 		}
 
 		public void SetWeapon(int damage, int minRange, int maxRange, bool interactable, bool selected)
@@ -116,11 +151,11 @@ namespace GameLogic
 			_abilityItems[index].SetData(title, cost, interactable, selected);
 		}
 
-		public void SetActionLayout(bool enabled, bool selecting, bool hasTarget, bool showConfirm, bool canConfirm)
+		public void SetActionLayout(bool enabled, bool selecting, bool hasTarget, bool showConfirm, bool canConfirm, bool commandSelected = false)
 		{
-			m_rectWeapons.gameObject.SetActive(enabled && !hasTarget);
-			m_rectAbilities.gameObject.SetActive(enabled && hasTarget);
-			m_rectCommands.gameObject.SetActive(false);
+			m_rectWeapons.gameObject.SetActive(enabled && !hasTarget && !commandSelected);
+			m_rectAbilities.gameObject.SetActive(enabled && hasTarget && !commandSelected);
+			m_rectCommands.gameObject.SetActive(enabled && (!hasTarget || commandSelected));
 			_actionControl.Visible = enabled;
 			_actionControl.SetState(selecting, showConfirm, canConfirm);
 		}
@@ -158,11 +193,15 @@ namespace GameLogic
 		protected override void OnDestroy()
 		{
 			_menu.onClick.RemoveListener(OnMenu);
+			_endFactionTurn.onClick.RemoveListener(OnEndFactionTurn);
 			MenuRequested = null;
+			EndFactionTurnRequested = null;
 			// 子 Widget 已由 TE 回收，此处只清除窗口持有的引用。
 			_weaponItem = null;
 			_abilityItems.Clear();
+			_commandItems.Clear();
 			ActionRequested = null;
+			CommandRequested = null;
 			ConfirmRequested = null;
 			CancelRequested = null;
 			StandbyRequested = null;

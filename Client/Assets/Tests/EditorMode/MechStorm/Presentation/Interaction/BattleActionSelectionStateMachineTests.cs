@@ -1,11 +1,11 @@
 using System;
 using MechStorm.Battle.Data;
 using MechStorm.Battle.Units;
-using MechStorm.Presentation.Controllers;
+using MechStorm.Presentation.Interaction;
 using NUnit.Framework;
 using Vector2Int = MechStorm.Battle.Foundation.Vector2Int;
 
-namespace MechStorm.Presentation.Tests.Controllers
+namespace MechStorm.Presentation.Tests.Interaction
 {
     public class BattleActionSelectionStateMachineTests
     {
@@ -117,6 +117,23 @@ namespace MechStorm.Presentation.Tests.Controllers
         }
 
         [Test]
+        public void ParameterValidation_PreservesArgumentNames()
+        {
+            var stateMachine = new BattleActionSelectionStateMachine();
+            Assert.AreEqual("action", Assert.Throws<ArgumentNullException>(() => stateMachine.SelectAction(null)).ParamName);
+            Assert.AreEqual("target", Assert.Throws<ArgumentNullException>(() => stateMachine.SelectTarget(null)).ParamName);
+            Assert.AreEqual("unit", Assert.Throws<ArgumentNullException>(() => BattleActionTargetSelection.ForUnit(null)).ParamName);
+            Assert.AreEqual("unit", Assert.Throws<ArgumentNullException>(() => BattleActionTargetSelection.ForSelf(null)).ParamName);
+            Assert.AreEqual("ability", Assert.Throws<ArgumentNullException>(() => BattleActionSelection.ForAbility(null)).ParamName);
+
+            var ability = new AbilityDefinition(10, "Strike", 1, 2, 20, 1, TargetRule.EnemyUnit);
+            Assert.AreEqual("rangeSource", Assert.Throws<ArgumentOutOfRangeException>(() =>
+                BattleActionSelection.ForAbility(ability, (AbilityTargetRangeSource)999)).ParamName);
+            Assert.AreEqual("rangeSource", Assert.Throws<ArgumentException>(() =>
+                BattleActionSelection.ForAbility(ability, AbilityTargetRangeSource.BasicWeapon)).ParamName);
+        }
+
+        [Test]
         public void TargetFactories_PreserveReservedTargetKinds()
         {
             var unit = CreateCombatUnit(2);
@@ -158,7 +175,7 @@ namespace MechStorm.Presentation.Tests.Controllers
             Assert.AreEqual(BattleActionTargetKind.Unit, basicAttack.TargetKind);
             Assert.IsNull(basicAttack.Ability);
             Assert.AreEqual(
-                BattleActionSelectionKind.ActiveAbility,
+                BattleActionSelectionKind.Ability,
                 activeAbility.Kind);
             Assert.AreEqual(
                 AbilityTargetRangeSource.Ability,

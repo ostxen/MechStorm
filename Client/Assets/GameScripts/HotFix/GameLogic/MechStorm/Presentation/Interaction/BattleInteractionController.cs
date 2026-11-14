@@ -9,7 +9,7 @@ using MechStorm.Presentation.Input;
 using MechStorm.Presentation.Units;
 using Vector2Int = MechStorm.Battle.Foundation.Vector2Int;
 
-namespace MechStorm.Presentation.Controllers
+namespace MechStorm.Presentation.Interaction
 {
     public enum BattleInputAction
     {
@@ -88,16 +88,28 @@ namespace MechStorm.Presentation.Controllers
             BattleGridFocusIndicator gridFocusIndicator,
             IReadOnlyDictionary<int, IReadOnlyList<AbilityDefinition>> abilitiesByUnitId = null)
         {
-            _battleSession = battleSession ?? throw new ArgumentNullException(nameof(battleSession));
-            _combatUnitVisuals = combatUnitVisuals ?? throw new ArgumentNullException(nameof(combatUnitVisuals));
-            _boardInputReader = boardInputReader ?? throw new ArgumentNullException(nameof(boardInputReader));
-            _rangeHighlighter = rangeHighlighter ?? throw new ArgumentNullException(nameof(rangeHighlighter));
-            _gridFocusIndicator = gridFocusIndicator ??
-                throw new ArgumentNullException(nameof(gridFocusIndicator));
+            ValidateDependencies(battleSession, combatUnitVisuals, boardInputReader, rangeHighlighter, gridFocusIndicator);
+            _battleSession = battleSession;
+            _combatUnitVisuals = combatUnitVisuals;
+            _boardInputReader = boardInputReader;
+            _rangeHighlighter = rangeHighlighter;
+            _gridFocusIndicator = gridFocusIndicator;
             _highlightMapper = new BattleRangeHighlightMapper();
             _actionSelection = new BattleActionSelectionCoordinator(
                 battleSession,
                 abilitiesByUnitId);
+        }
+
+        private static void ValidateDependencies(BattleSession battleSession,
+            IReadOnlyDictionary<CombatUnit, CombatUnitVisual> combatUnitVisuals,
+            BattleBoardInputReader boardInputReader, BattleRangeHighlighter rangeHighlighter,
+            BattleGridFocusIndicator gridFocusIndicator)
+        {
+            BattleInteractionArguments.RequireNotNull(battleSession, nameof(battleSession));
+            BattleInteractionArguments.RequireNotNull(combatUnitVisuals, nameof(combatUnitVisuals));
+            BattleInteractionArguments.RequireNotNull(boardInputReader, nameof(boardInputReader));
+            BattleInteractionArguments.RequireNotNull(rangeHighlighter, nameof(rangeHighlighter));
+            BattleInteractionArguments.RequireNotNull(gridFocusIndicator, nameof(gridFocusIndicator));
         }
 
         /// <summary>
@@ -186,16 +198,12 @@ namespace MechStorm.Presentation.Controllers
         }
 
         /// <summary>
-        /// 选择主动技能；目标优先时保留合法目标并直接进入待确认。
+        /// 选择技能；角色指令使用自身射程，目标优先只接受武器技能。
         /// </summary>
         public bool SelectAbility(AbilityDefinition ability,
             AbilityTargetRangeSource rangeSource = AbilityTargetRangeSource.Ability)
         {
-            if (ability == null)
-            {
-                throw new ArgumentNullException(nameof(ability));
-            }
-
+            // 工厂统一校验技能参数，避免交互入口重复检查。
             return TrySelectAction(BattleActionSelection.ForAbility(ability, rangeSource));
         }
 
@@ -420,7 +428,7 @@ namespace MechStorm.Presentation.Controllers
         private void RefreshRangeHighlights()
         {
             var selectedAction = _actionSelection.SelectedAction;
-            if (selectedAction?.Kind == BattleActionSelectionKind.ActiveAbility)
+            if (selectedAction?.Kind == BattleActionSelectionKind.Ability)
             {
                 var abilityHighlights = _highlightMapper.BuildAbility(
                     _battleSession.GetCurrentCombatUnitAbilityPositions(
@@ -462,7 +470,7 @@ namespace MechStorm.Presentation.Controllers
 
         private static BattleActionType GetActionType(BattleActionSelection action)
         {
-            return action.Kind == BattleActionSelectionKind.ActiveAbility
+            return action.Kind == BattleActionSelectionKind.Ability
                 ? BattleActionType.UseAbility
                 : BattleActionType.Attack;
         }

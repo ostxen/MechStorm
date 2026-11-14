@@ -1,6 +1,4 @@
-using System;
-
-namespace MechStorm.Presentation.Controllers
+namespace MechStorm.Presentation.Interaction
 {
     /// <summary>
     /// 行动与目标的四种有效组合，同时覆盖行动优先和目标优先。
@@ -13,6 +11,7 @@ namespace MechStorm.Presentation.Controllers
         AwaitingConfirmation,
     }
 
+    /// <summary>记录本次先选行动还是目标，不代表技能分类。</summary>
     public enum BattleActionSelectionPath
     {
         None,
@@ -57,10 +56,7 @@ namespace MechStorm.Presentation.Controllers
 
         public void SelectAction(BattleActionSelection action)
         {
-            if (action == null)
-            {
-                throw new ArgumentNullException(nameof(action));
-            }
+            BattleInteractionArguments.RequireNotNull(action, nameof(action));
 
             if (Path == BattleActionSelectionPath.None)
             {
@@ -74,10 +70,7 @@ namespace MechStorm.Presentation.Controllers
 
         public void SelectTarget(BattleActionTargetSelection target)
         {
-            if (target == null)
-            {
-                throw new ArgumentNullException(nameof(target));
-            }
+            BattleInteractionArguments.RequireNotNull(target, nameof(target));
 
             if (Path == BattleActionSelectionPath.None)
             {

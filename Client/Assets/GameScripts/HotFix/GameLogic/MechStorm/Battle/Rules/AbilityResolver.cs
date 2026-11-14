@@ -151,7 +151,7 @@ namespace MechStorm.Battle.Rules
                     maxRange = ability.MaxRange;
                     return;
                 case AbilityTargetRangeSource.BasicWeapon:
-                    if (!ability.RequiresBasicWeapon)
+                    if (!ability.RequiresBasicWeapon || ability.Category == AbilityCategory.Command)
                     {
                         throw new ArgumentException(
                             "Ability must require the basic weapon to use its range.",

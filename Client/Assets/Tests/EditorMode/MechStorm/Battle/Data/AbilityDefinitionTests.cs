@@ -19,6 +19,7 @@ namespace MechStorm.Battle.Tests.Data
             Assert.AreEqual(2, ability.ActionPointCost);
             Assert.AreEqual(TargetRule.EnemyUnit, ability.TargetRule);
             Assert.IsFalse(ability.RequiresBasicWeapon);
+            Assert.AreEqual(AbilityCategory.Active, ability.Category);
         }
 
         [Test]

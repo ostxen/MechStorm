@@ -1,8 +1,9 @@
 using System;
 using System.Collections.Generic;
 using MechStorm.Battle;
+using MechStorm.Battle.Data;
 using MechStorm.Battle.Units;
-using MechStorm.Presentation.Controllers;
+using MechStorm.Presentation.Interaction;
 using MechStorm.Presentation.Units;
 using TEngine;
 
@@ -20,6 +21,7 @@ namespace GameLogic
         private Func<bool> _canAcceptInput;
         private CombatUnit _lastUnit;
         private readonly List<BattleActionSelection> _displayedActions = new();
+        private readonly List<BattleActionSelection> _displayedCommands = new();
         private BattleActionSelection _lastAction;
         private BattleActionTargetSelection _lastTarget;
         private int _lastActionPoint;
@@ -40,9 +42,11 @@ namespace GameLogic
             _view = view ?? throw new ArgumentNullException(nameof(view));
             _canAcceptInput = canAcceptInput ?? throw new ArgumentNullException(nameof(canAcceptInput));
             view.ActionRequested += OnActionRequested;
+            view.CommandRequested += OnCommandRequested;
             view.ConfirmRequested += OnConfirmRequested;
             view.CancelRequested += OnCancelRequested;
             view.StandbyRequested += OnStandbyRequested;
+            view.EndFactionTurnRequested += OnEndFactionTurnRequested;
         }
 
         public void RefreshIfChanged(bool force = false)
@@ -97,6 +101,7 @@ namespace GameLogic
         {
             bool enabled = !_session.IsBattleEnded && _controller.IsCurrentUnitSelected;
             bool selecting = _controller.ActionSelectionState != BattleActionSelectionState.ActionList;
+            _view.SetEndFactionTurn(enabled && !selecting, _session.CurrentFaction == CombatFaction.TeamA ? "我方" : "敌方");
             bool hasTarget = _controller.SelectedTarget?.Unit != null;
             bool canSelect = enabled && hasTarget &&
                 _controller.ActionSelectionPath == BattleActionSelectionPath.TargetFirst;
@@ -106,6 +111,22 @@ namespace GameLogic
                 _displayedActions.AddRange(_controller.GetAvailableActionsForSelectedTarget());
             }
             var attack = unit.Mech.BasicAttack;
+            _displayedCommands.Clear();
+            if (enabled)
+            {
+                foreach (var action in _controller.GetAvailableActions())
+                {
+                    if (action.Ability?.Category == AbilityCategory.Command)
+                        _displayedCommands.Add(action);
+                }
+            }
+            _view.SetCommandCount(_displayedCommands.Count);
+            for (int i = 0; i < _displayedCommands.Count; i++)
+            {
+                var action = _displayedCommands[i];
+                _view.SetCommand(i, action.Ability.Name, action.Ability.ActionPointCost, enabled && !selecting,
+                    action.Matches(_controller.SelectedAction));
+            }
             // 持有武器不等于选择攻击方式，不能因此锁定移动或进入 ActionFirst。
             _view.SetWeapon(attack.Damage, attack.MinRange, attack.MaxRange, enabled && !selecting, true);
             _view.SetAbilityCount(_displayedActions.Count);
@@ -117,7 +138,8 @@ namespace GameLogic
                     action.Matches(_controller.SelectedAction));
             }
             bool awaiting = _controller.ActionSelectionState == BattleActionSelectionState.AwaitingConfirmation;
-            _view.SetActionLayout(enabled, selecting, hasTarget, awaiting, _controller.CanConfirmSelectedAction);
+            bool commandSelected = _controller.SelectedAction?.Ability?.Category == AbilityCategory.Command;
+            _view.SetActionLayout(enabled, selecting, hasTarget, awaiting, _controller.CanConfirmSelectedAction, commandSelected);
         }
 
         private static int GetActionCost(BattleActionSelection action, CombatUnit unit)
@@ -194,6 +216,18 @@ namespace GameLogic
             RefreshAfterAction(result.IsSuccess);
         }
 
+        private void OnCommandRequested(int index)
+        {
+            if (!CanAcceptInput() || _controller.IsActionInputLocked ||
+                index < 0 || index >= _displayedCommands.Count)
+            {
+                return;
+            }
+            var action = _displayedCommands[index];
+            _controller.SelectAbility(action.Ability);
+            RefreshIfChanged(true);
+        }
+
         private void OnCancelRequested()
         {
             if (!CanAcceptInput())
@@ -233,14 +267,26 @@ namespace GameLogic
             RefreshIfChanged(true);
         }
 
+        private void OnEndFactionTurnRequested()
+        {
+            if (!CanAcceptInput() || _controller.IsActionInputLocked)
+            {
+                return;
+            }
+            var result = _controller.EndCurrentFactionTurn();
+            RefreshAfterAction(result.IsSuccess);
+        }
+
         public void Dispose()
         {
             if (_view != null)
             {
                 _view.ActionRequested -= OnActionRequested;
+                _view.CommandRequested -= OnCommandRequested;
                 _view.ConfirmRequested -= OnConfirmRequested;
                 _view.CancelRequested -= OnCancelRequested;
                 _view.StandbyRequested -= OnStandbyRequested;
+                _view.EndFactionTurnRequested -= OnEndFactionTurnRequested;
             }
             _view = null;
             _session = null;
@@ -249,6 +295,7 @@ namespace GameLogic
             _unitStatusPresenter = null;
             _canAcceptInput = null;
             _displayedActions.Clear();
+            _displayedCommands.Clear();
             _lastAction = null;
             _lastTarget = null;
         }

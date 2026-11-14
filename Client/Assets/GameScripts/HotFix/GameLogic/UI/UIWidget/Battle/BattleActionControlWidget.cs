@@ -27,7 +27,7 @@ namespace GameLogic
 			m_goAbilityConfirm.SetActive(selecting);
 			_attack.Visible = showConfirm;
 			_attack.SetInteractable(canConfirm);
-			// 当前配置全部技能走武器技能路径，没有角色指令。
+			// 单体指令复用既有确认/取消控件，不开放未接入的方向操作。
 			_commandOperation.Visible = false;
 		}
 

@@ -1,7 +1,7 @@
 {
     "name": "MechStorm.Config.Tests",
     "rootNamespace": "MechStorm.Config.Tests",
-    "references": ["GameLogic", "GameProto", "MechStorm.Battle", "UniTask", "TEngine.Runtime"],
+    "references": ["GameLogic", "GameProto", "MechStorm.Battle", "MechStorm.Presentation", "UniTask", "TEngine.Runtime"],
     "includePlatforms": ["Editor"],
     "optionalUnityReferences": ["TestAssemblies"],
     "autoReferenced": true

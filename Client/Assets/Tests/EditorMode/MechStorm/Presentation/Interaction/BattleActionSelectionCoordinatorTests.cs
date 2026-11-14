@@ -2,14 +2,60 @@ using System.Collections.Generic;
 using MechStorm.Battle;
 using MechStorm.Battle.Data;
 using MechStorm.Battle.Units;
-using MechStorm.Presentation.Controllers;
+using MechStorm.Presentation.Interaction;
 using NUnit.Framework;
 using Vector2Int = MechStorm.Battle.Foundation.Vector2Int;
 
-namespace MechStorm.Presentation.Tests.Controllers
+namespace MechStorm.Presentation.Tests.Interaction
 {
     public class BattleActionSelectionCoordinatorTests
     {
+        [Test]
+        public void Command_WeaponDependencyDoesNotExposeTargetFirstOrWeaponRange()
+        {
+            var command = new AbilityDefinition(1004, "星坠闪", 1, 4, 12, 3, TargetRule.EnemyUnit, true, AbilityCategory.Command);
+            var context = CreateContext(command);
+            Assert.IsTrue(context.Coordinator.TrySelectUnitTarget(context.Enemy, out _));
+            Assert.AreEqual(1, context.Coordinator.GetAvailableActionsForSelectedTarget().Count);
+            Assert.IsFalse(context.Coordinator.TrySelectAction(BattleActionSelection.ForAbility(command), out _));
+            context.Coordinator.Cancel();
+            Assert.IsFalse(context.Coordinator.TrySelectAction(BattleActionSelection.ForAbility(command, AbilityTargetRangeSource.BasicWeapon), out _));
+            Assert.IsTrue(context.Coordinator.TrySelectAction(BattleActionSelection.ForAbility(command), out _));
+            Assert.AreEqual(BattleActionSelectionPath.ActionFirst, context.Coordinator.Path);
+            Assert.IsFalse(context.Coordinator.TrySelectAction(BattleActionSelection.ForBasicAttack(), out _));
+            context.Coordinator.Cancel();
+            Assert.AreEqual(3, context.Player.PilotRuntime.CurrentActionPoint);
+            Assert.AreEqual(100, context.Enemy.MechRuntime.CurrentDurability);
+            Assert.IsEmpty(context.Session.ActionLogs);
+        }
+
+        [Test]
+        public void Command_InsufficientAPRejectsSelectionWithoutSideEffects()
+        {
+            var command = new AbilityDefinition(1004, "星坠闪", 1, 4, 12, 3, TargetRule.EnemyUnit, true, AbilityCategory.Command);
+            var context = CreateContext(command);
+            context.Player.PilotRuntime.TrySpendActionPoint(1);
+            Assert.IsFalse(context.Coordinator.TrySelectAction(BattleActionSelection.ForAbility(command), out _));
+            Assert.AreEqual(BattleActionSelectionState.ActionList, context.Coordinator.State);
+            Assert.AreEqual(1, context.Coordinator.GetAvailableActions().Count);
+            Assert.AreEqual(2, context.Player.PilotRuntime.CurrentActionPoint);
+            Assert.IsEmpty(context.Session.ActionLogs);
+        }
+
+        [TestCase(1, true)]
+        [TestCase(4, true)]
+        [TestCase(5, false)]
+        public void Command_UsesInclusiveIndependentRange(int distance, bool valid)
+        {
+            var command = new AbilityDefinition(1004, "星坠闪", 1, 4, 12, 3, TargetRule.EnemyUnit, true, AbilityCategory.Command);
+            var context = CreateContext(command, enemyPosition: new Vector2Int(1 + distance / 2, 1 + distance - distance / 2));
+            Assert.IsTrue(context.Coordinator.TrySelectAction(BattleActionSelection.ForAbility(command), out _));
+            Assert.AreEqual(valid, context.Coordinator.TrySelectUnitTarget(context.Enemy, out _));
+            Assert.AreEqual(valid, context.Coordinator.CanConfirm);
+            Assert.AreEqual(3, context.Player.PilotRuntime.CurrentActionPoint);
+            Assert.IsEmpty(context.Session.ActionLogs);
+        }
+
         [Test]
         public void GetAvailableActions_ReturnsBasicAttackAndConfiguredAbility()
         {
@@ -19,7 +65,7 @@ namespace MechStorm.Presentation.Tests.Controllers
 
             Assert.AreEqual(2, actions.Count);
             Assert.AreEqual(BattleActionSelectionKind.BasicAttack, actions[0].Kind);
-            Assert.AreEqual(BattleActionSelectionKind.ActiveAbility, actions[1].Kind);
+            Assert.AreEqual(BattleActionSelectionKind.Ability, actions[1].Kind);
             Assert.AreSame(context.Ability, actions[1].Ability);
         }
 
@@ -31,7 +77,7 @@ namespace MechStorm.Presentation.Tests.Controllers
             var actions = context.Coordinator.GetAvailableActions();
 
             Assert.AreEqual(1, actions.Count);
-            Assert.AreEqual(BattleActionSelectionKind.ActiveAbility, actions[0].Kind);
+            Assert.AreEqual(BattleActionSelectionKind.Ability, actions[0].Kind);
         }
 
         [Test]
@@ -75,7 +121,7 @@ namespace MechStorm.Presentation.Tests.Controllers
                 BattleActionSelectionKind.BasicAttack,
                 actions[0].Kind);
             Assert.AreEqual(
-                BattleActionSelectionKind.ActiveAbility,
+                BattleActionSelectionKind.Ability,
                 actions[1].Kind);
         }
 

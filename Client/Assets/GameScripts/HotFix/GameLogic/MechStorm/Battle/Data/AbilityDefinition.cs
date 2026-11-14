@@ -2,6 +2,12 @@ using System;
 
 namespace MechStorm.Battle.Data
 {
+    public enum AbilityCategory
+    {
+        Active,
+        Command,
+    }
+
     /// <summary>
     /// 指定本次技能选择采用自身范围还是已验证的基础武器目标范围。
     /// </summary>
@@ -35,8 +41,10 @@ namespace MechStorm.Battle.Data
         /// </summary>
         public bool RequiresBasicWeapon { get; }
 
+        public AbilityCategory Category { get; }
+
         public AbilityDefinition(int abilityId, string name, int minRange, int maxRange, int damage,
-            int actionPointCost, TargetRule targetRule, bool requiresBasicWeapon = false)
+            int actionPointCost, TargetRule targetRule, bool requiresBasicWeapon = false, AbilityCategory category = AbilityCategory.Active)
         {
             if (abilityId <= 0)
             {
@@ -84,6 +92,11 @@ namespace MechStorm.Battle.Data
                     "Target rule must be defined.");
             }
 
+            if (!Enum.IsDefined(typeof(AbilityCategory), category))
+            {
+                throw new ArgumentOutOfRangeException(nameof(category), category, "Ability category must be defined.");
+            }
+
             AbilityId = abilityId;
             Name = name;
             MinRange = minRange;
@@ -92,6 +105,7 @@ namespace MechStorm.Battle.Data
             ActionPointCost = actionPointCost;
             TargetRule = targetRule;
             RequiresBasicWeapon = requiresBasicWeapon;
+            Category = category;
         }
     }
 }

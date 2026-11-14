@@ -1,6 +1,18 @@
 # MechStorm 战斗配置工程
 
-本工程属于 T1.12，配置域已按关卡出战、架构员、机兵装配、武器和技能分工。2026-11-07已完成Luban战斗装配与真实胜负/统计/重战/返回验收，正式ProcedureBattle不再读取 `BattleScenarioConfig.asset`。当前14表71行，生成78份C#及14份bytes；新增45条明确标注的流程验收数据，不是正式策划数值。当前配置运行时采用TE模板式同步按表懒加载：首次访问某个`Tables.TbXxx`时读取对应bytes，外键解析按依赖继续加载并缓存；完整新机制和正式平衡数据仍待后续Sprint。
+本工程属于 T1.12，配置域已按关卡出战、架构员、机兵装配、武器和技能分工。正式ProcedureBattle不再读取 `BattleScenarioConfig.asset`。当前14表73行，生成78份C#及14份bytes；45条流程验收数据保留，另追加艾达星坠闪的2行关联，不改原技能数值。配置继续同步按表懒加载；完整新机制和正式平衡数据仍待后续Sprint。
+
+## 当前游戏文案（2026-11-09）
+
+- 游戏名称及说明不附加开发验证标记。机师名为艾达、洛莎、索妮亚、曜；装配为装配1～4，武器为刀剑1～4，技能9001为“强击”。说明只保留武器/技能玩法信息，不改ID、数值或规则。下方历史批次出现的旧名称仅为历史记录。
+- 本次清理4份工作簿18处文本，标准导表仅更新对应4份bytes，工作簿复查无旧标记。Config25/25通过，实际准备页与HUD名称显示及撤退通过。
+
+## 真实角色指令接入（2026-11-09，覆盖下方历史运行范围）
+
+- 用户确认艾达9001的PilotSkill与Deployment9001的UnitSkill均追加1004星坠闪、顺序2，保留9001验收强击顺序1。两张关联表各5行，其他数据不改。标准`gen_code_bin_to_project_lazyload.bat`转调既有导表，退出0，仅更新两份关联bytes；主脚本客户端输出修正为`Client/Assets/...`，不再写旧目录。
+- 星坠闪沿用原Skill.xlsx：Command、3AP、菱形1～4、允许飞行目标配置、单敌方、唯一可用刀剑、伤害为武器攻击力×12000/10000。艾达本场伤害120，成功后沿既有Session规则结束行动。飞行系统未实现，不将允许标记当作飞行验收。
+- 9001验收强击原表也为Command。Builder现在保留Active/Command分类，Command独立自身射程且只行动优先；基础武器依赖不再被当作分类。Active武器技能仍要求与唯一武器范围一致。目标优先只显示普攻/武器技能；两种Command都在角色指令区。无双武器、范围攻击、被动或PP扩展。
+- 最终Config25/25、Presentation133/133、Battle232/232通过。实际按钮验证第4格目标、取消免费、3AP/120伤害/结束行动、菜单拒绝/重战独立通过；后续24组镜头及真实胜败/统计/结果再战通过。完整T1.11及物理输入/多分辨率仍待验收，详见Client进度。
 
 ## 配置加载策略（2026-11-07）
 
@@ -49,7 +61,7 @@
 |---|---|---:|
 | `Battle.TbScenario` | 关卡 ID 与棋盘宽高 | 1 |
 | `Battle.TbDeployment` | 关卡单位、阵营、站位、顺序、架构员与机兵装配引用 | 4 |
-| `Battle.TbUnitSkill` | 本场单位携带的机师技能及顺序 | 4 |
+| `Battle.TbUnitSkill` | 本场单位携带的机师技能及顺序 | 5 |
 | `Mech.TbMechClass` | 机型规则 | 3 |
 | `Mech.TbMech` | 机兵型号 | 4 |
 | `Mech.TbMechPart` | 四部位基础定义 | 16 |
@@ -57,7 +69,7 @@
 | `Mech.TbMechLoadoutWeapon` | 预设的实际武器挂载 | 4 |
 | `Pilot.TbPilot` | 架构员基础定义 | 4 |
 | `Pilot.TbDrivingRank` | 驾驶等级与倍率 | 5 |
-| `Pilot.TbPilotSkill` | 机师技能池 | 4 |
+| `Pilot.TbPilotSkill` | 机师技能池 | 5 |
 | `Skill.TbSkill` | 技能组合定义 | 11 |
 | `Skill.TbWeaponDefaultSkill` | 武器类别默认普攻 | 3 |
 | `Weapon.TbWeapon` | 武器基础定义 | 4 |

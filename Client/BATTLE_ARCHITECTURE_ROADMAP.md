@@ -73,7 +73,7 @@ MechStorm 后续战斗系统应保持以下方向：
 | `BattleSession` | `Battle` / `MechStorm.Battle` | 本场对局的权威状态和规则入口；纯 C#，不依赖 Unity |
 | `BattleRuntime` | `Runtime` / `MechStorm.Runtime` | 客户端本场战斗的装配与生命周期容器，拥有 Session、场景表现和交互对象；允许依赖 Unity，不复制战斗规则 |
 | `BattleSceneBindings` | `Runtime` / `MechStorm.Runtime` | 保存场景依赖，不自行启动或更新对局 |
-| `BattleInteractionController` | `Presentation/Controllers` / `MechStorm.Presentation.Controllers` | 协调选择、移动、目标、确认取消等交互，调用 Session/选择协调器并同步棋盘反馈，不接管全部表现 |
+| `BattleInteractionController` | `Presentation/Interaction` / `MechStorm.Presentation.Interaction` | 协调选择、移动、目标、确认取消等交互，调用 Session/选择协调器并同步棋盘反馈，不接管全部表现 |
 | `BattleBoardInputReader` | `Presentation/Input` / `MechStorm.Presentation.Input` | 读取棋盘点击，将命中转换为单位或格子，不判断行动合法性 |
 | `BattleUnitStatusPresenter` | `Presentation/Units` / `MechStorm.Presentation.Units` | 刷新单位头顶耐久/AP 条及其朝向，不管理单位全部表现 |
 | `BattleHUDPresenter` | `UI/Battle` / `GameLogic` | 将 HUD 意图转给交互控制器，将本场状态转换为 HUD 显示 |
@@ -271,7 +271,11 @@ Sprint 4 只建立最小主动技能闭环；当项目后续需要复杂技能�
 - `Diagnostics`：JSON 等调试导出。
 - `Numeric`：尚未接入主流程的数值组件候选。
 
-`MechStorm.Presentation` 保持单一 Unity 表现程序集，使用 `Board / Controllers / Input / Units` 归类棋盘适配、流程编排、输入和单位表现。测试目录镜像生产职责；当前不为每个目录拆分 asmdef，也不建立语义宽泛的 `Core / Models / Services`。
+`MechStorm.Presentation` 保持单一 Unity 表现程序集，使用 `Board / Camera / Interaction / Input / UI / Units` 按职责归类。`Interaction` 聚合交互入口、行动选择协调器、状态机和选择数据，不按Controller后缀收集类型；镜头控制器仍归Camera。测试目录镜像生产职责；当前不为每个目录拆分 asmdef，也不建立语义宽泛的 `Core / Models / Services`。
+
+- `BattleInteractionController` 对接棋盘输入和HUD意图，同步棋盘反馈；`BattleActionSelectionCoordinator` 通过Session查询合法组合并提交行动；`BattleActionSelectionStateMachine` 只管理选择转换；`BattleActionSelection` 及目标选择对象描述选择内容。四个主类名保留，目标选择暂不单独拆文件。
+- `BattleActionSelectionKind.Ability` 表示技能执行分支，同时承载Active与Command；不与技能分类`AbilityCategory`混用。普攻仍为BasicAttack，枚举顺序不变。
+- 参数契约检查集中到命名明确的校验方法，业务入口只调用校验方法，不展开多行参数if/else。AP不足、越距和状态锁定等玩法/交互判断仍留在对应职责中，不与调用错误混为一谈，也不新增全局校验框架。
 
 ## 后续必须补齐的设计约束
 

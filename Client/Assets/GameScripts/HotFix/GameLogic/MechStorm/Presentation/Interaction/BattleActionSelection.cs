@@ -3,7 +3,7 @@ using MechStorm.Battle.Data;
 using MechStorm.Battle.Units;
 using Vector2Int = MechStorm.Battle.Foundation.Vector2Int;
 
-namespace MechStorm.Presentation.Controllers
+namespace MechStorm.Presentation.Interaction
 {
     /// <summary>
     /// 当前已接入的行动来源；交互状态不按具体武器或技能拆分。
@@ -11,7 +11,7 @@ namespace MechStorm.Presentation.Controllers
     public enum BattleActionSelectionKind
     {
         BasicAttack,
-        ActiveAbility,
+        Ability,
     }
 
     /// <summary>
@@ -26,7 +26,7 @@ namespace MechStorm.Presentation.Controllers
     }
 
     /// <summary>
-    /// 表现层使用的不可变行动选择，统一承载基础攻击与主动技能。
+    /// 不可变的行动选择；技能分支同时承载武器技能和角色指令。
     /// </summary>
     public sealed class BattleActionSelection
     {
@@ -62,10 +62,18 @@ namespace MechStorm.Presentation.Controllers
         public static BattleActionSelection ForAbility(AbilityDefinition ability,
             AbilityTargetRangeSource rangeSource = AbilityTargetRangeSource.Ability)
         {
-            if (ability == null)
-            {
-                throw new ArgumentNullException(nameof(ability));
-            }
+            ValidateAbilitySelection(ability, rangeSource);
+
+            return new BattleActionSelection(
+                BattleActionSelectionKind.Ability,
+                BattleActionTargetKind.Unit,
+                ability,
+                rangeSource);
+        }
+
+        private static void ValidateAbilitySelection(AbilityDefinition ability, AbilityTargetRangeSource rangeSource)
+        {
+            BattleInteractionArguments.RequireNotNull(ability, nameof(ability));
 
             if (!Enum.IsDefined(typeof(AbilityTargetRangeSource), rangeSource))
             {
@@ -82,12 +90,6 @@ namespace MechStorm.Presentation.Controllers
                     "Ability must require the basic weapon to use its range.",
                     nameof(rangeSource));
             }
-
-            return new BattleActionSelection(
-                BattleActionSelectionKind.ActiveAbility,
-                BattleActionTargetKind.Unit,
-                ability,
-                rangeSource);
         }
 
         public bool Matches(BattleActionSelection other)
@@ -97,7 +99,7 @@ namespace MechStorm.Presentation.Controllers
                 return false;
             }
 
-            return Kind != BattleActionSelectionKind.ActiveAbility ||
+            return Kind != BattleActionSelectionKind.Ability ||
                    (ReferenceEquals(Ability, other.Ability) &&
                     RangeSource == other.RangeSource);
         }
@@ -124,10 +126,7 @@ namespace MechStorm.Presentation.Controllers
 
         public static BattleActionTargetSelection ForUnit(CombatUnit unit)
         {
-            if (unit == null)
-            {
-                throw new ArgumentNullException(nameof(unit));
-            }
+            BattleInteractionArguments.RequireNotNull(unit, nameof(unit));
 
             return new BattleActionTargetSelection(BattleActionTargetKind.Unit, unit, null);
         }
@@ -139,10 +138,7 @@ namespace MechStorm.Presentation.Controllers
 
         public static BattleActionTargetSelection ForSelf(CombatUnit unit)
         {
-            if (unit == null)
-            {
-                throw new ArgumentNullException(nameof(unit));
-            }
+            BattleInteractionArguments.RequireNotNull(unit, nameof(unit));
 
             return new BattleActionTargetSelection(BattleActionTargetKind.Self, unit, null);
         }
@@ -150,6 +146,20 @@ namespace MechStorm.Presentation.Controllers
         public static BattleActionTargetSelection WithoutTarget()
         {
             return new BattleActionTargetSelection(BattleActionTargetKind.None, null, null);
+        }
+    }
+
+    // 只处理调用参数契约，AP、射程及交互状态仍由各自规则判断。
+    internal static class BattleInteractionArguments
+    {
+        internal static T RequireNotNull<T>(T value, string parameterName) where T : class
+        {
+            if (value == null)
+            {
+                throw new ArgumentNullException(parameterName);
+            }
+
+            return value;
         }
     }
 }

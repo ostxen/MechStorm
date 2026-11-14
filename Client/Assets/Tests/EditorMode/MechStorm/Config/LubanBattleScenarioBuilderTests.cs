@@ -4,6 +4,8 @@ using GameConfig;
 using Luban;
 using System.Collections.Generic;
 using MechStorm.Battle.Actions;
+using MechStorm.Battle.Data;
+using MechStorm.Presentation.Interaction;
 using MechStorm.Battle.Outcomes;
 using MechStorm.Battle.Units;
 using Vector2Int = MechStorm.Battle.Foundation.Vector2Int;
@@ -34,14 +36,35 @@ namespace MechStorm.Config.Tests
             Assert.AreEqual(new Vector2Int(2, 3), result.Units[0].Position);
             foreach (var unit in result.Units)
             {
-                var skill = result.GetAbilitiesForUnit(unit.UnitId).Single();
+                var skill = result.GetAbilitiesForUnit(unit.UnitId).Single(s => s.AbilityId == 9001);
                 Assert.AreEqual(9001, skill.AbilityId);
-                Assert.AreEqual("验收强击", skill.Name);
+                Assert.AreEqual("强击", skill.Name);
                 Assert.AreEqual(3, skill.ActionPointCost);
                 Assert.AreEqual(unit.UnitId < 3 ? 150 : 750, skill.Damage);
+                Assert.AreEqual(AbilityCategory.Command, skill.Category);
             }
+            CollectionAssert.AreEqual(new[] { 9001, 1004 }, result.GetAbilitiesForUnit(1).Select(s => s.AbilityId));
+            Assert.IsTrue(result.Units.Skip(1).All(u => result.GetAbilitiesForUnit(u.UnitId).Count == 1));
             Assert.IsEmpty(result.BattleSession.ActionLogs);
             Assert.IsEmpty(result.GetAbilitiesForUnit(999));
+        }
+
+        [Test]
+        public void DisplayText_ContainsNamesAndRulesWithoutDevelopmentMarkers()
+        {
+            var tables = Load();
+            var text = tables.TbPilot.DataList.Select(p => p.Name)
+                .Concat(tables.TbMechLoadout.DataList.Select(m => m.Name))
+                .Concat(tables.TbWeapon.DataList.SelectMany(w => new[] { w.Name, w.Description }))
+                .Concat(tables.TbSkill.DataList.SelectMany(s => new[] { s.Name, s.Description }));
+            foreach (var value in text)
+            {
+                StringAssert.DoesNotContain("验收", value);
+                StringAssert.DoesNotContain("非正式", value);
+            }
+            CollectionAssert.AreEqual(new[] { "艾达", "洛莎", "索妮亚", "曜" }, tables.TbPilot.DataList.Select(p => p.Name));
+            Assert.AreEqual("强击", tables.TbSkill.Get(9001).Name);
+            Assert.AreEqual("消耗3AP，使用刀剑对1至3格内的单个敌方单位造成1.5倍武器伤害。", tables.TbSkill.Get(9001).Description);
         }
 
         [Test]
@@ -141,9 +164,50 @@ namespace MechStorm.Config.Tests
             Assert.AreEqual(actor, battle.BattleSession.CurrentCombatUnit.UnitId);
             var target = battle.Units.Single(u => u.UnitId == targetId);
             var result = ability
-                ? battle.BattleSession.TryUseAbility(battle.GetAbilitiesForUnit(actor).Single(), target)
+                ? battle.BattleSession.TryUseAbility(battle.GetAbilitiesForUnit(actor).Single(s => s.AbilityId == 9001), target)
                 : battle.BattleSession.AttackTargetCombatUnit(target);
             Assert.IsTrue(result.IsSuccess, result.FailureReason.ToString());
+        }
+
+        [Test]
+        public void Starfall_RealConfigurationUsesOwnFourCellRangeAndEndsActorAfterThreeAP()
+        {
+            var battle = new LubanBattleScenarioBuilder().Build(Load(), 1);
+            var session = battle.BattleSession;
+            var ability = battle.GetAbilitiesForUnit(1).Single(s => s.AbilityId == 1004);
+            Assert.AreEqual("星坠闪", ability.Name);
+            Assert.AreEqual(AbilityCategory.Command, ability.Category);
+            Assert.IsTrue(ability.RequiresBasicWeapon);
+            Assert.AreEqual(1, ability.MinRange);
+            Assert.AreEqual(4, ability.MaxRange);
+            Assert.AreEqual(3, ability.ActionPointCost);
+            Assert.AreEqual(120, ability.Damage);
+            MoveAndWait(battle, 1, new Vector2Int(5, 4));
+            EndAction(battle, 2);
+            MoveAndWait(battle, 3, new Vector2Int(7, 6));
+            EndAction(battle, 4);
+            var actor = battle.Units[0];
+            var target = battle.Units[2];
+            var coordinator = new BattleActionSelectionCoordinator(session, battle.AbilitiesByUnitId);
+            Assert.IsEmpty(session.GetCurrentCombatUnitBasicAttackTargets());
+            Assert.Contains(target, session.GetCurrentCombatUnitAbilityTargets(ability).ToArray());
+            int ap = actor.PilotRuntime.CurrentActionPoint, hp = target.MechRuntime.CurrentDurability, logs = session.ActionLogs.Count;
+            Assert.IsFalse(coordinator.TrySelectUnitTarget(target, out _));
+            Assert.IsTrue(coordinator.TrySelectAction(BattleActionSelection.ForAbility(ability), out _));
+            Assert.IsFalse(coordinator.TrySelectUnitTarget(actor, out _));
+            Assert.IsTrue(coordinator.TrySelectUnitTarget(target, out _));
+            coordinator.Cancel();
+            Assert.AreEqual(ap, actor.PilotRuntime.CurrentActionPoint);
+            Assert.AreEqual(hp, target.MechRuntime.CurrentDurability);
+            Assert.AreEqual(logs, session.ActionLogs.Count);
+            Assert.IsTrue(coordinator.TrySelectAction(BattleActionSelection.ForAbility(ability), out _));
+            Assert.IsTrue(coordinator.TrySelectUnitTarget(target, out _));
+            Assert.IsTrue(coordinator.Confirm().IsSuccess);
+            Assert.AreEqual(ap - 3, actor.PilotRuntime.CurrentActionPoint);
+            Assert.AreEqual(hp - 120, target.MechRuntime.CurrentDurability);
+            CollectionAssert.AreEqual(new[] { BattleActionType.UseAbility, BattleActionType.EndUnitAction },
+                session.ActionLogs.Skip(logs).Select(log => log.ActionType));
+            Assert.AreEqual(2, session.CurrentCombatUnit.UnitId);
         }
 
         [Test]

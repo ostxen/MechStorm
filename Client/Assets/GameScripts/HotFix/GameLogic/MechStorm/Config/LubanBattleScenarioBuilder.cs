@@ -131,9 +131,10 @@ namespace MechStorm.Config
                     activation.UseConditions[0] is EquippedWeaponUsable usable && usable.WeaponKind == weapon.Kind,
                     context + "存在未支持的目标或武器条件。");
                 range = activation.Range;
-                // 目标优先交互沿用基础武器范围，当前仅接受两者完全一致的配置。
-                Require(range.Shape == weapon.Range.Shape && range.MinRange == weapon.Range.MinRange &&
-                    range.MaxRange == weapon.Range.MaxRange, context + "当前技能与唯一武器射程必须一致。");
+                // 武器技能仍走目标优先；角色指令行动优先，使用配置自身的射程。
+                Require(skill.Category == SkillCategory.Command || (range.Shape == weapon.Range.Shape &&
+                    range.MinRange == weapon.Range.MinRange && range.MaxRange == weapon.Range.MaxRange),
+                    context + "当前武器技能与唯一武器射程必须一致。");
             }
             ValidateRange(range, context);
             Require(definition.Effects.Count == 1 && definition.Effects[0] is AttackEffect, context + "仅支持单个攻击效果。");
@@ -148,7 +149,8 @@ namespace MechStorm.Config
             long scaledDamage = (long)weapon.AttackPower * attack.DamageRate;
             Require(scaledDamage >= 0 && scaledDamage % 10000 == 0 && scaledDamage / 10000 <= int.MaxValue, context + "伤害不是可精确表示的非负整数。");
             return new AbilityDefinition(skill.Id, skill.Name, range.MinRange, range.MaxRange, (int)(scaledDamage / 10000),
-                definition.Costs.Count == 0 ? 0 : definition.Costs[0].Amount, TargetRule.EnemyUnit, !basic);
+                definition.Costs.Count == 0 ? 0 : definition.Costs[0].Amount, TargetRule.EnemyUnit, !basic,
+                skill.Category == SkillCategory.Command ? AbilityCategory.Command : AbilityCategory.Active);
         }
 
         private static void ValidateRange(WeaponRange range, string context)

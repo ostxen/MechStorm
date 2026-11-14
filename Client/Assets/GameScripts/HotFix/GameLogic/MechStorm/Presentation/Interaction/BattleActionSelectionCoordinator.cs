@@ -5,7 +5,7 @@ using MechStorm.Battle.Actions;
 using MechStorm.Battle.Data;
 using MechStorm.Battle.Units;
 
-namespace MechStorm.Presentation.Controllers
+namespace MechStorm.Presentation.Interaction
 {
     /// <summary>
     /// 使用 Battle 权威查询校验行动与目标组合，不复制攻击或技能规则。
@@ -19,7 +19,7 @@ namespace MechStorm.Presentation.Controllers
         public BattleActionSelectionCoordinator(BattleSession battleSession,
             IReadOnlyDictionary<int, IReadOnlyList<AbilityDefinition>> abilitiesByUnitId = null)
         {
-            _battleSession = battleSession ?? throw new ArgumentNullException(nameof(battleSession));
+            _battleSession = BattleInteractionArguments.RequireNotNull(battleSession, nameof(battleSession));
             _abilitiesByUnitId = abilitiesByUnitId ??
                 new Dictionary<int, IReadOnlyList<AbilityDefinition>>();
             _stateMachine = new BattleActionSelectionStateMachine();
@@ -79,10 +79,7 @@ namespace MechStorm.Presentation.Controllers
         /// </summary>
         public bool TrySelectAction(BattleActionSelection action, out string rejectionReason)
         {
-            if (action == null)
-            {
-                throw new ArgumentNullException(nameof(action));
-            }
+            BattleInteractionArguments.RequireNotNull(action, nameof(action));
 
             if (_battleSession.IsBattleEnded)
             {
@@ -105,7 +102,7 @@ namespace MechStorm.Presentation.Controllers
             }
 
             if (Path == BattleActionSelectionPath.TargetFirst &&
-                action.Kind == BattleActionSelectionKind.ActiveAbility &&
+                action.Kind == BattleActionSelectionKind.Ability &&
                 action.RangeSource != AbilityTargetRangeSource.BasicWeapon)
             {
                 rejectionReason =
@@ -137,10 +134,7 @@ namespace MechStorm.Presentation.Controllers
         /// </summary>
         public bool TrySelectUnitTarget(CombatUnit targetUnit, out string rejectionReason)
         {
-            if (targetUnit == null)
-            {
-                throw new ArgumentNullException(nameof(targetUnit));
-            }
+            BattleInteractionArguments.RequireNotNull(targetUnit, nameof(targetUnit));
 
             var target = BattleActionTargetSelection.ForUnit(targetUnit);
             BattleActionSelection defaultAction = null;
@@ -199,7 +193,7 @@ namespace MechStorm.Presentation.Controllers
             {
                 BattleActionSelectionKind.BasicAttack =>
                     _battleSession.AttackTargetCombatUnit(SelectedTarget.Unit),
-                BattleActionSelectionKind.ActiveAbility =>
+                BattleActionSelectionKind.Ability =>
                     _battleSession.TryUseAbility(
                         SelectedAction.Ability,
                         SelectedTarget.Unit,
@@ -255,7 +249,8 @@ namespace MechStorm.Presentation.Controllers
 
             foreach (var ability in GetCurrentCombatUnitAbilities())
             {
-                if (!ability.RequiresBasicWeapon)
+                // 指令必须先选行动，不能借目标优先路径套用武器射程。
+                if (!ability.RequiresBasicWeapon || ability.Category == AbilityCategory.Command)
                 {
                     continue;
                 }
@@ -299,7 +294,11 @@ namespace MechStorm.Presentation.Controllers
                 case BattleActionSelectionKind.BasicAttack:
                     return currentUnit.PilotRuntime.HasEnoughActionPoint(
                         currentUnit.Mech.BasicAttack.ActionPointCost);
-                case BattleActionSelectionKind.ActiveAbility:
+                case BattleActionSelectionKind.Ability:
+                    if (action.Ability.Category == AbilityCategory.Command && action.RangeSource != AbilityTargetRangeSource.Ability)
+                    {
+                        return false;
+                    }
                     foreach (var ability in GetCurrentCombatUnitAbilities())
                     {
                         if (ReferenceEquals(ability, action.Ability))
@@ -332,7 +331,7 @@ namespace MechStorm.Presentation.Controllers
                     ContainsTarget(
                         _battleSession.GetCurrentCombatUnitBasicAttackTargets(),
                         target.Unit),
-                BattleActionSelectionKind.ActiveAbility =>
+                BattleActionSelectionKind.Ability =>
                     ContainsTarget(
                         _battleSession.GetCurrentCombatUnitAbilityTargets(
                             action.Ability,
