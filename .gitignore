@@ -8,6 +8,19 @@
 [Mm]ech[Ss]torm_Unity/.idea/
 [Mm]ech[Ss]torm_Unity/.factory/task-state/
 
+# Unity client after the project directory rename.
+/Client/[Ll]ibrary/
+/Client/[Tt]emp/
+/Client/[Oo]bj/
+/Client/[Bb]uild/
+/Client/[Bb]uilds/
+/Client/[Ll]ogs/
+/Client/UserSettings/
+/Client/Bundles/
+/Client/**/.idea/
+/Client/.vscode/
+/Client/.factory/task-state/
+
 *.csproj
 *.sln
 *.user
