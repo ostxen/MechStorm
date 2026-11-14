@@ -70,7 +70,7 @@ namespace Unity.Pipeline.Editor
 #if UNITY_2023_2_OR_NEWER
         internal static Action<IAnalytic> s_Send = analytic => EditorAnalytics.SendAnalytic(analytic);
 #else
-        // Unity 2021 has no IAnalytic transport. Retain local diagnostic recording without sending telemetry.
+        // Unity 2022 has no IAnalytic transport. Retain local diagnostic recording without sending telemetry.
         internal static Action<IAnalytic> s_Send = analytic => { };
 #endif
 

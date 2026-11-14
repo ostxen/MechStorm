@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""MechStorm Unity CLI workflow. No automatic installation, compilation or tests."""
+"""MechStorm Unity CLI workflow. Explicit verification, no installation or publication."""
 
 import argparse
 from pathlib import Path
@@ -14,6 +14,11 @@ def parser():
     root.add_argument("--project", type=Path, help="Must be this script's own project.")
     commands = root.add_subparsers(dest="command", required=True)
     commands.add_parser("doctor", help="Query this project's Editor; writes a local report only.")
+    verify = commands.add_parser("verify", help="Run only the explicitly selected validation profile.")
+    verify.add_argument("--profile", choices=("docs", "unity"), required=True)
+    verify.add_argument("--test-filter", default="Unity.Pipeline.Tests.Editor")
+    verify.add_argument("--filter-type", choices=("assembly", "testName", "category"), default="assembly")
+    verify.add_argument("--timeout", type=int, default=300)
     sub = commands.add_parser("unity").add_subparsers(dest="action", required=True)
     sub.add_parser("list", help="Discover all registered command names.")
     for action in ("query", "preview"):
@@ -34,6 +39,23 @@ def parser():
 
 
 def dispatch(run, args):
+    if args.command == "verify":
+        if args.timeout < 1 or not args.test_filter.strip():
+            raise WorkflowError("Timeout and test filter must be nonempty/positive.")
+        if args.profile == "docs":
+            result = run.execute([sys.executable, "-B", "-m", "unittest", "discover", "-s",
+                                  str(run.context.project / ".codex/tests"), "-p", "test_*.py", "-v"], timeout=args.timeout)
+            if result.returncode:
+                raise WorkflowError("Workflow unit tests failed; see command evidence.")
+            return {"unitTests": "passed", "scope": "Unity workflow contracts only; no domain or asset checks."}
+        unity = Unity(run)
+        run.step("editor-compilation", lambda: unity.recompile(args.timeout))
+        if run.data["steps"][-1]["status"] != "passed":
+            raise WorkflowError("Compilation did not pass; tests were not started.", "blocked")
+        status = unity.ready()
+        if status.get("playMode") != "stopped":
+            raise WorkflowError("Verification requires Play Mode stopped; do not take over a user run.", "blocked")
+        return unity.tests("editor", args.test_filter, args.filter_type, args.timeout)
     if args.command == "approve":
         return approve(run, args.plan, args.by, args.reason, args.high_risk)
     unity = Unity(run)

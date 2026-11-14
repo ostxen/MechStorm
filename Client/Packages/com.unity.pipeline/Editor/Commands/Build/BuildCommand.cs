@@ -98,7 +98,7 @@ namespace Unity.Pipeline.Editor.Commands.Build
         public static object Run(
             [CliArg("target", "BuildTarget name (e.g. StandaloneWindows64). Defaults to the active target. Must be installed.")] string target = "",
             [CliArg("output-path", "Output path (absolute, or relative to the project root). Defaults to the last/auto path.")] string outputPath = "",
-            [CliArg("profile-name", "Build Profile name to activate before building (Unity 6 only; ignored otherwise).")] string profileName = "",
+            [CliArg("profile-name", "Build Profile name to activate before building (Unity 6 only; refused when unavailable).")] string profileName = "",
             [CliArg("options", "BuildOptions names. Omit to get just DetailedBuildReport; supplying any disables that default.")] string[] options = null,
             [CliArg("scenes", "Scene asset paths to build (e.g. Assets/Scenes/Main.unity). Defaults to EditorBuildSettings.")] string[] scenes = null,
             [CliArg("confirm", "Acknowledge and run the build; without it the call is refused. Use dry-run to validate only.")] bool confirm = false,
@@ -119,6 +119,16 @@ namespace Unity.Pipeline.Editor.Commands.Build
                 if (!dryRun && (s_Building || s_Pending))
                     return new { status = "busy", success = false, message = "A build is already queued or in progress. Poll " + CommandNames.BuildStatus + "." };
             }
+
+            if (!string.IsNullOrWhiteSpace(profileName) && !BuildProfiles.IsSupported)
+                return new
+                {
+                    status = dryRun ? "dry_run" : "error",
+                    success = false,
+                    valid = false,
+                    code = "feature_unavailable",
+                    message = "Build Profiles require Unity 6 (6000.0) or later; nothing was queued. Omit profile-name to use the current Build Settings."
+                };
 
             var errors = new List<object>();
 
@@ -381,11 +391,7 @@ namespace Unity.Pipeline.Editor.Commands.Build
             var files = new List<BuildFileEntry>();
             try
             {
-#if UNITY_2022_1_OR_NEWER
                 foreach (var f in report.GetFiles())
-#else
-                foreach (var f in report.files)
-#endif
                     files.Add(new BuildFileEntry { Path = f.path, Role = f.role, SizeBytes = (long)f.size });
             }
             catch (Exception ex)

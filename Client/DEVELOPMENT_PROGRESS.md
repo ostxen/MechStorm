@@ -4,8 +4,29 @@
 
 - 当前里程碑：P1.5 / Sprint T1（进行中）；Sprint 4 已完成并验收
 - 当前任务：整阵营结束及真实角色指令星坠闪已实现并完成限定验证；镜头24组组合与胜败/统计/再战闭环自动化通过。用户认为新增队伍/站位摘要多余，已按最新决定删除准备页整个新增摘要区，保留原有队伍卡片、目标与行动序列。实体键鼠、失焦、多分辨率与视觉手感待人工验收，完整T1.11不标完成；不自动进入Sprint 5。
-- 当前状态：feature/t1-luban-config 上14张逻辑表、14份工作簿、73条数据，生成78份C#及14份bytes。正式ProcedureBattle使用Luban Scenario 1装配独立对局，不再读取SO。既有45条流程验收数据保留，另按用户授权为艾达追加真实星坠闪的技能池及部署关联2行，不改技能数值。仅桥接当前原型规则，完整四部位、属性公式、双武器、被动及PP等后置。T1.11完整交互回归仍未完成。配置继续同步按表懒加载；首次阻塞和错误延迟到访问点是已接受差异。
+- 当前状态：Unity2022迁移分支为upgrade/unity-2022.3，基于feature/t1-luban-config。14张逻辑表、14份工作簿、73条数据，生成78份C#及14份bytes。正式ProcedureBattle使用Luban Scenario 1装配独立对局，不再读取SO。既有45条流程验收数据保留，另按用户授权为艾达追加真实星坠闪的技能池及部署关联2行，不改技能数值。仅桥接当前原型规则，完整四部位、属性公式、双武器、被动及PP等后置。T1.11完整交互回归仍未完成。配置继续同步按表懒加载；首次阻塞和错误延迟到访问点是已接受差异。
 - 最后更新：2026-11-14
+
+### Unity2022迁移分支与提交范围确认（2026-11-14）
+
+- 开发者实际测试后确认“确实没有问题”，批准从feature/t1-luban-config创建upgrade/unity-2022.3，按工程升级和Pipeline/AI工作流/血条适配拆成两次提交，并推送新分支设置上游。
+- 工程升级包含2022.3.62f3版本、相关Packages/ProjectSettings及两处TEngine API适配；第二批包含Pipeline、本项目Unity工作流/技能、专项测试、血条字体修复及本记录。排除原IDE暂存、动态字体、图集、Procedure纯排版、第三方未跟踪资源及未确认归属的HybridCLRSettings，保留工作区内容。
+- 提交复用本轮已有编译、专项测试和真实战斗验证证据，不重复运行Unity、导表或构建。开发者反馈不扩大为完整T1.11验收，不自动开始新游戏功能。
+
+### Unity 2022 战斗血条字体异常修复（2026-11-14）
+
+- 用户反馈运行时仍报错。实时Console定位为进入Battle时UnitHealthBarView.CreateText加载Arial.ttf抛ArgumentException，Unity2022内置字体已改为LegacyRuntime.ttf；当时compilationFailed=false，不是新的C#编译失败。上轮Pipeline专项测试未覆盖真实战斗初始化，不能据其通过宣称游戏启动路径无异常。
+- 用户明确允许停止当前Play、修复并验证。生产仅替换这一处内置字体名，不增加异常兜底或修改战斗流程；新增UnitHealthBarViewTests验证真实构造、字体引用及75/100文本，1/1 Passed（0.032秒）。本次编译实际completed、failed=false/errors=[]/compilationFailed=false，证据`.codex/runs/20261114T073624Z-95d6cdc3/report.md`；Assets中Arial.ttf残留为0。
+- 真实Play从StartUI开始按钮、MainUI出战按钮进入Preparation，确认四条血条均使用LegacyRuntime.ttf，文本分别300/300、200/200、150/150、200/200；随后真实准备页按钮进入Playing，3.23秒验证通过。临时验证首次错误地用短类名查询UI，停在未点击的开始页超时；核对框架WindowName为完整类名后仅修正临时脚本，从同一开始页续验，未修改生产UI或重放已提交操作。
+- 复验Console原生计数consoleErrors=0、compilationFailed=false，读取到的后续日志无Error/Exception；既有TMP字体缺Underline字符警告仍在，未擅自改字体资源，也不把警告说成已修复。已退出Play，最终2022.3.62f3、ready/stopped、codeLoadCount5、无编译/域重载，证据`.codex/runs/20261114T074359Z-ef9a00eb/report.md`。未保存场景/Prefab/设置，新增测试meta由Editor生成；未跑全游戏回归或构建，未暂存、提交或推送，T1.11人工验收状态不变。
+
+### Unity 2022 Pipeline与AI工作流迁移（2026-11-14）
+
+- 工程已由开发者升级至2022.3.62f3。按用户要求从TEngine-Variant/UnityProject迁移Pipeline适配差异及26项专项测试，保留本项目原8项回归。修复ConsoleWindowUtility三处CS0103和Material.rawRenderQueue一处CS1061的错误版本分支，同步测试取消/生命周期、异步取消令牌、AutoTick所有权、窗口/Panel截图及不支持的Build Profile拒绝行为。最低版本明确2022.3，旧2021说明仅归档。
+- Unity专用Python工作流同步分页发现、状态轮询、编译与测试身份/数量校验；新增显式docs/unity验证入口，更新unity-cli技能和操作规程。保留MechStorm严格写入白名单、工程/PID绑定、一次审批及常规校验授权，不覆盖AGENTS/CLAUDE，不迁移无关Luban/HTML领域、其他技能或code/full profile。两端CLI二进制一致，未安装或升级工具。
+- 本项目Editor正常导入后恢复连接；编译状态up_to_date、failed=false/errors=[]/compilationFailed=false，表示本次显式请求未触发新的编译。实际发现并执行Unity.Pipeline.Tests.Editor 34/34逐项Passed，0失败/跳过/不确定，各用例耗时合计9.44秒；含原有测试内部的短暂Play及测试专用模态对话框，不是独立PlayMode全套。证据：`.codex/runs/20261114T071523Z-47189b12/report.md`。
+- 最终Python隔离契约36/36通过，含保留审批与新增禁止接管用户Play验证。中途新增Play门控后旧Mock缺stopped状态导致1项失败，已修正测试夹具并增加门控专项断言，最终docs入口通过；一次并行离线验证曾被有效Editor锁阻塞，未删锁或重复启动Unity测试。证据：`.codex/runs/20261114T071915Z-cefc5449/report.md`。最终doctor为2022.3.62f3、ready/stopped、无编译或域重载，codeLoadCount2。
+- 静态审计：源Pipeline非meta源码/配置/文档差异全部同步，差异空白检查通过；原14项升级/资源等既有变化内容、355份既有meta及Git索引哈希保持。新AssemblyInfo及专项测试meta由Editor生成，未覆盖GUID、manifest/lock、项目设置、游戏代码或源工程。未运行.NET解决方案构建、全游戏回归、独立Player或真实构建，未提交推送；T1.11人工验收状态不变。
 
 ### 本批提交确认（2026-11-14）
 

@@ -30,6 +30,33 @@ namespace Unity.Pipeline.Editor.Testing
         internal const string TestStatusFile = "Temp/pipeline_test_status.json";
 
         internal static TestResultCollector m_ActiveCollector;
+        private static readonly Dictionary<TestResultCollector, TestRunnerApi> s_OwnedApis = new Dictionary<TestResultCollector, TestRunnerApi>();
+        private static bool s_RunStarted;
+        private static string s_RunId;
+        private static readonly HashSet<string> s_PendingCancellations = new HashSet<string>();
+
+        static PipelineTestRunner()
+        {
+            AssemblyReloadEvents.beforeAssemblyReload += ReleaseOwnedApis;
+            EditorApplication.quitting += ReleaseOwnedApis;
+        }
+
+        private static void ReleaseOwnedApis()
+        {
+            EditorApplication.update -= FinishPendingCancellations;
+            s_PendingCancellations.Clear();
+            foreach (var collector in s_OwnedApis.Keys.ToArray())
+                UnregisterCollector(collector);
+        }
+
+        private static void RecordStartedRun(string runId)
+        {
+            s_RunId = runId;
+            if (!File.Exists(TestRequestFile)) return;
+            var request = JsonConvert.DeserializeObject<TestRequest>(File.ReadAllText(TestRequestFile));
+            request.runId = runId;
+            File.WriteAllText(TestRequestFile, JsonConvert.SerializeObject(request));
+        }
 
         /// <summary>
         /// Execute tests with the given parameters
@@ -180,16 +207,12 @@ namespace Unity.Pipeline.Editor.Testing
             var collector = new TestResultCollector();
 
             m_ActiveCollector = collector;
+            s_OwnedApis[collector] = api;
 
             // Set up timeout cancellation
             using (var cts = new CancellationTokenSource(PipelineTimeout.StopBefore(timeout)))
+            using (var linked = CancellationTokenSource.CreateLinkedTokenSource(cts.Token, PipelineCancellation.AmbientToken))
             {
-                cts.Token.Register(() =>
-                {
-                    Debug.Log("[PipelineTestRunner] Test execution timed out, cancelling...");
-                    InvalidatePreviousRun();
-                });
-
                 try
                 {
                     // For PlayMode tests, we need to handle domain reloads
@@ -207,10 +230,10 @@ namespace Unity.Pipeline.Editor.Testing
                         File.WriteAllText(TestRequestFile, JsonConvert.SerializeObject(request));
                     }
 
-                    // Execute tests and wait for completion, or for the timeout: an invalidated
-                    // collector never reports the run finished, so the timeout ends the wait.
+                    // Await on Unity's context: timeout/job cancellation only signals a task;
+                    // invalidation and Unity object cleanup below stay on the editor thread.
                     var completionTask = ExecuteTestsInternal(api, collector, testMode, filter, filterType, includeExplicit);
-                    var resultAdaptor = await AwaitUnlessCanceled(completionTask, cts.Token);
+                    var resultAdaptor = await AwaitUnlessCanceled(completionTask, linked.Token);
 
                     // Build response
                     var duration = (DateTime.UtcNow - startTime).TotalSeconds;
@@ -241,7 +264,14 @@ namespace Unity.Pipeline.Editor.Testing
                 }
                 catch (OperationCanceledException)
                 {
-                    return CreateErrorResponse($"Test execution timed out ({PipelineTimeout.Describe(timeout)} timeout)");
+                    if (ReferenceEquals(m_ActiveCollector, collector))
+                    {
+                        CleanupRequestFile();
+                        InvalidatePreviousRun();
+                    }
+                    return CreateErrorResponse(cts.IsCancellationRequested
+                        ? $"Test execution timed out ({PipelineTimeout.Describe(timeout)} timeout)"
+                        : "Test execution cancelled");
                 }
                 catch (Exception ex)
                 {
@@ -329,7 +359,7 @@ namespace Unity.Pipeline.Editor.Testing
         /// <summary>
         /// Internal test execution logic
         /// </summary>
-        private static async Task<ITestResultAdaptor> ExecuteTestsInternal(
+        private static Task<ITestResultAdaptor> ExecuteTestsInternal(
             TestRunnerApi api,
             TestResultCollector collector,
             TestMode testMode,
@@ -337,20 +367,18 @@ namespace Unity.Pipeline.Editor.Testing
             string filterType,
             bool includeExplicit)
         {
-            var tcs = new TaskCompletionSource<ITestResultAdaptor>();
-
             // Retrieve test list and filter
             api.RetrieveTestList(testMode, (ITestAdaptor rootTest) =>
             {
                 try
                 {
+                    if (collector.IsCancelled) return;
                     var testNames = CollectTestNames(rootTest, filter, filterType, includeExplicit);
 
                     if (testNames.Count == 0)
                     {
                         Debug.Log("[PipelineTestRunner] No tests to run after filtering");
-                        var emptyResult = CreateEmptyTestResult();
-                        tcs.SetResult(emptyResult);
+                        collector.CompleteWithoutTests();
                         return;
                     }
 
@@ -362,27 +390,24 @@ namespace Unity.Pipeline.Editor.Testing
                         testNames = testNames.ToArray()
                     };
 
-                    // Set up completion handling
-                    collector.OnRunFinished = () => tcs.SetResult(collector.RootResult);
-
                     api.RegisterCallbacks(collector);
-                    api.Execute(new ExecutionSettings(testFilter));
+                    s_RunStarted = true;
+                    RecordStartedRun(api.Execute(new ExecutionSettings(testFilter)));
                 }
                 catch (Exception ex)
                 {
                     Debug.LogError($"[PipelineTestRunner] Error during test execution: {ex.Message}");
-                    tcs.SetException(ex);
+                    collector.SetError(ex);
                 }
             });
 
-            return await tcs.Task;
+            return collector.WaitForCompletionAsync();
         }
 
         /// <summary>
         /// Start async test execution on the main thread. Registers callbacks and kicks off the
         /// run, then returns; completion is reported by the collector writing the status file.
-        /// Unlike the sync path, this does NOT reuse ExecuteTestsInternal (which sets its own
-        /// OnRunFinished to complete a Task, clobbering ours), and does NOT await.
+        /// Unlike the sync path, this reports through OnRunFinished and does not await the collector.
         /// </summary>
         private static void StartAsyncTestExecution(TestMode testMode, string filter, string filterType, bool includeExplicit)
         {
@@ -394,6 +419,7 @@ namespace Unity.Pipeline.Editor.Testing
                 collector = new TestResultCollector();
 
                 m_ActiveCollector = collector;
+                s_OwnedApis[collector] = api;
 
                 // Async completion: write results for pollers. Set once, never overwritten.
                 collector.OnRunFinished = () =>
@@ -408,6 +434,7 @@ namespace Unity.Pipeline.Editor.Testing
                 {
                     try
                     {
+                        if (collector.IsCancelled) return;
                         var testNames = CollectTestNames(rootTest, filter, filterType, includeExplicit);
 
                         if (testNames.Count == 0)
@@ -425,11 +452,12 @@ namespace Unity.Pipeline.Editor.Testing
                         }
 
                         api.RegisterCallbacks(collector);
-                        api.Execute(new ExecutionSettings(new Filter
+                        s_RunStarted = true;
+                        RecordStartedRun(api.Execute(new ExecutionSettings(new Filter
                         {
                             testMode = testMode,
                             testNames = testNames.ToArray()
-                        }));
+                        })));
                     }
                     catch (Exception ex)
                     {
@@ -459,7 +487,7 @@ namespace Unity.Pipeline.Editor.Testing
         /// per-test results from the RootResult tree at RunFinished, since the incremental
         /// TestFinished callbacks were delivered to a collector from the previous domain.
         /// </summary>
-        private static void ReattachResultCollector()
+        private static void ReattachResultCollector(string runId)
         {
             TestRunnerApi api = null;
             TestResultCollector collector = null;
@@ -469,6 +497,9 @@ namespace Unity.Pipeline.Editor.Testing
                 collector = new TestResultCollector(attachedMidRun: true);
 
                 m_ActiveCollector = collector;
+                s_OwnedApis[collector] = api;
+                s_RunStarted = true;
+                s_RunId = runId;
 
                 collector.OnRunFinished = () =>
                 {
@@ -519,7 +550,7 @@ namespace Unity.Pipeline.Editor.Testing
                 // We only need to re-register a collector — our previous one did not survive the
                 // reload — to capture the resumed run's completion. Runs on the main thread because
                 // CheckForPendingTests is invoked via EditorApplication.delayCall.
-                ReattachResultCollector();
+                ReattachResultCollector(request.runId);
             }
             catch (Exception ex)
             {
@@ -647,10 +678,69 @@ namespace Unity.Pipeline.Editor.Testing
         {
             if (m_ActiveCollector != null)
             {
-                m_ActiveCollector.Cancel();
-                UnregisterCollector(m_ActiveCollector);
+                var collector = m_ActiveCollector;
+                collector.IsCancelled = true;
+                try
+                {
+                    if (s_RunStarted)
+                        CancelUnderlyingRun(s_RunId);
+                }
+                finally
+                {
+                    collector.Cancel();
+                    UnregisterCollector(collector);
+                }
                 Debug.Log("[PipelineTestRunner] Invalidated previous test run");
             }
+        }
+
+        // All callers run on the editor thread. The Test Framework used by Unity 2022 has no public
+        // cancellation entry point; use the same EditMode runner hook as its cancelable progress bar.
+        private static void CancelUnderlyingRun(string runId)
+        {
+            if (string.IsNullOrEmpty(runId)) return;
+#if UNITY_6000_0_OR_NEWER
+            TestRunnerApi.CancelTestRun(runId);
+#else
+            s_PendingCancellations.Add(runId);
+            FinishPendingCancellations();
+            if (s_PendingCancellations.Count > 0)
+            {
+                EditorApplication.update -= FinishPendingCancellations;
+                EditorApplication.update += FinishPendingCancellations;
+            }
+#endif
+        }
+
+        private static void FinishPendingCancellations()
+        {
+            const System.Reflection.BindingFlags fields = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public;
+            var holderType = typeof(TestRunnerApi).Assembly.GetType("UnityEditor.TestTools.TestRunner.TestRun.TestJobDataHolder");
+            var holder = holderType?.GetProperty("instance", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.FlattenHierarchy)?.GetValue(null);
+            var runs = holderType?.GetField("TestRuns", fields)?.GetValue(holder) as System.Collections.IEnumerable;
+            if (runs == null)
+            {
+                s_PendingCancellations.Clear();
+                Debug.LogWarning("[PipelineTestRunner] This test framework does not expose the legacy cancellation registry.");
+            }
+            else
+            {
+                var seen = new HashSet<string>();
+                foreach (var run in runs)
+                {
+                    var type = run.GetType();
+                    var id = type.GetField("guid", fields)?.GetValue(run) as string;
+                    if (id == null || !s_PendingCancellations.Contains(id)) continue;
+                    seen.Add(id);
+                    var runner = type.GetField("editModeRunner", fields)?.GetValue(run) as UnityEngine.Object;
+                    if (runner == null) continue; // TestJobRunner has not reached its run task yet.
+                    runner.GetType().GetMethod("OnRunCancel", fields)?.Invoke(runner, null);
+                    s_PendingCancellations.Remove(id);
+                }
+                s_PendingCancellations.IntersectWith(seen);
+            }
+            if (s_PendingCancellations.Count == 0)
+                EditorApplication.update -= FinishPendingCancellations;
         }
 
         /// <summary>
@@ -660,27 +750,35 @@ namespace Unity.Pipeline.Editor.Testing
         /// </summary>
         internal static void UnregisterCollector(TestResultCollector collector)
         {
-            if (collector != null)
+            TestRunnerApi owned = null;
+            if (collector != null && s_OwnedApis.TryGetValue(collector, out owned))
             {
                 try
                 {
 #if UNITY_6000_0_OR_NEWER
                     TestRunnerApi.UnregisterTestCallback(collector);
 #else
-                    var api = ScriptableObject.CreateInstance<TestRunnerApi>();
+                    var api = owned != null ? owned : ScriptableObject.CreateInstance<TestRunnerApi>();
                     try { api.UnregisterCallbacks(collector); }
-                    finally { UnityEngine.Object.DestroyImmediate(api); }
+                    finally { if (api != owned) UnityEngine.Object.DestroyImmediate(api); }
 #endif
                 }
                 catch (Exception ex)
                 {
                     Debug.LogWarning($"[PipelineTestRunner] Could not unregister collector: {ex.Message}");
                 }
+                finally
+                {
+                    s_OwnedApis.Remove(collector);
+                    if (owned != null) UnityEngine.Object.DestroyImmediate(owned);
+                }
             }
 
             if (ReferenceEquals(m_ActiveCollector, collector))
             {
                 m_ActiveCollector = null;
+                s_RunStarted = false;
+                s_RunId = null;
             }
         }
 
@@ -695,13 +793,6 @@ namespace Unity.Pipeline.Editor.Testing
                 Summary = new TestSummary(),
                 ExecutedAt = DateTime.UtcNow
             };
-        }
-
-        private static ITestResultAdaptor CreateEmptyTestResult()
-        {
-            // This is a bit of a hack since ITestResultAdaptor is an interface
-            // In practice, this case should be rare (no tests matching filter)
-            return null;
         }
 
         /// <summary>
@@ -845,6 +936,7 @@ namespace Unity.Pipeline.Editor.Testing
             public string mode;
             public bool includeExplicit;
             public bool isSync;
+            public string runId;
         }
     }
 }

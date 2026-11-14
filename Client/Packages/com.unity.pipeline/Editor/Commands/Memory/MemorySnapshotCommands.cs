@@ -7,11 +7,7 @@ using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Unity.Pipeline.Commands;
 using Unity.Pipeline.Editor.Commands.Profiling;
-#if UNITY_2022_2_OR_NEWER
 using Unity.Profiling.Memory;
-#else
-using UnityEngine.Profiling.Memory.Experimental;
-#endif
 using UnityEditor;
 using UnityEngine;
 #if UNITY_6000_5_OR_NEWER

@@ -1,5 +1,17 @@
 # MechStorm Unity CLI 操作规程
 
+## 当前2022维护入口（2026-11-14）
+
+Pipeline最低Unity2022.3，当前工程2022.3.62f3；旧版本的验收证据不自动沿用。CLI二进制两端一致，无需安装升级。
+
+显式离线验证：`python .codex/scripts/workflow.py verify --profile docs`。
+显式专项验证：`python .codex/scripts/workflow.py verify --profile unity --test-filter Unity.Pipeline.Tests.Editor --filter-type assembly --timeout 180`。
+unity profile只执行本项目编译与明确筛选的EditMode用例，不另行启动PlayMode测试集或全量游戏回归。个别EditMode测试内部可能短暂进出Play并恢复停止状态，选择前核对用例实现。源码新文件须先由Editor正常导入；不接管已有Play或测试。
+命令发现完整分页，状态查询允许忙状态；每次轮询重新绑定项目及PID。启动必须得到确认，零用例、身份/数量不匹配、失败及不确定结果不能通过。
+仅提供docs/unity profile，未迁移来源项目code/full、Luban/HTML、资产验证或发布能力。原审批与常规验证授权边界不变，持久化保存仍需具体授权。
+
+当前兼容说明：`Packages/com.unity.pipeline/Documentation~/MechStorm-2022-Compatibility.md`。下方旧“已验证”描述仅记录原接入时的有限证据，不代表2022本轮重跑结果；本轮证据以DEVELOPMENT_PROGRESS为准。
+
 ## 1. 发现目标与能力
 
 项目包装入口需要Python3.11+，只使用标准库，不自动安装依赖。从本项目执行：

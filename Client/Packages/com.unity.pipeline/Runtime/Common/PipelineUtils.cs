@@ -1,3 +1,7 @@
+#if !UNITY_2022_3_OR_NEWER
+#error This local Pipeline adaptation requires Unity 2022.3 LTS or newer. Unity 2021 is no longer supported.
+#endif
+
 using System.Collections.Generic;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -180,10 +184,8 @@ namespace Unity.Pipeline
         {
 #if UNITY_6000_4_OR_NEWER
             return GameObject.FindObjectsByType<T>();
-#elif UNITY_2022_2_OR_NEWER
-            return GameObject.FindObjectsByType<T>(FindObjectsSortMode.None);
 #else
-            return GameObject.FindObjectsOfType<T>();
+            return GameObject.FindObjectsByType<T>(FindObjectsSortMode.None);
 #endif
         }
 

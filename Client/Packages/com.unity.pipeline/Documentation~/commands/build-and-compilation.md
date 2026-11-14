@@ -9,7 +9,7 @@ Trigger an async Player build and report the full BuildReport. Returns immediate
 |-----------|----------|---------|-------------|
 | `target` | no | `–` | BuildTarget name (e.g. StandaloneWindows64). Defaults to the active target. Must be installed. |
 | `output-path` | no | `–` | Output path (absolute, or relative to the project root). Defaults to the last/auto path. |
-| `profile-name` | no | `–` | Build Profile name to activate before building (Unity 6 only; ignored otherwise). |
+| `profile-name` | no | `–` | Build Profile name to activate before building (Unity 6 only). When unavailable, both a dry run and a real request return `feature_unavailable`; nothing is queued. Omit it to use the current Build Settings. |
 | `options` | no | `–` | BuildOptions names. Omit to get just DetailedBuildReport; supplying any disables that default. |
 | `scenes` | no | `–` | Scene asset paths to build (e.g. Assets/Scenes/Main.unity). Defaults to EditorBuildSettings. |
 | `confirm` | no | `false` | Acknowledge and run the build; without it the call is refused. Use `dry-run` to validate only. |
