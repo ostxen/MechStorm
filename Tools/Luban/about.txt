@@ -1,0 +1,7 @@
+Luban 工具输出目录。
+Windows：运行 Tools/build-luban.bat。
+macOS/Linux：运行 bash Tools/build-luban.sh。
+需要 Git、网络和 Luban 源码要求的 .NET SDK；脚本不安装依赖。
+脚本从官方仓库克隆或更新源码到 Tools/luban-source，编译到本目录。
+重复运行会尝试更新源码并覆盖构建产物，不删除整个目录，也不自动导表。
+构建成功后 source-revision.txt 记录源码提交号，不代表已固定版本或完成兼容验收。

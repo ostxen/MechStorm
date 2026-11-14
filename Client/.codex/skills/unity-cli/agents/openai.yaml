@@ -1,0 +1,6 @@
+interface:
+  display_name: "Unity CLI"
+  short_description: "Project-bound Unity operations with explicit authorization"
+  default_prompt: "Use $unity-cli to inspect MechStorm's Unity CLI capabilities and follow project authorization rules."
+policy:
+  allow_implicit_invocation: true

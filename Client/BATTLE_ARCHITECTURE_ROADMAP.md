@@ -1,0 +1,623 @@
+# MechStorm 战斗系统长期拓展规划
+
+## 记录目的
+
+本文记录从“战斗系统：GameObject / State / Attribute / Modifier / Trigger / Bullet”系列文章中提炼出的长期架构借鉴方向。
+
+当前项目已进入 P1 / Sprint 3。本文不是近期必须全部实现的任务清单，而是后续扩展战斗系统时的技术路线约束；具体 Sprint、任务状态与验收边界以 `DEVELOPMENT_PROGRESS.md` 为唯一执行来源。
+
+本文属于前期规划文档，不是不可变更的架构承诺。后续应根据玩法验证结果、代码复杂度、测试成本、配置需求和团队工具链成熟度持续调整。
+
+## 与轻量 GAS 变种的关系
+
+项目主计划中已经明确采用“轻量级 GAS 变种”作为实体与状态管线方向，包括：
+
+- `GameplayTags` 简版
+- `GameplayAttribute`
+- `GameplayModifier`
+- `BattleResource.*`
+- `State.Broken.*`
+- `Locomotion.*`
+- `Attack.Mode.*`
+- `Timing.*`
+
+因此，本文记录的文章思路不用于替代项目原有 GAS 变种规划，而是作为补充参考。
+
+推荐关系如下：
+
+| 职责 | 项目主干采用 | 文章思路提供的补充 |
+|------|--------------|--------------------|
+| 状态标识 | `GameplayTag` | 用层级标签表达状态、攻击方式、移动能力和时序 |
+| 数值中心 | `GameplayAttribute` | 属性集中读取，避免各系统到处查询状态来源 |
+| 数值修改 | `GameplayModifier` | Modifier 不拥有生命周期，只修改流程中的值 |
+| 持续状态 | 轻量 `BattleState` / `StateComponent` | 借鉴“一切皆 State”，但只覆盖有生命周期的状态 |
+| 主动行为 | `Command` / `Ability` / `ActionContext` | 不强行把所有主动技能都塞进 State |
+| 条件触发 | `Trigger` / `EventBus` | Trigger 作为扩展点，不替代核心流程 |
+
+当前建议是：
+
+```text
+主架构：轻量 GAS 变种
+补充思想：State 生命周期统一、Modifier 流程化、Attribute 集中读取、Trigger 扩展点
+不采用：完整 UE GAS、不采用完整“一切皆 State”框架
+```
+
+也就是说：
+
+- 有生命周期的控制、破坏、过热、护盾、警戒等效果，可以逐步进入轻量 `State`。
+- 主动行动仍优先用 `Command / Ability / ActionContext` 表达。
+- 最终数值和功能开关通过 `GameplayAttribute` 读取。
+- 分类、条件和状态标识通过 `GameplayTag` 表达。
+- Modifier 作为属性或流程修改器，不直接承担生命周期。
+- Trigger 用于反击、警戒、地形、回合开始等扩展点，但核心移动、攻击、回合推进仍保持显式流程。
+
+## 核心决策
+
+MechStorm 后续战斗系统应保持以下方向：
+
+1. **纯逻辑优先**：战斗规则继续放在 `MechStorm.Battle`，不依赖 Unity。
+2. **显式流程优先**：移动、攻击、回合推进等核心流程保持显式调用，不用事件系统替代主流程。
+3. **逐步组件化**：当 `CombatUnit` 职责膨胀时，再逐步拆出属性、状态、行动等组件。
+4. **状态统一建模**：眩晕、过热、护盾、死亡、行动结束、警戒等持续性效果，后续优先进入轻量 `State` 系统。
+5. **属性集中读取**：HP、AP、移动力、攻击、防御、热量、护盾、功能禁用等最终结果，后续逐步收敛到统一属性中心。
+6. **上下文承载流程**：伤害、命中、移动、技能释放等一次性流程，后续用 Context 承载输入、中间值和结果。
+7. **Modifier / Trigger 后置**：修改器和触发器作为中后期扩展能力，不在早期原型阶段提前完整实现。
+8. **数据驱动渐进引入**：先用简单配置满足玩法验证，技能数量和规则复杂度上来后，再引入更强的数据驱动或编辑器工具。
+
+## 战斗主链路命名与职责
+
+命名以项目内一致、职责明确为准，不把类名后缀当成架构边界。目录与命名空间保持一致，程序集边界由 asmdef 决定。
+
+| 类型 | 位置 / 命名空间 | 职责 |
+|---|---|---|
+| `BattleSession` | `Battle` / `MechStorm.Battle` | 本场对局的权威状态和规则入口；纯 C#，不依赖 Unity |
+| `BattleRuntime` | `Runtime` / `MechStorm.Runtime` | 客户端本场战斗的装配与生命周期容器，拥有 Session、场景表现和交互对象；允许依赖 Unity，不复制战斗规则 |
+| `BattleSceneBindings` | `Runtime` / `MechStorm.Runtime` | 保存场景依赖，不自行启动或更新对局 |
+| `BattleInteractionController` | `Presentation/Interaction` / `MechStorm.Presentation.Interaction` | 协调选择、移动、目标、确认取消等交互，调用 Session/选择协调器并同步棋盘反馈，不接管全部表现 |
+| `BattleBoardInputReader` | `Presentation/Input` / `MechStorm.Presentation.Input` | 读取棋盘点击，将命中转换为单位或格子，不判断行动合法性 |
+| `BattleUnitStatusPresenter` | `Presentation/Units` / `MechStorm.Presentation.Units` | 刷新单位头顶耐久/AP 条及其朝向，不管理单位全部表现 |
+| `BattleHUDPresenter` | `UI/Battle` / `GameLogic` | 将 HUD 意图转给交互控制器，将本场状态转换为 HUD 显示 |
+| `LubanBattleScenarioBuilder` / `BattleScenarioBuildResult` | `Config` / `MechStorm.Config` | 将Luban配置校验并转换为独立逻辑实例，不保存或回写运行中状态；旧SO链路已移除 |
+
+`Runtime`、`Config` 和 `UI/Battle` 仍归 `GameLogic` 程序集；`Presentation` 保持独立程序集，不反向依赖 `GameLogic`。命名调整不意味着新增层级、接口或状态机。`PilotRuntime` / `MechRuntime` 等位于 Battle 内的纯逻辑状态也不因 `Runtime` 后缀而依赖客户端容器。
+
+### ProcedureBattle 内部阶段
+
+外层仍由 TEngine Procedure 管理主界面与战斗生命周期；场景、Runtime 和单位初始化完成后才启动内部五阶段。资源加载不是 Gameplay 的 Loading 阶段；初始化和正常离场由 Procedure 管理，开发错误直接暴露，不自动退出或返回主界面。
+
+```text
+Preparation → Starting → Playing → Result
+                           ↕
+                     TurnTransition
+```
+
+| 阶段 | 进入行为与结束条件 |
+|---|---|
+| `Preparation` | 场景与单位已存在但未选中，准备窗口就绪后关闭首次 Loading；确认后进入 Starting |
+| `Starting` | 依次播放目标、首回合提示，然后才初始化 HUD；完成后进入 Playing，不并行预加载 HUD或再次打开 Loading |
+| `Playing` | 同步默认选中、刷新和显示 HUD；唯一允许战斗输入/棋盘轮询的阶段。同阵营切单位不离开；Session 已结束优先进入 Result，否则阵营/回合变化进入 TurnTransition |
+| `TurnTransition` | 隐藏 HUD、清除选择，播放 Session 当前回合/阵营提示；复用已初始化 HUD，完成后进入 Playing |
+| `Result` | 隐藏 HUD、清除选择并禁止操作；权威结果仍来自 Session.Outcome。Procedure 打开结算窗口并接收统计、重战/返回意图；重战/返回通过正常离场与外层 Procedure 切换完成，不由内部阶段自行重建对局 |
+
+采用枚举和集中的合法转换、进入/退出逻辑，不为动画或一次 await 建状态类，不新增通用 FSM/全局状态变更事件。`CurrentPhase` 在资源初始化及退出后为 null；异常不额外重置阶段。当前异步阶段完成后才转移，没有独立抢占需求，统一复用整场 token，不增加阶段级 CTS 或阶段身份；离场先使整场身份失效并取消，阻止旧任务推进。不可取消的场景加载进度回调仍按整场身份隔离。
+
+`ProcedureBattle.cs` 保留初始化、窗口请求和统一释放，`ProcedureBattle.Flow.cs` 保存内部阶段与输入门控，二者为同一 Procedure 的 partial，而非新的 RuntimeController。窗口离场直接调用 TE 的 CloseUI（对未入栈窗口为空操作），不另记请求状态；加载是否完成由窗口的 IsLoadDone 判断，不用当前阶段猜测。棋盘与 HUD 共用门控，同时检查 Session 是否结束及提示是否已覆盖当前阵营，防止切阶段前的同帧输入泄漏；内部流程不推进核心回合或判定胜负。
+
+Playing 内部依赖由进入条件保证，更新时不重复判空或静默跳过。按 2026-10-26 最新决定，开发阶段程序错误直接暴露，由开发者修复，不自动清理、返回主流程或重试。初始化、阶段、菜单、统计及同步更新不为失败退出包裹 try/catch，不保留 HandleBattleFailure 或仅供失败处理的生命周期参数。异步异常经 UniTask/Forget、同步异常经原更新调用链暴露，不重复记录日志；异常可能保留部分初始化状态或重复报错，不将此视为恢复成功。
+
+正常撤退、重开和离场仍先取消再统一释放；ReturnToMain/RestartBattle 仅响应正常导航，使用 `_nextProcedureType` 调度下一次更新切换，避免按钮回调直接重入 FSM。每次进入战斗重置导航请求并新建整场生命周期。ProcedureMain 只重新打开 MainUI、监听 RequestBattle，不新增物理主场景回切。旧场异常只上报，不再拥有清理或跳转当前场的路径。本决定覆盖2026-10-21“异常清理并自动返回入口”及更早“异常只清理”的策略，不承诺发生程序错误后可继续操作失败状态。
+
+泛型窗口创建的非空契约由框架保证，不在 Procedure 重复判空；窗口资源地址解析与加载诊断交给 TE，不反射 WindowAttribute 或重复预检查资源地址。加载完成检查（TE 超时返回未完成窗口时显式报错）、场景绑定与场景资源地址校验仍保留，以明确暴露边界错误。IsLoadDone 在 Canvas 检查及绑定/OnCreate 前设置，不证明这些步骤成功；TE 内部独立 UI 加载任务的异常不保证回传 Procedure，本轮不修改框架或另建 IsReady/恢复机制。正常窗口在顺序步骤结束时关闭，正常离场统一释放；异常不自动触发释放，退出阶段不重复关闭已完成的提示窗口。相关精简遵循工程协作文档的“避免过度防御”。
+
+目标/回合动画及 HUD 条目初始化直接接收 Procedure 的整场 token，不额外建立窗口销毁取消源或 linked CTS。Procedure 等待 HUD 初始化后才构造 Presenter，不再维护 ActionItemsReady 或重复检查 IsDestroyed；正常释放时先停止流程并关闭窗口（含 HUD），再 Dispose Presenter 与 Runtime，不通过 HUD.Closed 建立第二条释放链，也不在普通刷新/输入调用中静默忽略已释放 Presenter。目标文本和 Loading 绑定错误由生成绑定诊断及直接使用暴露，不另写业务预检查。
+
+HUD 显示许可由 OnCreate 关闭、进入 Playing 开启、退出 Playing 关闭，OnSetVisible 负责阻止 TE 的显隐重算提前显示；不在 HUD 初始化完成或回合提示关闭后重复隐藏。动画循环中带 token 的 UniTask.Yield 已检查取消，恢复后不重复检查；动画时长与非缩放时间语义不变。
+
+2026-11-07 HUD战况读取Session真实回合/阵营，当前固定全灭目标由Procedure提供同一说明给准备页、开战提示及HUD。HUD菜单复用现有BattleMenuUI，Procedure在打开前取消指针手势，重复请求不重复订阅。菜单/设置从入栈加载到关闭统一纳入CanAcceptBattleInput，覆盖棋盘、HUD行动及镜头新输入，不新增模态状态标记；已接受镜头缓动仍完成。整阵营结束和角色指令不属于本批。
+
+准备窗口由 Procedure 独占关闭。其开始确认等待只依赖 EnterBattleRequested 事件和整场取消，不轮询 IsDestroyed 或为推测性外部关闭抛错；菜单撤退/重开使用整场取消结束等待，再关闭窗口。不增加独立 IsReady 等待，也不将 IsLoadDone 当作创建成功的证明。
+
+### 基础战斗镜头边界（2026-10-22 批准，2026-11-08补充交互规则）
+
+- 2026-11-08用户修正菜单输入边界：战斗菜单内允许WASD平移、左右方向键旋转和滚轮缩放，设置打开后禁止镜头新输入；棋盘、HUD行动和鼠标拖拽仍被菜单阻止。此决定覆盖下方旧“菜单禁止镜头新输入”约束；应用/文本焦点和非Playing阶段限制保留。镜头门控不依赖被菜单遮挡的HUD.Visible。滚轮检测只忽略当前菜单明确提供的关闭遮罩对象，面板/按钮及其他UI命中仍阻挡，棋盘检测不带该例外；不以节点名称或全局关闭UI射线实现穿透。遮罩点击关闭和阻止棋盘穿透职责不变，实现/验证状态以正式进度为准。
+
+- 镜头属于客户端 Presentation；Runtime 装配并管理本场镜头依赖，Procedure 管阶段启停与释放，HUD 只提交操作意图。Battle 不引用镜头，不因观察变化修改角色逻辑朝向、位置、行动或胜负。
+- 镜头调参集中在普通可序列化BattleCameraSettings，Bindings保存嵌套参数，Runtime装配时校验一次；控制器只读引用配置并独立维护本场运行状态。场景引用和派生棋盘边界不进入调参对象，输入读取器仅获取所需阈值；不为当前单套镜头引入SO、Luban表或配置管理器。
+- T1.8 使用8个离散观察方位、相邻45°，基于配置初始方位循环。默认45°俯角仅由配置修改，玩家运行时不能调俯角；T1.13 的缩放也不改变俯角。此范围覆盖旧四档方案及讨论中的四档90°方案。
+- 2026-11-07反馈要求旋转及行动者居中必须缓动，不硬切；过渡时长为表现配置，连续输入从当前镜头状态接续。阶段拒绝新输入与已接受过渡的逐帧完成分开处理，离场统一停止更新并恢复原场景相机位姿。
+- 2026-11-07最新决定覆盖同日LateUpdate方案：当前镜头不逐帧跟随角色Transform且无行走动画，统一在Procedure.OnUpdate中先处理输入/战斗操作/目标同步，再推进镜头并刷新血条朝向；镜头推进位于阶段函数外，阶段内提前返回不阻断已接受过渡。删除镜头LateUpdate订阅、解绑及晚到回调补偿；保留加载进度身份隔离，拖拽仍立即应用位姿。不改ModuleSystem、不新增MonoBehaviour或全局镜头单例，未来有实际跨组件跟随时序需求再评估LateUpdate。
+- 每个角色开始行动时居中，包括同阵营内换角色和阵营交接；居中保留玩家选择的角度与缩放。手动平移后不每帧拉回，下一个角色开始行动再居中；选中敌方目标不改变行动者焦点。2026-11-07确认每次角色移动后重新居中；最新键位决定覆盖同日HUD按钮+Q/E方案，旋转改为左右方向键，每次按下转45°、长按不重复，HUD旋转按钮及提示整体隐藏且删除业务接线。提示、菜单/设置、结算和离场不接受镜头新输入，键盘输入尊重应用焦点和文本输入占用。
+- 2026-11-07新增WASD按住平移，按当前镜头水平角（含旋转缓动途中）将画面前后左右转换到世界XZ，不使用固定世界轴。速度由既有BattleCameraSettings配置，默认6世界单位/非缩放秒，组合键不加速、不随缩放变化。复用拖拽的手动焦点限幅和应用，焦点在棋盘矩形内逐轴Clamp，斜角触边后沿边滑动、到角落停止；手动焦点不回拉且不重启角度/距离缓动。不新增输入管理器或修改Battle。
+- T1.13 增加棋盘平面拖拽平移、焦点边界和限幅滚轮缩放。边缘行动者居中优先，不强求画面永不露出棋盘外；拖拽键位、阈值、缩放和边界参数在实现前确认。
+- 2026-11-07确认先缩放后拖拽：滚轮向上拉近/向下拉远，距离6～18、初始10、每格1、默认0.25秒缓动，均为Inspector表现配置。围绕当前焦点、不向鼠标位置偏移，固定俯角；旋转/居中保留缩放目标，连续操作从当前插值状态接续，边界无效输入不重启缓动。滚轮复用即时UI射线检测与既有阶段/菜单/设置门控，不另建全局输入服务。
+- 镜头手势与棋盘动作必须互斥。2026-11-07确认左键按住移动超过8像素即拖拽，普通点击改为松开时提交，已拖拽松开不点击；不采用按下先执行、拖动后撤销。屏幕射线与棋盘平面交点差驱动跟手平移，无惯性，焦点限制在棋盘矩形边界，旋转与缩放保持。UI起手/移入、视口退出、失焦、菜单/设置及阶段停用取消手势，恢复须重新按下。UI 上手势不穿透，提示/结果/离场启停和重战恢复纳入同一验收，覆盖8档、缩放与平移后的射线、高亮、血条朝向及目标确认。
+- 不引入自由轨道相机、运行时俯角调整、镜头碰撞或技能演出导演。镜头拖拽不是角色部署，角色库、上下阵和布阵仍归 Sprint 9。
+
+### T1 收尾顺序与数据边界（2026-10-22）
+
+正式任务/估时/验收状态只在 DEVELOPMENT_PROGRESS.md 维护：结果页 → 全新重战/返回 → 只读统计 → 最小 Luban 迁移 → 八档镜头/平移/缩放 → T1 补漏和完整回归 → Sprint 5 地形寻路 → 后续机制。排期批准不代表既有异常退出或完整回归已验收，不自动开始源码实现。
+
+重战由本场生命周期所有者释放旧场并创建全新 Session，不局部重填旧场属性；正常失败读取 Outcome，程序异常不伪装成战败。正常返回是否切回 main 场景在对应任务开工时确认；当前异常返回仅打开 MainUI 的实现事实不变。统计从权威日志构建只读数据，不回写战斗。
+
+最小 Luban 迁移放在可重复闭环之后、地形和新机制扩展之前。生成代码归 GameProto，二进制由 YooAsset 管理并明确资源释放；GameLogic 单向转换为既有 Battle Data，Battle 不依赖 Luban、GameProto 或 Unity。按2026-11-07最新选择，配置使用同步按表懒加载，允许首次访问阻塞主线程，读取TextAsset后立即配对UnloadAsset；此处覆盖原启动异步预加载约束，其他资源IO规范不变。场景引用、材质与镜头调试参数仍为表现配置，不再保留SO战斗数据及旧构建入口。当前流程验收数据与旧SO的移动力、射程、技能等存在已授权差异，不宣称数值等价；具体数据范围与正式验收以DEVELOPMENT_PROGRESS.md为准，完整后置机制不因配置接入而视为实现。
+
+## 分阶段路线
+
+### 当前执行排期映射（2026-07-18）
+
+实际 Sprint 2 已优先完成 `BattleSession`、多单位、回合、结构化 Result、Snapshot 和 ActionLog，与主计划旧 Sprint 2 的属性、部位、资源和武器任务不同。未实施内容没有取消，而是按真实依赖重新排期：
+
+| Sprint | 当前执行主题 | 关键边界 |
+|---|---|---|
+| Sprint 3 | 占格、攻击范围、目标规则与高亮 | 继续使用 BFS 和瞬移，不做技能、地形 Cost 或 A* |
+| Sprint 4 | 最小主动技能闭环 | 单体直接伤害、最小 AP、目标选择与日志；不做 Buff / Modifier / Trigger |
+| Sprint 5 | Terrain Cost、Dijkstra 与 A* | Dijkstra 负责带权范围，A* 负责单目标路径；不做路径动画 |
+| Sprint 6 | 属性合成、多部位、Tag、部位破坏和最小武器关系 | 补回主计划旧 Sprint 2 的机甲核心机制 |
+| Sprint 7 | AP / PP、技能成本、命中率、确定性 RNG 与伤害管线 | Context 仅在参数和共享中间状态真实膨胀时引入 |
+| Sprint 8 | Elevation、Locomotion、ZOC、LOS、掩体与最小 PVE AI | `IMapTopology` 仅在第二种真实拓扑出现时评估 |
+| Sprint 9～12 | 正式流程、State / Attribute / Modifier / Trigger、Luban、Command / 恢复 / 回放基础 | 主计划旧 P2 工程化任务顺延，不重复已完成的 TEngine 和 asmdef 接入 |
+
+动态召唤、Hex、正式路径动画、复杂 Buff、追加攻击、PVP 和编辑器工具继续按真实玩法与前置条件进入 Backlog，不为填满路线图提前实现。
+
+### 架构演进 A：最小可玩原型
+
+目标是验证战棋机甲基础循环：
+
+- 方格拓扑
+- 移动范围
+- 单位显示
+- 点击移动
+- 基础攻击
+- 回合切换
+
+此阶段应避免引入完整 `State / Modifier / Trigger / Bullet` 框架。
+
+允许保留简单直接的实现，只要核心逻辑可测试、表现层与逻辑层边界清晰。
+
+### 架构演进 B：轻量战斗行动与空间规则
+
+当基础闭环跑通后，可以引入：
+
+- 动态占格、攻击范围、候选目标与目标合法性查询
+- 最小 `AbilityDefinition` / `TargetRule` / `AbilityResolver`
+- Terrain Cost、Dijkstra 可达范围和 A* 单目标路径
+- 多部位、资源、武器、命中率和确定性 `BattleRNG`
+- `BattleActionResult`：统一承载移动、攻击、结束回合和使用技能的结果，供表现层刷新
+- `CombatUnit.UnitId`：提供本场战斗内稳定的实体身份，供 Snapshot、日志和后续回放引用
+- 轻量 `BattleSnapshot` / `BattleActionLog`：先支撑调试导出，不提前实现完整回放
+
+重点是先让范围、技能、空间和机甲核心规则形成可玩闭环。正式 Command、通用 State 生命周期、Modifier 和 Trigger 仍后置到对应执行任务，不因概念已经命名就提前搭建完整框架。
+
+### 架构演进 C：属性中心与流程上下文
+
+当单位数据和规则开始变多后，逐步引入：
+
+- `BattleAttributeSet`
+- `DamageContext`
+- `AttackContext`
+- `MoveContext`
+- 属性变化结果记录
+- 战斗日志或调试输出
+
+此阶段目标是减少规则散落，方便后续 AI、UI、回放、调试读取同一套结果。
+
+### 架构演进 D：Modifier 与 Trigger
+
+当装备、机甲部件、天赋、地形、状态开始影响战斗流程时，再引入：
+
+- `AttributeModifier`
+- `DamageModifier`
+- `HitModifier`
+- `MoveCostModifier`
+- 回合触发器
+- 进入格子触发器
+- 受击触发器
+- 警戒/反击触发器
+
+核心原则：
+
+- Modifier 只修改流程中的值，不拥有生命周期。
+- State / 装备 / 地形可以提供 Modifier。
+- Trigger 作为扩展点，不替代核心流程。
+
+### 架构演进 E：复杂技能、子弹与复杂数据驱动
+
+Sprint 4 只建立最小主动技能闭环；当项目后续需要复杂技能和投射物时，再考虑：
+
+- 技能配置表
+- 技能释放上下文
+- 技能状态或技能脚本
+- 独立生命周期的 Bullet
+- 可拦截、延迟落点、追踪导弹、无人机等实体化效果
+- 更强的数据驱动或可视化编辑器
+
+普通瞬发攻击不应提前实体化为 Bullet。只有具备独立生命周期和交互需求的效果才需要 Bullet。
+
+## 不应提前照搬的内容
+
+早期原型与核心机制阶段不建议提前实现：
+
+- 完整“一切皆 State”框架
+- 完整 Modifier 表体系
+- 复杂技能编辑器
+- 行为树技能系统
+- 大型互斥图
+- 完整子弹框架
+- 所有流程事件化
+- 复杂配置 DSL
+
+这些能力适合在玩法复杂度真实出现后再扩展。
+
+## 当前开发约束
+
+1. `MechStorm.Battle` 不引用 `UnityEngine`。
+2. `MechStorm.Presentation` 只负责 Unity 表现、输入适配和 View 同步。
+3. 新增战斗规则优先补 EditMode 测试。
+4. 当前 P1 仍不为了架构完整性牺牲可玩闭环推进速度。
+5. 每次引入新抽象前，应先确认已有代码出现重复、职责膨胀或测试困难。
+
+### 当前代码组织边界
+
+`MechStorm.Battle` 保持单一纯 C# 程序集，目录与命名空间按职责对应：
+
+- 根命名空间：`BattleSession` 等战斗统一入口。
+- `Foundation`：基础值类型。
+- `Spatial`：棋盘拓扑与空间规则基础。
+- `Units`：战斗单位、阵营、Pilot / Mech 数据和运行时数据、Registry。
+- `Turns`：行动顺序与回合推进。
+- `Rules`：移动、攻击等显式规则解析。
+- `Actions`：行动类型、失败原因、变化类型、结果与行动日志。
+- `Snapshots`：战场和单位快照。
+- `Diagnostics`：JSON 等调试导出。
+- `Numeric`：尚未接入主流程的数值组件候选。
+
+`MechStorm.Presentation` 保持单一 Unity 表现程序集，使用 `Board / Camera / Interaction / Input / UI / Units` 按职责归类。`Interaction` 聚合交互入口、行动选择协调器、状态机和选择数据，不按Controller后缀收集类型；镜头控制器仍归Camera。测试目录镜像生产职责；当前不为每个目录拆分 asmdef，也不建立语义宽泛的 `Core / Models / Services`。
+
+- `BattleInteractionController` 对接棋盘输入和HUD意图，同步棋盘反馈；`BattleActionSelectionCoordinator` 通过Session查询合法组合并提交行动；`BattleActionSelectionStateMachine` 只管理选择转换；`BattleActionSelection` 及目标选择对象描述选择内容。四个主类名保留，目标选择暂不单独拆文件。
+- `BattleActionSelectionKind.Ability` 表示技能执行分支，同时承载Active与Command；不与技能分类`AbilityCategory`混用。普攻仍为BasicAttack，枚举顺序不变。
+- 参数契约检查集中到命名明确的校验方法，业务入口只调用校验方法，不展开多行参数if/else。AP不足、越距和状态锁定等玩法/交互判断仍留在对应职责中，不与调用错误混为一谈，也不新增全局校验框架。
+
+## 后续必须补齐的设计约束
+
+以下内容不一定在当前 Sprint 实现，但在进入对应后续架构任务前应逐步明确，否则轻量 GAS 变种会在后期变得难以维护。
+
+### 术语边界
+
+需要明确项目内这些概念的职责边界：
+
+| 术语 | 建议含义 |
+|------|----------|
+| `GameplayTag` | 状态标识、分类、条件匹配，不直接承载生命周期 |
+| `BattleState` | 有生命周期的状态对象，例如眩晕、过热、护盾、破坏、警戒 |
+| `GameplayAttribute` | 可查询的最终数值或功能开关 |
+| `GameplayModifier` | 对属性或流程值的修改器，不拥有生命周期 |
+| `Trigger` | 条件满足后的扩展执行点 |
+| `Command / Ability` | 主动行动入口，例如移动、攻击、技能、结束回合 |
+| `Context` | 一次流程的上下文，例如攻击、伤害、移动、技能释放 |
+
+尤其要避免混淆：
+
+- `Tag` 不是 `State`，Tag 只是标识或条件。
+- `Modifier` 不是 `Buff`，Modifier 只修改值。
+- `State` 可以提供 Tag 或 Modifier，但 State 本身负责生命周期。
+- 主动技能不强制等于 State，复杂技能可以由 Ability / Command / Context 驱动。
+
+### Tag 注册与命名规范
+
+`GameplayTag` 应尽早形成命名规则，避免随手字符串扩散。
+
+建议采用层级命名：
+
+```text
+State.Broken.Leg
+State.Broken.Arm
+State.Control.Stun
+State.Control.Root
+Locomotion.Walk
+Locomotion.Hover
+Locomotion.Jump
+Attack.Mode.Active
+Attack.Mode.Reactive
+Attack.Mode.Duel
+Timing.Turn.Start
+Timing.Action.Before
+Timing.Hit.After
+BattleResource.ActionPoint
+BattleResource.PotentialPoint
+```
+
+后续应考虑集中注册或生成，避免运行时拼接未知 Tag。
+
+### 养成属性与装配边界（2026-10-31 确认）
+
+- 机师等级、科研、芯片等模块各自负责本领域的配置读取、玩家进度和属性贡献。
+- 独立装配层汇总角色自身基础值与各模块贡献，按统一规则计算属性并保留来源；战斗创建与界面展示复用同一计算口径。
+- 战斗装配生成本场属性、资源实例与天赋行为，局内状态在此基础上参与计算；界面读取对应场景的属性与资源结果。
+- 当前Pilot六属性使用70级自身基础值，科研、芯片等加成分别提供。接入等级养成后，自身基础值改由当前等级及成长配置确定。
+
+### 机师配置与天赋扩展（2026-10-31 确认，后续实施）
+
+- 配置按独立规则、复用和一对多关系拆分。Pilot主表保留身份、自身六属性、默认驾驶许可及基础AP/PP参数，驾驶等级引用共用规则表。
+- 天赋独立定义效果类型与参数，通过机师天赋关联表以pilotId、talentId及解锁条件关联；等级成长随后续养成配置。玩家当前等级、解锁进度和装备关系由对应领域存档保存。
+- 机师采用统一结构，按配置组合天赋、资源和行为。已有机制复用参数配置，新机制增加对应行为实现。
+- 专属资源配置初始值与上限；天赋行为负责条件触发和回复，技能或天赋配置负责消耗及使用效果。装配层根据生效天赋创建资源并挂接行为。
+- 资源上限、回复量参与属性计算，当前值属于本场Runtime，由明确的获取、消耗和初始化操作维护。资源实例是否存在表达拥有资格，当前值表达可用点数。
+
+### Attribute 重算策略
+
+进入 `GameplayAttribute` 阶段前，需要明确属性值如何计算：
+
+- 增量修改：添加 Modifier 时修改，移除时回滚。
+- 脏标记重算：Modifier 变化时标脏，查询时重新计算。
+- 分层缓存：局外静态层 + 局内动态层。
+
+当前更推荐预留脏标记接口，Sprint 10 先做简单重算，Sprint 13+ 在 Utility AI 大量读取属性时再做两层缓存。
+
+还需要保留属性来源追踪能力，例如：
+
+```text
+MoveRange = 4
+  Base: 3
+  LegModule: +1
+  State.Broken.Leg: Override 1
+```
+
+否则后期很难解释“为什么这个单位当前移动力是 1”。
+
+### Modifier 计算顺序
+
+Modifier 必须有明确计算顺序，否则数值不可预测。
+
+建议先采用简单层级：
+
+```text
+Base
+Add
+Multiply
+Override
+Clamp
+FinalModify
+```
+
+Sprint 3～8 可以不实现完整 Modifier 系统，但一旦进入 Sprint 10，就要明确：
+
+- 同层 Modifier 的合并规则
+- Override 之间的优先级
+- Clamp 的上下限来源
+- Modifier 来源记录
+- Modifier 生效时机
+
+### 调试工具需求
+
+GAS 类架构没有调试工具会很难排查问题。后期至少需要能查看：
+
+- 单位当前 `GameplayTag` 列表
+- 单位当前 `BattleState` 列表
+- 属性当前值和来源
+- 生效中的 Modifier
+- 最近触发的 Trigger
+- 最近一次 Attack / Damage / Move Context
+- 回合内 Command 记录
+
+这些可以先从日志开始，不必一开始做完整 Editor 面板。
+
+### 确定性、悔棋与回放边界
+
+如果未来要支持悔棋、续战、录像或战斗复现，需要尽早保证：
+
+- 行动通过 `Command` 表达。
+- 随机数通过 `BattleRNG` 管理。
+- 每次行动的输入、结果、影响目标可记录。
+- 关键流程不依赖 Unity 时间、帧率或场景对象。
+- `Context` 不保存不可序列化对象。
+
+这部分不要求早期原型完成，但其后新增系统时要避免破坏确定性。
+
+### 战斗实体身份与动态单位生命周期
+
+`CombatUnit.UnitId` 表示某一场战斗中的稳定实体身份，不等同于驾驶员配置 ID、机甲配置 ID、对象哈希或 Unity Instance ID。Snapshot、ActionLog、Command 和回放都只通过该数字身份引用单位，不保存跨运行时对象引用。
+
+当前约束：
+
+- 初始单位由战斗初始数据显式提供大于零的 `UnitId`，`CombatUnitFactory` 负责传入，`CombatUnitRegistry` 负责校验唯一性并提供按 ID 查询。
+- 不使用静态全局自增，也不让注册顺序隐式决定 ID；同一份初始战斗数据应能在测试、服务端和回放中创建出相同的数字身份。
+- 回放恢复时创建的是新的 `CombatUnit` 对象，但复用 Snapshot 或日志中的相同 `UnitId` 与数据，因此无需保留原对象引用。
+
+动态召唤按真实玩法需求分阶段引入：
+
+1. **Task 2.7**：只完成初始单位稳定 ID、注册唯一性、Snapshot 和 ActionLog，不实现动态召唤。
+2. **Sprint 4 或其后**：仅当首个真实主动召唤技能进入开发，并且 Sprint 3 的目标 / 占格规则与最小技能流程已经稳定后，将召唤作为独立垂直切片实现。
+3. **Sprint 13+ 天赋 / Trigger 阶段**：天赋触发召唤通过 Trigger 或 Ability 复用统一召唤入口，不直接修改单位注册表；若此前没有真实召唤玩法，则到首个天赋召唤需求出现时再补齐。
+
+动态召唤进入开发时，必须同时明确并验证：
+
+- `BattleSession` 的本场 ID 分配器及 Snapshot 中的下一可用 ID。
+- 出生位置、占格、阵营和注册校验。
+- 新单位加入行动队列以及当回合能否行动的规则。
+- `UnitSpawned` 结果、日志和回放中的稳定 ID。
+- 表现层单位、模型、血条的创建与销毁。
+- 召唤物死亡、离场及召唤者失效后的生命周期规则。
+
+召唤能力不能只实现为“创建一个 `CombatUnit`”，也不应由具体技能或天赋各自维护一套注册、ID 和回放逻辑。
+
+### 阵营、行动角色与本地视角
+
+阵营、流程阶段、单次行动角色和本地表现关系属于不同维度，不能共用同一个枚举或字段。
+
+讨论中排除了直接使用 `Player / Enemy / Neutral` 作为长期阵营定义的方案。`Player` 与 `Enemy` 是客户端观察者的相对称呼：同一个 PVP 单位在一方客户端是己方，在另一方客户端则是敌方，无法作为服务端权威状态、录像或重连数据中的稳定身份。
+
+当前采用四层模型：
+
+| 层级 | 推荐表达 | 职责 |
+|------|----------|------|
+| 持久阵营 | `CombatFaction.TeamA / TeamB / Neutral` | 表示战斗内稳定归属，服务端、快照和回放共同使用 |
+| 流程阶段 | `TurnPhase` | 表示战斗流程当前所处阶段，不作为阵营参数 |
+| 单次行动角色 | `AttackerUnitId / DefenderUnitId` | 表示一次攻击中的进攻方与防守方，下一次行动可以互换 |
+| 本地表现关系 | `Ally / Enemy / Neutral` | 由客户端根据本地玩家所属阵营映射，只影响 UI、颜色、镜头和动画 |
+
+使用规则：
+
+- PVE 中可映射为 `TeamA = 玩家阵营`、`TeamB = AI 阵营`、`Neutral = 中立单位`。
+- PVP 中由服务端固定分配 `TeamA / TeamB`，两个客户端接收完全相同的阵营和结算数据。
+- `Neutral` 不默认等于敌对，其可攻击性、AI 行为和胜负归属应由独立规则决定。
+- `Attacker / Defender` 只描述单次行动角色，不能用于推断单位的持久阵营。
+- `Ally / Enemy` 不写入服务端权威状态、快照或回放日志，由观看端根据观察者阵营计算。
+- 如果未来需要三方以上混战或动态结盟，将 `CombatFaction` 枚举升级为稳定的 `FactionId`，上层接口保持按阵营标识查询。
+
+### 回放技术选型
+
+回放要区分两种目标：
+
+```text
+复现战斗结果：重新跑战斗逻辑，要求确定性。
+再现战斗表现：按权威结果播放，不要求客户端重新算出同样结果。
+```
+
+因此后续回放建议分层设计：
+
+| 类型 | 数据内容 | 适用场景 | 特点 |
+|------|----------|----------|------|
+| Command Replay | 初始快照 + Command 序列 + RNG 种子/游标 | 本地回放、开发调试、确定性验证 | 数据小，但要求逻辑、配置和 RNG 完全一致 |
+| Result Replay | 初始快照 + 每步权威结果日志 | PVP 回放、分享回放、排行榜、防作弊 | 更稳，不依赖观看端重新结算，数据更大 |
+| 混合日志 | Command + 权威 Result + 关键表现事件 | 长期推荐方案 | 既能追踪玩家意图，又能按权威结果稳定播放 |
+
+#### Command 意图与 Action 事实分层
+
+正式进入 Command Replay、回放或 PVP 前，应增加独立 `BattleCommandLog`，避免只记录结果而丢失失败操作的原始请求，也避免把本地 UI 点击混入权威战斗历史。
+
+```text
+BattleCommandLog
+  Sequence
+  CommandType
+  ActorUnitId
+  RequestedTargetPosition?
+  RequestedTargetUnitId?
+  Accepted
+  FailureReason
+
+BattleActionLog
+  Sequence
+  ActionType
+  ActorUnitId / TargetUnitId / NextUnitId
+  FailureReason
+  ChangeTypes
+  Before / After
+
+BattleSnapshot
+  指定时刻的完整世界状态
+```
+
+三者职责：
+
+- `BattleCommandLog` 记录玩家、AI 或服务端“想做什么”以及 Session 是否接受，用于解释失败移动原本点击了哪个格子、失败攻击原本选择了哪个目标。
+- `BattleActionLog` 记录战斗核心“实际发生了什么”，保持客观阵营、稳定单位 ID、失败原因和有序状态变化。
+- `BattleSnapshot` 记录指定时刻的完整状态，用于诊断、恢复和回放检查点。
+
+本地点击、选中单位、未选中拒绝和无效 Collider 等尚未提交到 `BattleSession` 的交互只属于非权威 `InputTrace`，不进入 BattleCommandLog 或权威 BattleLog。空引用、未知运行时对象等调用契约错误进入异常日志，不伪装成玩家指令失败。
+
+阶段边界：
+
+- Task 2.7 已只实现轻量 `BattleActionLog + BattleSnapshot`，没有提前建立 Command 体系。
+- Sprint 12 引入 `BattleCommand` 时同步增加 `BattleCommandLog`，并用相同 `Sequence` 关联 Command、ActionResult 和关键 Snapshot。
+- PVP 分享回放使用 Command + 权威 ActionResult 的混合日志，本地 `InputTrace` 不上传为战斗事实。
+
+PVP 和可分享回放更推荐使用“Command + 权威 Result 混合日志”：
+
+```text
+客户端提交 CommandIntent
+-> 服务端校验并结算
+-> 服务端记录 Command + CommandResult / BattleResult
+-> 分享时其他客户端下载权威 BattleLog
+-> 本地按 Result 播放表现
+```
+
+权威 BattleLog 应记录客观事实，而不是任一客户端的本地敌我关系。攻击结果至少包含稳定的单位与阵营标识、单次行动角色和服务端结算结果，例如：
+
+```text
+AttackerUnitId
+DefenderUnitId
+AttackerFactionId
+DefenderFactionId
+Damage
+StateChanges
+```
+
+所有客户端和回放观看端读取同一份日志；客户端仅根据本地玩家或当前观察者所属阵营，将稳定阵营映射为 `Ally / Enemy / Neutral` 并播放对应表现。命中、伤害、死亡和状态变化等权威结果不得按本地视角重新结算。
+
+PVE 如果需要排行榜、防作弊、分享回放，也应尽量上传服务器认可的 BattleLog，而不是只分享本地录像文件。
+
+本地调试和单机复盘可以继续使用 Command Replay，但它不能替代权威分享回放。
+
+### 整数化战斗逻辑
+
+PVP、悔棋、续战、录像和服务端权威结算都会要求战斗结果可复现、可校验。
+
+因此，战斗逻辑层应优先使用整数表达规则：
+
+- 坐标：整数格子坐标。
+- HP / AP / 护盾 / 热量：整数。
+- 概率：整数万分比，例如 `7500 = 75%`。
+- 倍率：整数缩放值，例如 `15000 = 1.5 倍`。
+- 减免：整数万分比，例如 `6600 = 66%`。
+- 固伤率：整数万分比，例如 `1020 = 10.2%`。
+
+浮点数只用于表现层动画、插值、相机、特效和 UI 过渡，不参与核心战斗结算。
+
+使用整数逻辑的原因：
+
+1. **结果确定**：不同平台、不同运行环境不容易出现浮点误差。
+2. **便于服务端校验**：PVP 中客户端只提交指令，服务端用同一套整数规则校验并结算。
+3. **便于回放复现**：Command + RNG + 整数公式更容易重放出完全一致的结果。
+4. **便于配置解释**：策划配置 `40%`、`66%`、`10.2%` 时，可以精确映射为整数比例。
+5. **便于取整约束**：所有出现非整数结果的地方都必须声明取整策略，避免隐藏规则。
+
+示例：
+
+```text
+基础子弹数 = 18
+子弹数加成 = 40% = 4000
+最终子弹数 = Ceil(18 * (10000 + 4000) / 10000) = 26
+```
+
+```text
+基础固伤率 = 30% = 3000
+Boss 固伤减免 = 66% = 6600
+最终固伤率 = 3000 * (10000 - 6600) / 10000 = 1020
+1020 = 10.2%
+最终伤害 = Floor(目标最大 HP * 1020 / 10000)
+```
+
+需要明确的规则：
+
+- 每个公式的取整时机。
+- 每个公式的取整方式：`Floor`、`Ceil`、`Round`、`Trunc`。
+- 是否存在最低值，例如最低 1 点伤害、最低 1 点 AP 消耗。
+- 中间比例是否保留缩放整数，通常推荐中间不提前取整，最终落到离散值时再取整。
+
+完整定点数库暂时不是当前回合制核心必需项。只有当后期出现实时 Lockstep、连续坐标、弹道物理、复杂曲线结果参与战斗逻辑时，才重新评估是否引入定点数库。
+
+### 事件边界
+
+事件系统只作为扩展点，不替代核心流程。
+
+应保持显式流程：
+
+```text
+Validate -> Execute -> ApplyResult -> Notify
+```
+
+不推荐把移动、攻击、扣血、死亡这类主流程拆成一串无序事件监听。
+
+推荐事件用途：
+
+- UI 刷新通知
+- 战斗日志
+- 触发器扩展点
+- 成就/任务统计
+- 表现层播放提示
+
+核心规则：
+
+```text
+主流程显式，扩展点事件化。
+```
