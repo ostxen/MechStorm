@@ -158,11 +158,7 @@ namespace Unity.Pipeline.Editor.Commands.Observability
                         Available = true,
                         CpuFrameTimeMs = timings[0].cpuFrameTime,
                         GpuFrameTimeMs = timings[0].gpuFrameTime,
-#if UNITY_2022_2_OR_NEWER
                         CpuMainThreadFrameTimeMs = timings[0].cpuMainThreadFrameTime
-#else
-                        CpuMainThreadFrameTimeMs = null
-#endif
                     };
                 }
             }

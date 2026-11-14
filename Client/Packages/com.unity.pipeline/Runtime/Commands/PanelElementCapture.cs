@@ -24,6 +24,9 @@ namespace Unity.Pipeline.Runtime.Commands
             if (targetField == null || scaleProperty == null || repaint == null)
                 throw new InvalidOperationException("This engine's runtime panel rendering interface is unavailable.");
 
+            // Pick validates styles/layout without painting. An off-screen panel in EditMode may
+            // not have had a render tick, and reading an existing target must not require Repaint.
+            panel.Pick(Vector2.zero);
             var rootBounds = panel.visualTree.worldBound;
             var scale = (float)scaleProperty.GetValue(panel);
             var target = targetField.GetValue(panel) as RenderTexture;
@@ -41,10 +44,15 @@ namespace Unity.Pipeline.Runtime.Commands
             {
                 Camera.SetupCurrent(null);
                 RenderTexture.active = rt;
-                GL.Clear(true, true, Color.clear);
-                repaint.Invoke(panel, new object[] { new Event { type = EventType.Repaint } });
                 if (target != null)
+                    // Read the existing frame. Repaint binds targetTexture internally and would
+                    // draw into the application's texture again (accumulating translucent pixels).
                     Graphics.Blit(target, rt);
+                else
+                {
+                    GL.Clear(true, true, Color.clear);
+                    repaint.Invoke(panel, new object[] { new Event { type = EventType.Repaint } });
+                }
 
                 RenderTexture.active = rt;
                 texture = new Texture2D(panelWidth, panelHeight, TextureFormat.RGBA32, false);

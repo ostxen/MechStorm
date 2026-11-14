@@ -13,9 +13,9 @@ namespace Unity.Pipeline.Editor.Commands
     /// unfocused. Unity throttles EditorApplication.update when the editor is in the background,
     /// which can stall long-running work (HTTP commands, async test runs) driven from the CLI.
     ///
-    /// When enabled, this forces EditorApplication.SignalTick() on every update, which schedules
-    /// the next tick immediately and keeps the loop spinning. It is off by default and changes
-    /// nothing in normal package behavior. Cross-platform: no native/OS calls.
+    /// When enabled, this forces EditorApplication.SignalTick() at the selected interval.
+    /// The server also holds an implicit tick request while its watchdog needs it. An explicit
+    /// user choice takes precedence; stopping the server releases only its implicit request.
     ///
     /// Note: the update-loop subscription is static and does not survive a domain reload, but the
     /// enabled/interval choice is persisted to SessionState and restored by
@@ -37,6 +37,7 @@ namespace Unity.Pipeline.Editor.Commands
         private const string IntervalKey = "Unity.Pipeline.AutoTick.IntervalMs";
 
         private static bool s_Enabled;
+        private static bool s_ExplicitChoice;
         private static Action s_SignalTick;
         private static EditorApplication.CallbackFunction s_Pump;
         private static readonly System.Diagnostics.Stopwatch s_Stopwatch = new System.Diagnostics.Stopwatch();
@@ -52,11 +53,11 @@ namespace Unity.Pipeline.Editor.Commands
             [CliArg("persist", "Persist this choice to SessionState so it survives a domain reload. Set false for a one-off/expensive setting (e.g. interval-ms=0) that should revert to the last persisted choice (or the default) after the next recompile instead of sticking for the rest of the session.")] bool persist = true)
         {
             var result = ApplyAutoTick(enabled, intervalMs);
-            if (!persist)
-                return result.StartsWith("Error:") ? result : result + " (session-only, won't survive a domain reload)";
-
             if (result.StartsWith("Error:"))
                 return result;
+            s_ExplicitChoice = true;
+            if (!persist)
+                return result + " (session-only, won't survive a domain reload)";
 
             SessionState.SetBool(EnabledKey, s_Enabled);
             SessionState.SetInt(IntervalKey, (int)s_IntervalMs);
@@ -72,6 +73,7 @@ namespace Unity.Pipeline.Editor.Commands
         /// </summary>
         internal static void RestoreFromSession(bool defaultEnabled)
         {
+            if (s_ExplicitChoice) return;
             var storedInterval = SessionState.GetInt(IntervalKey, -1);
             if (storedInterval < 0)
             {
@@ -80,7 +82,14 @@ namespace Unity.Pipeline.Editor.Commands
             }
 
             var storedEnabled = SessionState.GetBool(EnabledKey, defaultEnabled);
-            ApplyAutoTick(storedEnabled, storedInterval);
+            if (!ApplyAutoTick(storedEnabled, storedInterval).StartsWith("Error:"))
+                s_ExplicitChoice = true;
+        }
+
+        internal static void ReleaseServerRequest()
+        {
+            if (!s_ExplicitChoice)
+                ApplyAutoTick(false, DefaultIntervalMs);
         }
 
         /// <summary>
@@ -96,6 +105,7 @@ namespace Unity.Pipeline.Editor.Commands
             }
             s_Stopwatch.Stop();
             s_Enabled = false;
+            s_ExplicitChoice = false;
             s_IntervalMs = 0;
         }
 
@@ -145,7 +155,10 @@ namespace Unity.Pipeline.Editor.Commands
                 return $"Auto-tick already enabled (interval updated to {s_IntervalMs}ms)";
             }
             if (!enable && !s_Enabled)
+            {
+                s_IntervalMs = Math.Max(0, intervalMs);
                 return "Auto-tick already disabled";
+            }
 
             if (enable)
             {

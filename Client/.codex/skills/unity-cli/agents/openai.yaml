@@ -1,6 +1,6 @@
 interface:
   display_name: "Unity CLI"
-  short_description: "Project-bound Unity operations with explicit authorization"
+  short_description: "Unity 2022 project-bound operations and focused verification"
   default_prompt: "Use $unity-cli to inspect MechStorm's Unity CLI capabilities and follow project authorization rules."
 policy:
   allow_implicit_invocation: true

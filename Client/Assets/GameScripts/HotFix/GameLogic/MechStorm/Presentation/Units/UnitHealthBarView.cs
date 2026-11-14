@@ -165,7 +165,7 @@ namespace MechStorm.Presentation.Units
             text.alignment = TextAnchor.MiddleCenter;
             text.color = Color.white;
             text.fontSize = 12;
-            text.font = Resources.GetBuiltinResource<Font>("Arial.ttf");
+            text.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
 
             return text;
         }

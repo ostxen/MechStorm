@@ -7,6 +7,14 @@ uid: index
 `com.unity.pipeline` lets a client — CLI, CI, or an agent — drive a running Unity Editor (or a
 development Player) over a local HTTP API by executing registered commands.
 
+## Local maintenance baseline
+
+This repository maintains the local adaptation for Unity 2022.3 LTS (currently 2022.3.62f3).
+Unity 2021 is no longer supported; the package minimum and source compile guard require 2022.3.
+Compatibility implementations still needed by 2022 (including panel-crop capture, the toolbar,
+Windows modal observation and Test Framework cancellation) remain. Upstream Unity 6 branches
+are retained, but are outside this project's maintenance and validation scope.
+
 ## Guides
 
 | Page | What it covers |

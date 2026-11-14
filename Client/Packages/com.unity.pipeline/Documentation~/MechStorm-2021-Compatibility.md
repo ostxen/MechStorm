@@ -1,5 +1,7 @@
 # MechStorm Unity 2021.3 兼容说明
 
+> 历史归档：工程现为Unity2022.3，以下版本与验证记录仅描述迁移前状态。当前范围见[2022兼容说明](MechStorm-2022-Compatibility.md)，不再维护2021。
+
 ## 来源
 
 - 官方包：com.unity.pipeline 0.10.0-exp.1，revision 8c52ede3f9f3514111961927c9688a70a6322309。

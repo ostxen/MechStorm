@@ -14,7 +14,7 @@ namespace Unity.Pipeline.Editor.Commands
     /// <summary>
     /// Commands for running Unity tests programmatically
     /// </summary>
-    static class TestCommands
+    public static class TestCommands
     {
         const string Group = "test";
 
@@ -23,7 +23,7 @@ namespace Unity.Pipeline.Editor.Commands
         /// Synchronous by default (blocks until completion), async mode available with --async-tests flag.
         /// </summary>
         [CliGroupCommand(Group, "Execute Unity tests with filtering options", MainThreadRequired = true, Tags = new[] { "tests" })]
-        public static async Task<TestExecutionResponse> Run(
+        public static async Task<CommandExecutionResponse> Run(
             [CliArg("mode", "Test mode: all, editor, playmode (default: all)")] string mode = "all",
             [CliArg("filter", "Test name filter pattern (case-insensitive partial match)")] string filter = "",
             [CliArg("filter-type", "Filter type: testName, assembly, category (default: testName)")] string filterType = "testName",
@@ -113,6 +113,7 @@ namespace Unity.Pipeline.Editor.Commands
         /// Cancel running test execution
         /// </summary>
         [CliGroupCommand(Group, "Cancel running test execution", MainThreadRequired = true, Tags = new[] { "tests" })]
+        [ImmediateCommand]
         public static object Cancel()
         {
             return PipelineTestRunner.CancelTests();
@@ -153,19 +154,25 @@ namespace Unity.Pipeline.Editor.Commands
             var api = ScriptableObject.CreateInstance<TestRunnerApi>();
             var tcs = new TaskCompletionSource<List<TestListItem>>();
 
-            api.RetrieveTestList(testMode, root =>
+            try
             {
-                try
+                api.RetrieveTestList(testMode, root =>
                 {
-                    var items = new List<TestListItem>();
-                    CollectLeafTests(root, testMode, items);
-                    tcs.SetResult(items);
-                }
-                catch (Exception ex)
-                {
-                    tcs.SetException(ex);
-                }
-            });
+                    try
+                    {
+                        var items = new List<TestListItem>();
+                        CollectLeafTests(root, testMode, items);
+                        tcs.TrySetResult(items);
+                    }
+                    catch (Exception ex) { tcs.TrySetException(ex); }
+                    finally { if (api != null) UnityEngine.Object.DestroyImmediate(api); }
+                });
+            }
+            catch
+            {
+                if (api != null) UnityEngine.Object.DestroyImmediate(api);
+                throw;
+            }
 
             return tcs.Task;
         }
@@ -203,7 +210,7 @@ namespace Unity.Pipeline.Editor.Commands
     /// Response for the list_tests command: the available tests, without execution results.
     /// </summary>
     [Serializable]
-    class TestListResponse : CommandExecutionResponse
+    public class TestListResponse : CommandExecutionResponse
     {
         public string Mode { get; set; }       // EditMode, PlayMode, or All
         public int Count { get; set; }
@@ -214,7 +221,7 @@ namespace Unity.Pipeline.Editor.Commands
     /// A single available test (no run state / outcome — this is a listing, not a result).
     /// </summary>
     [Serializable]
-    class TestListItem
+    public class TestListItem
     {
         public string FullName { get; set; }
         public string Mode { get; set; }

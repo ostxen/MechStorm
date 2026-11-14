@@ -252,10 +252,10 @@ namespace Unity.Pipeline.Editor.Commands.Capture
             string source, string savePath, bool includeInlineImage, int maxResolution)
         {
             var previousFront = target.hasFocus ? null : windows.FirstOrDefault(w => w != target && w.hasFocus && SameHost(w, target));
-            target.ShowTab();
-            RepaintImmediately(target);
             try
             {
+                target.ShowTab();
+                RepaintImmediately(target);
                 // The window is grabbed at its full size; only the image is capped, keeping its aspect.
                 var (pixelW, pixelH) = WindowPixelSize(target);
                 var (outW, outH) = ClampToLongEdge(pixelW, pixelH, MaxDimension);
@@ -387,10 +387,35 @@ namespace Unity.Pipeline.Editor.Commands.Capture
         }
 
         /// <summary>
-        /// Read the window's back buffer, orient it, then scale it to <paramref name="w"/> x
-        /// <paramref name="h"/> and encode it. See <see cref="GrabEditorWindow"/>.
+        /// Read the full window at its display's DPI, restoring its previous dock tab afterwards.
+        /// The caller owns the returned readable texture. See <see cref="GrabEditorWindow"/>.
         /// </summary>
+        internal static Texture2D ReadWindowPixels(UnityEditor.EditorWindow target, IEnumerable<UnityEditor.EditorWindow> windows)
+        {
+            var previousFront = target.hasFocus ? null : windows.FirstOrDefault(w => w != target && w.hasFocus && SameHost(w, target));
+            try
+            {
+                target.ShowTab();
+                RepaintImmediately(target);
+                var (w, h) = WindowPixelSize(target);
+                return ReadEditorWindowPixels(target, w, h);
+            }
+            finally
+            {
+                if (previousFront != null)
+                    previousFront.ShowTab();
+            }
+        }
+
         private static byte[] EncodeEditorWindowToPng(UnityEditor.EditorWindow window, int w, int h)
+        {
+            var texture = ReadEditorWindowPixels(window, w, h);
+            try { return ImageConversion.EncodeToPNG(texture); }
+            finally { Object.DestroyImmediate(texture); }
+        }
+
+        // Caller owns the readable texture. No PNG/base64 intermediate and no GPU upload needed.
+        private static Texture2D ReadEditorWindowPixels(UnityEditor.EditorWindow window, int w, int h)
         {
             var (pixelW, pixelH) = WindowPixelSize(window);
             var grabRt = RenderTexture.GetTemporary(pixelW, pixelH, 0, RenderTextureFormat.ARGB32);
@@ -413,13 +438,13 @@ namespace Unity.Pipeline.Editor.Commands.Capture
                 var tex = new Texture2D(w, h, TextureFormat.RGB24, false);
                 try
                 {
-                    tex.ReadPixels(new Rect(0, 0, w, h), 0, 0);
-                    tex.Apply();
-                    return ImageConversion.EncodeToPNG(tex);
+                    tex.ReadPixels(new Rect(0, 0, w, h), 0, 0, false);
+                    return tex;
                 }
-                finally
+                catch
                 {
                     Object.DestroyImmediate(tex);
+                    throw;
                 }
             }
             finally

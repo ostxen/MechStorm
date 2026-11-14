@@ -61,16 +61,11 @@ namespace Unity.Pipeline.Editor.Commands
         }
 
 #if !UNITY_6000_7_OR_NEWER
-        static byte[] CaptureWindowElement(EditorWindow window, VisualElement element, out int width, out int height)
+        internal static byte[] CaptureWindowElement(EditorWindow window, VisualElement element, out int width, out int height)
         {
-            var image = Capture.CaptureCommands.CaptureWindow(window, Resources.FindObjectsOfTypeAll<EditorWindow>(),
-                $"window:{window.titleContent.text}", null, true, 0);
-            var texture = new Texture2D(2, 2, TextureFormat.RGBA32, false);
+            var texture = Capture.CaptureCommands.ReadWindowPixels(window, Resources.FindObjectsOfTypeAll<EditorWindow>());
             try
             {
-                if (!texture.LoadImage(Convert.FromBase64String(image.Base64)))
-                    throw new InvalidOperationException("The Editor window capture could not be decoded.");
-
                 var root = window.rootVisualElement;
                 var bounds = root.worldBound;
                 var scale = new Vector2(texture.width / bounds.width, texture.height / bounds.height);

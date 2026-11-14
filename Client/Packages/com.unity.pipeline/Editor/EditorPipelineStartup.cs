@@ -272,6 +272,8 @@ namespace Unity.Pipeline.Editor
                 server.WatchdogEnabled = cfg?.WatchdogEnabled ?? EditorPipelineConfig.DefaultWatchdogEnabled;
                 server.WatchdogIntervalSeconds = cfg?.WatchdogIntervalSeconds ?? EditorPipelineConfig.DefaultWatchdogIntervalSeconds;
                 server.LogRequestsResponses = cfg?.LogRequestsResponses ?? EditorPipelineConfig.DefaultLogRequestsResponses;
+                if (server.IsRunning)
+                    Commands.AutoTickCommand.RestoreFromSession(server.WatchdogEnabled);
             }
 
             ApplyEvalTelemetrySettings(cfg);
@@ -347,6 +349,7 @@ namespace Unity.Pipeline.Editor
         /// </summary>
         public static void StopServer()
         {
+            Commands.AutoTickCommand.ReleaseServerRequest();
             StopProtocolTransport();
 
             if (m_Server != null)

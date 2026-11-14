@@ -298,10 +298,8 @@ namespace Unity.Pipeline.MethodReload
 
 #if UNITY_6000_5_OR_NEWER
             var instances = UnityEngine.Object.FindObjectsByType(type);
-#elif UNITY_2022_2_OR_NEWER
-            var instances = UnityEngine.Object.FindObjectsByType(type, FindObjectsSortMode.None);
 #else
-            var instances = UnityEngine.Object.FindObjectsOfType(type);
+            var instances = UnityEngine.Object.FindObjectsByType(type, FindObjectsSortMode.None);
 #endif
             foreach (var instance in instances)
             {

@@ -48,7 +48,7 @@ namespace Unity.Pipeline.Editor.Commands.Materials
                 // rawRenderQueue is -1 when the material inherits from the shader and a positive
                 // integer when explicitly overridden — returning the raw value preserves the
                 // round-trip contract with set_material_properties renderQueue:-1 (inherit).
-#if UNITY_2022_1_OR_NEWER
+#if UNITY_6000_0_OR_NEWER
                 RenderQueue = mat.rawRenderQueue,
 #else
                 RenderQueue = new SerializedObject(mat).FindProperty("m_CustomRenderQueue").intValue,

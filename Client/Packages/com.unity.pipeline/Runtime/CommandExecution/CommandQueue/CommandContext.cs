@@ -16,8 +16,8 @@ namespace Unity.Pipeline.Commands
     /// <remarks>
     /// <see cref="Current"/> is set only around the command's own invocation, so it is correct
     /// whichever thread runs the command: the set, the reads and the reset happen within one
-    /// synchronous call frame. A command that awaits and resumes on another thread before reading
-    /// it would not see it (no command does today).
+    /// synchronous call frame. Async code uses PipelineCancellation's AsyncLocal token after an
+    /// await; the thread-local context itself deliberately does not flow to continuations.
     /// </remarks>
 #if UNITY_6000_5_OR_NEWER
     [NoAutoStaticsCleanup]
@@ -105,23 +105,28 @@ namespace Unity.Pipeline.Commands
         internal static Scope Enter(CommandContext context)
         {
             var previous = s_Current;
+            var previousToken = PipelineCancellation.AmbientToken;
             s_Current = context;
-            return new Scope(previous);
+            PipelineCancellation.AmbientToken = context?.CancellationToken ?? System.Threading.CancellationToken.None;
+            return new Scope(previous, previousToken);
         }
 
         /// <summary>Restores the execution that was current before <see cref="Enter"/>.</summary>
         internal readonly struct Scope : IDisposable
         {
             readonly CommandContext m_Previous;
+            readonly System.Threading.CancellationToken m_PreviousToken;
 
-            internal Scope(CommandContext previous)
+            internal Scope(CommandContext previous, System.Threading.CancellationToken previousToken)
             {
                 m_Previous = previous;
+                m_PreviousToken = previousToken;
             }
 
             public void Dispose()
             {
                 s_Current = m_Previous;
+                PipelineCancellation.AmbientToken = m_PreviousToken;
             }
         }
     }
