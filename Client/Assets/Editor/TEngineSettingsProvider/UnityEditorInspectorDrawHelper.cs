@@ -5,9 +5,11 @@ using UnityEditor;
 using System.Collections.Generic;
 using System.Linq;
 using GameLogic;
-using TEngine.Editor.UI;
+using TEngine;
 using UnityEngine.Events;
 
+namespace TEngine.Editor.UI
+{
 [InitializeOnLoad]
 public static class UnityEditorInspectorDrawHelper
 {
@@ -73,9 +75,9 @@ public static class UnityEditorInspectorDrawHelper
     static bool ShouldShowBindButton()
     {
         var selectedGameObjects = Selection.gameObjects;
-        return selectedGameObjects.Length > 0 &&
+        return UIScriptGeneration.IsAvailable && selectedGameObjects.Length > 0 &&
                selectedGameObjects.All(go => go != null && go.TryGetComponent<RectTransform>(out _)
-               && !go.TryGetComponent<UIBindComponent>(out _)) && ScriptGeneratorSetting.Instance.UseBindComponent;
+               && !go.TryGetComponent<UIBindComponent>(out _)) && UIScriptGeneratorSetting.Instance.UseBindComponent;
     }
 
     static void CreateButton(EditorWindow window)
@@ -159,11 +161,12 @@ public static class UnityEditorInspectorDrawHelper
             var go = selectedGameObjects[i];
             if (go != null && !go.TryGetComponent<UIBindComponent>(out _))
             {
-                ScriptGenerator.GenerateUIComponentScript();
-                ScriptGenerator.GenerateCSharpScript(false);
-                Debug.Log($"{go.name}: Bind UI Component");
+                UIBindComponentGenerator.GenerateUIComponentScript(go.transform);
+                UIBindComponentGenerator.GenerateCSharpScript(false, targetRoot: go.transform);
+                Log.Info($"{go.name}: Bind UI Component");
             }
         }
     }
+}
 }
 #endif

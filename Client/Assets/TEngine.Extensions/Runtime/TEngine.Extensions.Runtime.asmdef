@@ -1,0 +1,21 @@
+{
+    "name": "TEngine.Extensions.Runtime",
+    "rootNamespace": "TEngine.Extensions",
+    "references": [
+        "GUID:24c092aee38482f4e80715eaa8148782",
+        "GUID:f51ebe6a0ceec4240a699833d6309b23",
+        "GUID:1278a46ce459c5a46b4eaeda148684ef",
+        "GUID:e34a5702dd353724aa315fb8011f08c3",
+        "GUID:3b570a5146f9d4f0fa107ed4559471a3",
+        "GUID:3aa1866a824b5472da50fe142777d95f"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

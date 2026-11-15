@@ -1,0 +1,6 @@
+{
+    "name": "TEngine.Extensions.TweenFixtures",
+    "references": ["TEngine.Extensions.Runtime", "LitMotion"],
+    "optionalUnityReferences": ["TestAssemblies"],
+    "autoReferenced": false
+}

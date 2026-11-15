@@ -18,6 +18,7 @@ namespace TEngine.Editor
         private SerializedProperty _textHelperTypeName = null;
         private SerializedProperty _logHelperTypeName = null;
         private SerializedProperty _jsonHelperTypeName = null;
+        private SerializedProperty _tweenHelperTypeName = null;
         private SerializedProperty _frameRate = null;
         private SerializedProperty _gameSpeed = null;
         private SerializedProperty _runInBackground = null;
@@ -29,6 +30,8 @@ namespace TEngine.Editor
         private int _logHelperTypeNameIndex = 0;
         private string[] _jsonHelperTypeNames = null;
         private int _jsonHelperTypeNameIndex = 0;
+        private string[] _tweenHelperTypeNames = null;
+        private int _tweenHelperTypeNameIndex = 0;
 
         public override void OnInspectorGUI()
         {
@@ -65,6 +68,13 @@ namespace TEngine.Editor
                     {
                         _jsonHelperTypeNameIndex = jsonHelperSelectedIndex;
                         _jsonHelperTypeName.stringValue = jsonHelperSelectedIndex <= 0 ? null : _jsonHelperTypeNames[jsonHelperSelectedIndex];
+                    }
+
+                    int tweenHelperSelectedIndex = EditorGUILayout.Popup("Tween Helper", _tweenHelperTypeNameIndex, _tweenHelperTypeNames);
+                    if (tweenHelperSelectedIndex != _tweenHelperTypeNameIndex)
+                    {
+                        _tweenHelperTypeNameIndex = tweenHelperSelectedIndex;
+                        _tweenHelperTypeName.stringValue = tweenHelperSelectedIndex <= 0 ? null : _tweenHelperTypeNames[tweenHelperSelectedIndex];
                     }
                 }
                 EditorGUILayout.EndVertical();
@@ -149,6 +159,7 @@ namespace TEngine.Editor
             _textHelperTypeName = serializedObject.FindProperty("textHelperTypeName");
             _logHelperTypeName = serializedObject.FindProperty("logHelperTypeName"); 
             _jsonHelperTypeName = serializedObject.FindProperty("jsonHelperTypeName");
+            _tweenHelperTypeName = serializedObject.FindProperty("tweenHelperTypeName");
             _frameRate = serializedObject.FindProperty("frameRate");
             _gameSpeed = serializedObject.FindProperty("gameSpeed");
             _runInBackground = serializedObject.FindProperty("runInBackground");
@@ -210,6 +221,24 @@ namespace TEngine.Editor
                 {
                     _jsonHelperTypeNameIndex = 0;
                     _jsonHelperTypeName.stringValue = null;
+                }
+            }
+
+            List<string> tweenHelperTypeNames = new List<string>
+            {
+                NONE_OPTION_NAME
+            };
+
+            tweenHelperTypeNames.AddRange(Type.GetRuntimeTypeNames(typeof(Utility.Tween.ITweenHelper)));
+            _tweenHelperTypeNames = tweenHelperTypeNames.ToArray();
+            _tweenHelperTypeNameIndex = 0;
+            if (!string.IsNullOrEmpty(_tweenHelperTypeName.stringValue))
+            {
+                _tweenHelperTypeNameIndex = tweenHelperTypeNames.IndexOf(_tweenHelperTypeName.stringValue);
+                if (_tweenHelperTypeNameIndex <= 0)
+                {
+                    _tweenHelperTypeNameIndex = 0;
+                    _tweenHelperTypeName.stringValue = null;
                 }
             }
 

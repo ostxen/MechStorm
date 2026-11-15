@@ -5,7 +5,46 @@
 - 当前里程碑：P1.5 / Sprint T1（进行中）；Sprint 4 已完成并验收
 - 当前任务：整阵营结束及真实角色指令星坠闪已实现并完成限定验证；镜头24组组合与胜败/统计/再战闭环自动化通过。用户认为新增队伍/站位摘要多余，已按最新决定删除准备页整个新增摘要区，保留原有队伍卡片、目标与行动序列。实体键鼠、失焦、多分辨率与视觉手感待人工验收，完整T1.11不标完成；不自动进入Sprint 5。
 - 当前状态：Unity2022迁移分支为upgrade/unity-2022.3，基于feature/t1-luban-config。14张逻辑表、14份工作簿、73条数据，生成78份C#及14份bytes。正式ProcedureBattle使用Luban Scenario 1装配独立对局，不再读取SO。既有45条流程验收数据保留，另按用户授权为艾达追加真实星坠闪的技能池及部署关联2行，不改技能数值。仅桥接当前原型规则，完整四部位、属性公式、双武器、被动及PP等后置。T1.11完整交互回归仍未完成。配置继续同步按表懒加载；首次阻塞和错误延迟到访问点是已接受差异。
-- 最后更新：2026-11-14
+- 最后更新：2026-11-15
+
+### TEV迁移提交确认（2026-11-15）
+
+- 开发者在客户端运行确认后反馈“可以，没问题了”，同意提交本次两轮迁移。反馈仅作为本次运行确认，不据此补记未说明的逐项人工测试，也不扩大为完整T1.11或热更发布验收。
+- 按项目Git规范在本地`upgrade/tev-framework-tools`分支提交框架/默认Editor工具、固定依赖、相关测试、HTML/Edge工具和本记录。使用隔离索引排除原3份IDE暂存、字体/图集、Procedure既有修改、大量无关未跟踪资源及运行产物。不推送。
+- 复用本轮已完成的Unity/.NET、聚焦Edit/Play、真实启动和Edge/离线契约证据，不因提交重复构建、运行或保存业务资源。HybridCLR主包/热更名单、AOT裁剪、Player/真机发布和完整T1.11继续保留为未完成。
+
+### TEV第二轮：HTML离线工具链与热更配置审计（2026-11-15）
+
+#### 最新验收：按用户选择使用Edge，浏览器阻塞已解除
+
+- 用户明确允许安装Playwright、以现有Edge代替Chromium。仅安装Playwright1.65.2与必要依赖greenlet3.5.6，未执行浏览器下载、安装/更新Edge或升级pip。安装后台进程未提供可靠退出码，但安装日志显示成功，随后独立Python进程实际import/version及Edge启动均退出0，确认安装有效。
+- Python烘焙脚本与工作流默认`--browser-channel msedge`，启动既有Edge157.0.4341.46；仍可显式选择chromium但不自动安装/回退。因此脚本不再与TEV逐字相同，差异是已授权浏览器选择适配。Edge与Chromium同内核不保证版本完全一致，以实测为准。
+- 最新离线契约50/50通过（0.271秒，`.codex/runs/20261115T074829Z-a2cb38ea/report.md`）。真实`ui bake .codex/tests/fixtures/ui-smoke.html --width 1920 --height 1080`默认入口通过，实际生成ui.json/browser.png，报告`.codex/runs/20261115T074856Z-3a93598d/report.md`。
+- 新增显式浏览器回归入口`python .codex/scripts/verify_html_browser.py`，不加入docs离线测试。真实Edge在1920×1080、1080×1920、2048×1536及8192×1、1×8192尺寸边界均通过，五组重复烘焙JSON一致；本地中文路径、SourceHanSansSC字体、图片、中文文字、0值Slider、未选Toggle和未命名布局组层级均校验通过。缺图、缺字体、远程图片三种失败正确拒绝，未下载远程素材。实测16.22秒，报告`.codex/runs/20261115T074902Z-a37e53a8/report.md`，截图与JSON均在对应run目录，已查看PC截图。
+- 浏览器部分已验收，以下“缺Playwright、无截图”只保留为早期失败历史。**Unity自动烘焙CLI缺失、Prefab生成/保存、实际宿主Canvas与设备视觉、热更发布配置决策和构建仍未执行**，不以浏览器通过宣称Unity全链/发布完成。未改Assets/meta或项目设置，未提交推送。
+
+#### 移植范围与早期记录
+
+- 迁入TEV d3f89dd0实际存在的HTML→JSON Python脚本、UI-DSL及JSON规范，新增目标`workflow.py ui bake <html> --width 1920 --height 1080`入口。JSON、截图与报告限定在本次`.codex/runs`，不向Assets写入，不覆盖目标现有Unity审批白名单、项目/PID绑定、一次审批或docs/unity验证profile；未整份复制耦合Luban的源domains.py。
+- 目标技能与控件说明按真实源码修正：源文档宣称的HtmlToUGUIBakeService、tengine_bake_ugui及tengine_validate_assets在当前源C#中无实现，不导入失效ui preview/apply入口，不通过任意script绕过审批。现有Unity能力仍是当前场景Canvas下的交互窗口，不是隔离PreviewScene/自动保存Prefab服务，缺图警告不等于严格预检。
+- 新增12项离线契约测试，含无Unity调用、输出目录、路径含空格、尺寸1/8192及非法值、缺依赖/源/输出/截图、子进程失败、根尺寸、活动HTML拒绝及不支持资产写入口。连同原36项，实际48/48通过（0.301秒，`.codex/runs/20261115T074056Z-936ace14/report.md`）。这些Mock/解析契约不证明浏览器渲染；新增ui-smoke.html供后续真实浏览器验证，不作为Unity资源。
+- 实际默认横屏入口运行`.codex/tests/fixtures/ui-smoke.html`，返回blocked，原因是当前Python环境未安装Playwright，报告`.codex/runs/20261115T074214Z-2a7d4913/report.md`。没有下载/安装浏览器或依赖，没有JSON/截图成功证据。浏览器、字体/图片、多分辨率及Unity生成/视觉验收均未完成，不能称HTML全链完成；requirements仅声明可选依赖，不自动安装。
+- 热更只读审计：UpdateSetting列GameProto.dll/GameLogic.dll；HybridCLRSettings磁盘enable=1但hotUpdateAssemblyDefinitions/hotUpdateAssemblies/patchAOTAssemblies为空，ProjectSettings未找到ENABLE_HYBRIDCLR。UpdateSetting.Enable实际由该宏控制，不能用enable字段或Editor测试推定Player热更启用。Battle与Presentation保持独立asmdef，Presentation依Battle，GameLogic引用两者，目录名不能替代发布名单。
+- DLL Collector已配置Assets/AssetRaw/DLL、AddressByFileName，与加载器按DLL名地址的设计相符，但当前该目录没有DLL数据文件；Assets下无AOTGenericReferences.cs或link.xml，缺少生成/裁剪后的实物证据。UpdateSettingEditor有同步保存函数不表示已调用；本轮未调用以免擅自保存设置。真正AOT列表需结合目标平台裁剪结果和泛型使用确定，不能只凭源码依赖猜配，也不能沿用旧主包承诺纯DLL升级。
+- 后续需用户明确热更发布范围：若Battle/Presentation也热更，候选依赖顺序为Battle、Presentation、GameProto、GameLogic；若作为主包则其改动需要新主包。这个候选不是已执行配置。同步列表、AOT生成/裁剪、DLL及资源构建、IL2CPP/Player和真机验证均需另授权，不新增程序集或改变纯Battle边界。
+- 本轮只修改Python/HTML测试夹具和说明，未改游戏C#、Assets/meta、Packages、Collector或项目设置，未运行Unity/.NET/Player构建、保存业务资源、暂存提交或推送。首批验证结果与T1.11人工验收边界保持。
+
+### TEV首批框架与默认Editor工具移植（2026-11-15）
+
+- 按已确认范围从TEV d3f89dd0迁入核心28项更新、Bezier/LitMotion辅助器、Extensions框架及相关测试、HTML窗口、AtlasRefWindow、ReferenceFinder差异、UI生成器core/adapter；共同工具保持原版目录与默认Editor程序集，不新增UI/HTML程序集。共41项已有文件更新、166份新增文件及7项AssetDatabase保GUID更名。UniTask仅同步3项差异至2.5.11；YooAsset和Pipeline不整包替换。
+- 用户安装的LitMotion虽同标2.0.2但提交不同，经明确选择后对齐422eb124051c81a9bc3f422ebf190703c5053514，新增PlayableGraphMonitor固定97526c745a448291d0f235a40422e45609b20519。UPM解析新增Burst1.8.21、Collections1.5.1、Mathematics1.2.6，原锁文件已有依赖未变。未安装Animancer/Input System。
+- 新资产unitypackage导入请求未实际落盘，导致中间32项缺类型编译错误；原生导出检查一度超时，用户确认空闲后恢复，未重启Editor。随后用户明确授权只对白名单新增文件及缺少父目录成对复制源meta，166份文件与226份身份已导入，未覆盖已有meta。全部新增meta与源一致、整个目标Assets重复GUID为0，旧冲突空目录未迁入。
+- 目标设置类型实际加载为默认Editor的UIScriptGeneratorSetting，23条规则、GameLogic命名空间、UI/Gen和UI路径、CodeStyle/Nullable与m_item Widget保持；只由Unity更名更新asset的m_Name，未替换示例配置。23个业务绑定Prefab实载无Missing Script或空绑定。现有GameEntry Prefab不改写，实际RootModule已初始化LitMotionHelper，真实Tween延时完成。
+- 目标UI Edit22/22（`.codex/runs/20261115T030712Z-294d81af/report.md`）、扩展Edit359/359（44动画+315 Tween Editor，`.codex/runs/20261115T031945Z-ae875d27/report.md`）、绑定Play1/1、扩展非样例Play35/35逐项Passed，0失败/跳过/不确定。未迁入示例工程，明确不运行ShowcaseSavedPrefabRunsButtonsLayoutAndRepeatedEnable，不声称36例全套通过。四类Window/Widget同步/异步生成输出已逐一内存编译通过。
+- 实际Play通过开始按钮→Main出战→准备按钮→HUD、菜单重战→新准备→HUD、撤退→Main，验证脚本执行5.99秒；不改业务逻辑或规则，不等同完整T1.11设备/视觉验收。临时脚本先因误用内部IsLoadDone属性无法编译，仅修改验证脚本为公开IsPrepare后通过。已退出Play，最终ready/stopped、codeLoadCount25、无编译/域重载，held=false。
+- 最终Unity编译completed、failed=false/errors=[]/compilationFailed=false；完整Client.sln构建0错误52警告40.91秒（`Temp/tev-migration-build-final.log`）。首次默认MSBuild进程栈溢出，限定单worker后成功；中途测试过滤参数误用fullname未启动测试，改testName后22例通过。最终diff --check通过，保留既有引用冲突/字体等警告，不宣称零警告或清除历史Console。
+- 1484份既有文件保护审计除授权更新/更名外无意外变化，Git索引hash保持；GameApp、Battle/Presentation程序集引用、Luban契约/表/生成代码、Collector、横屏UIRoot、业务资源、用户图集/字体/Procedure修改与原IDE暂存均保留。未保存业务Prefab/场景或项目设置，未暂存提交推送。
+- 证据：`Temp/tev-migration/{plan,final-audit}.json`、`Temp/tev-target-audit.json`、`Temp/tev-play-regressions-results.json`、`Temp/tev-business-smoke-result.json`。后续仍需单独核定热更程序集/AOT/裁剪与资源发布边界，HTML完整Python/browser/CLI链未接入；未执行AB/IL2CPP/Player构建、真机热更新或完整游戏回归，不自动进入Sprint5。
 
 ### Unity2022迁移分支与提交范围确认（2026-11-14）
 

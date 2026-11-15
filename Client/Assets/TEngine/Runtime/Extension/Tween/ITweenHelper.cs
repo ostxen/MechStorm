@@ -76,7 +76,7 @@ namespace TEngine
             /// <summary>
             /// 动画辅助器接口。
             /// </summary>
-            public interface ITweenHelper
+            public partial interface ITweenHelper
             {
                 public bool IsTweening(object onTarget);
 
@@ -291,9 +291,6 @@ namespace TEngine
                 public long UIFillAmount(UnityEngine.UI.Image target, Single startValue, Single endValue, float duration, Ease ease = Ease.Default, int cycles = 1,
                     CycleMode cycleMode = CycleMode.Restart, float startDelay = 0, float endDelay = 0, bool useUnscaledTime = false);
 
-                public long MoveBezierPath(UnityEngine.Transform target, UnityEngine.Vector3[] path, float duration, Ease ease = Ease.Default, int cycles = 1,
-                    CycleMode cycleMode = CycleMode.Restart, float startDelay = 0, float endDelay = 0, bool useUnscaledTime = false);
-                
                 public long Custom<T>(T target, UnityEngine.Vector3 startValue, UnityEngine.Vector3 endValue, float duration, Action<T, UnityEngine.Vector3> onValueChange,
                     Ease ease = Ease.Default, int cycles = 1, CycleMode cycleMode = CycleMode.Restart, float startDelay = 0, float endDelay = 0, bool useUnscaledTime = false)
                     where T : class;

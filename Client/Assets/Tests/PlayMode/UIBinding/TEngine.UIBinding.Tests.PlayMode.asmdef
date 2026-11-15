@@ -1,0 +1,6 @@
+{
+    "name": "TEngine.UIBinding.Tests.PlayMode",
+    "references": ["GameLogic", "TEngine.Runtime", "UnityEngine.UI", "UniTask"],
+    "optionalUnityReferences": ["TestAssemblies"],
+    "autoReferenced": false
+}
