@@ -19,6 +19,12 @@ def parser():
     verify.add_argument("--test-filter", default="Unity.Pipeline.Tests.Editor")
     verify.add_argument("--filter-type", choices=("assembly", "testName", "category"), default="assembly")
     verify.add_argument("--timeout", type=int, default=300)
+    ui = commands.add_parser("ui", help="Offline HTML tools only; no Unity asset writes.").add_subparsers(dest="action", required=True)
+    bake = ui.add_parser("bake", help="Bake local UI-DSL HTML to JSON and a browser screenshot.")
+    bake.add_argument("source", type=Path)
+    bake.add_argument("--width", type=int, default=1920)
+    bake.add_argument("--height", type=int, default=1080)
+    bake.add_argument("--browser-channel", choices=("msedge", "chromium"), default="msedge")
     sub = commands.add_parser("unity").add_subparsers(dest="action", required=True)
     sub.add_parser("list", help="Discover all registered command names.")
     for action in ("query", "preview"):
@@ -47,7 +53,7 @@ def dispatch(run, args):
                                   str(run.context.project / ".codex/tests"), "-p", "test_*.py", "-v"], timeout=args.timeout)
             if result.returncode:
                 raise WorkflowError("Workflow unit tests failed; see command evidence.")
-            return {"unitTests": "passed", "scope": "Unity workflow contracts only; no domain or asset checks."}
+            return {"unitTests": "passed", "scope": "Isolated workflow contracts only; no real browser or Unity asset checks."}
         unity = Unity(run)
         run.step("editor-compilation", lambda: unity.recompile(args.timeout))
         if run.data["steps"][-1]["status"] != "passed":
@@ -58,6 +64,9 @@ def dispatch(run, args):
         return unity.tests("editor", args.test_filter, args.filter_type, args.timeout)
     if args.command == "approve":
         return approve(run, args.plan, args.by, args.reason, args.high_risk)
+    if args.command == "ui":
+        from workflow_lib.ui import bake
+        return bake(run, args.source, args.width, args.height, args.browser_channel)
     unity = Unity(run)
     if args.command == "doctor":
         return {"cli": str(run.context.cli), "editor": unity.ready()}

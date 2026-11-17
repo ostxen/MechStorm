@@ -1,0 +1,3 @@
+# Optional HTML tooling only. Install separately after explicit authorization.
+playwright>=1.40,<2
+# Uses existing Microsoft Edge (channel=msedge); no playwright install required.

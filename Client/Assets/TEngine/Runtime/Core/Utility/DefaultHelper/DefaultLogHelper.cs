@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.Reflection;
 using System.Text;
 using System.Text.RegularExpressions;
+using UnityEngine;
 #if UNITY_EDITOR
 using UnityEditor;
 using UnityEditor.Callbacks;
@@ -75,53 +76,97 @@ namespace TEngine
         private static StringBuilder GetFormatString(ELogLevel eLogLevel, string logString, bool bColor)
         {
             _stringBuilder.Clear();
+
+            //多行日志需要逐行包裹颜色标签,否则Unity Console中后续行不会应用颜色(显示为秘文)
+            string body = bColor ? ColorizePerLine(logString, GetBodyColor(eLogLevel)) : logString;
             switch (eLogLevel)
             {
                 case ELogLevel.Debug:
-                    _stringBuilder.AppendFormat(
-                        bColor
-                            ? "<color=#CFCFCF><b>[Debug] ► </b></color> - <color=#00FF18>{0}</color>"
-                            : "<color=#00FF18><b>[Debug] ► </b></color> - {0}",
-                        logString);
+                    _stringBuilder.AppendFormat("<color=#CFCFCF><b>[Debug] ► </b></color> - {0}", body);
                     break;
                 case ELogLevel.Info:
-                    _stringBuilder.AppendFormat(
-                        bColor
-                            ? "<color=#CFCFCF><b>[INFO] ► </b></color> - <color=#CFCFCF>{0}</color>"
-                            : "<color=#CFCFCF><b>[INFO] ► </b></color> - {0}",
-                        logString);
+                    _stringBuilder.AppendFormat("<color=#CFCFCF><b>[INFO] ► </b></color> - {0}", body);
                     break;
                 case ELogLevel.Assert:
-                    _stringBuilder.AppendFormat(
-                        bColor
-                            ? "<color=#FF00BD><b>[ASSERT] ► </b></color> - <color=green>{0}</color>"
-                            : "<color=#FF00BD><b>[ASSERT] ► </b></color> - {0}",
-                        logString);
+                    _stringBuilder.AppendFormat("<color=#FF00BD><b>[ASSERT] ► </b></color> - {0}", body);
                     break;
                 case ELogLevel.Warning:
-                    _stringBuilder.AppendFormat(
-                        bColor
-                            ? "<color=#FF9400><b>[WARNING] ► </b></color> - <color=yellow>{0}</color>"
-                            : "<color=#FF9400><b>[WARNING] ► </b></color> - {0}",
-                        logString);
+                    _stringBuilder.AppendFormat("<color=#FF9400><b>[WARNING] ► </b></color> - {0}", body);
                     break;
                 case ELogLevel.Error:
-                    _stringBuilder.AppendFormat(
-                        bColor
-                            ? "<color=red><b>[ERROR] ► </b></color> - <color=red>{0}</color>"
-                            : "<color=red><b>[ERROR] ► </b></color>- {0}",
-                        logString);
+                    _stringBuilder.AppendFormat("<color=red><b>[ERROR] ► </b></color>- {0}", body);
                     break;
                 case ELogLevel.Exception:
-                    _stringBuilder.AppendFormat(
-                        bColor
-                            ? "<color=red><b>[EXCEPTION] ► </b></color> - <color=red>{0}</color>"
-                            : "<color=red><b>[EXCEPTION] ► </b></color> - {0}",
-                        logString);
+                    _stringBuilder.AppendFormat("<color=red><b>[EXCEPTION] ► </b></color> - {0}", body);
                     break;
             }
 
             return _stringBuilder;
+        }
+
+        /// <summary>
+        /// 获取日志正文颜色。
+        /// </summary>
+        /// <param name="eLogLevel">日志级别。</param>
+        /// <returns>颜色字符串。</returns>
+        private static string GetBodyColor(ELogLevel eLogLevel)
+            => eLogLevel switch
+            {
+                ELogLevel.Debug => "#00FF18",
+                ELogLevel.Assert => "green",
+                ELogLevel.Warning => "yellow",
+                ELogLevel.Error => "red",
+                ELogLevel.Exception => "red",
+                _ => "#CFCFCF"
+            };
+
+        /// <summary>
+        /// 对多行日志逐行包裹颜色标签。
+        /// 单次整体包裹 <color> 时,Unity Console 只会为第一行着色,后续行不应用颜色,表现为秘文;
+        /// 逐行包裹可让每一行都正确着色。同时兼容 \r\n 换行符。
+        /// </summary>
+        /// <param name="logStr">原始日志文本。</param>
+        /// <param name="color">颜色字符串。</param>
+        /// <returns>逐行着色后的文本。</returns>
+        private static string ColorizePerLine(string logStr, string color)
+        {
+            if (string.IsNullOrEmpty(logStr))
+            {
+                return logStr;
+            }
+
+            if (logStr.IndexOf('\n') < 0)
+            {
+                return Utility.Text.Format("<color={0}>{1}</color>", color, logStr);
+            }
+
+            var sb = new StringBuilder(logStr.Length + 32);
+            int start = 0;
+
+            for (int i = 0; i < logStr.Length; i++)
+            {
+                if (logStr[i] != '\n')
+                {
+                    continue;
+                }
+
+                //兼容 \r\n:把回车符留在颜色标签之外,避免秘文
+                int lineEnd = i > start && logStr[i - 1] == '\r' ? i - 1 : i;
+                sb.Append("<color=").Append(color).Append('>')
+                    .Append(logStr, start, lineEnd - start)
+                    .Append("</color>")
+                    .Append(logStr, lineEnd, i - lineEnd + 1);
+                start = i + 1;
+            }
+
+            if (start < logStr.Length)
+            {
+                sb.Append("<color=").Append(color).Append('>')
+                    .Append(logStr, start, logStr.Length - start)
+                    .Append("</color>");
+            }
+
+            return sb.ToString();
         }
 
         private static void LogImp(ELogLevel type, string logString)
@@ -181,15 +226,24 @@ namespace TEngine.Editor
     internal static class LogRedirection
     {
         [OnOpenAsset(0)]
-        private static bool OnOpenAsset(int instanceID, int line)
+#if UNITY_6000_1_OR_NEWER
+        private static bool OnOpenAsset(EntityId entityId, int line)
+        {
+            return OnOpenAsset(AssetDatabase.GetAssetPath(entityId), line);
+        }
+#else
+       private static bool OnOpenAsset(int instanceID, int line)
+        {
+            return OnOpenAsset(AssetDatabase.GetAssetPath(instanceID), line);
+        }
+#endif
+        private static bool OnOpenAsset(string assetPath, int line)
         {
             if (line <= 0)
             {
                 return false;
             }
-            // 获取资源路径
-            string assetPath = AssetDatabase.GetAssetPath(instanceID);
-            
+
             // 判断资源类型
             if (!assetPath.EndsWith(".cs"))
             {
@@ -201,15 +255,15 @@ namespace TEngine.Editor
                                    assetPath.Contains("GameFrameworkLog.cs") ||
                                    assetPath.Contains("AssetsLogger.cs") ||
                                    assetPath.Contains("Log.cs");
-            
+
             var stackTrace = GetStackTrace();
-            if (!string.IsNullOrEmpty(stackTrace) && (stackTrace.Contains("[Debug]") || 
-                                                      stackTrace.Contains("[INFO]") || 
+            if (!string.IsNullOrEmpty(stackTrace) && (stackTrace.Contains("[Debug]") ||
+                                                      stackTrace.Contains("[INFO]") ||
                                                       stackTrace.Contains("[ASSERT]") ||
                                                       stackTrace.Contains("[WARNING]") ||
                                                       stackTrace.Contains("[ERROR]") ||
                                                       stackTrace.Contains("[EXCEPTION]")))
-                                            
+
             {
                 if (!autoFirstMatch)
                 {
@@ -219,7 +273,7 @@ namespace TEngine.Editor
                     InternalEditorUtility.OpenFileAtLineExternal(fullPath.Replace('/', '\\'), line);
                     return true;
                 }
-                
+
                 // 使用正则表达式匹配at的哪个脚本的哪一行
                 var matches = Regex.Match(stackTrace, @"\(at (.+)\)",
                     RegexOptions.IgnoreCase);
@@ -227,10 +281,10 @@ namespace TEngine.Editor
                 {
                     var pathLine = matches.Groups[1].Value;
 
-                    if (!pathLine.Contains("Logger.cs") && 
+                    if (!pathLine.Contains("Logger.cs") &&
                         !pathLine.Contains("DefaultLogHelper.cs") &&
-                        !pathLine.Contains("GameFrameworkLog.cs") && 
-                        !pathLine.Contains("AssetsLogger.cs") && 
+                        !pathLine.Contains("GameFrameworkLog.cs") &&
+                        !pathLine.Contains("AssetsLogger.cs") &&
                         !pathLine.Contains("Log.cs"))
                     {
                         var splitIndex = pathLine.LastIndexOf(":", StringComparison.Ordinal);

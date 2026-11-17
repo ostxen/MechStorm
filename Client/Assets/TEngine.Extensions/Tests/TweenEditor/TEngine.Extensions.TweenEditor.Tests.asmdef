@@ -1,0 +1,13 @@
+{
+    "name": "TEngine.Extensions.TweenEditor.Tests",
+    "references": [
+        "TEngine.Extensions.Runtime",
+        "TEngine.Extensions.TweenFixtures",
+        "TEngine.Extensions.Editor",
+        "LitMotion",
+        "UnityEngine.UI"
+    ],
+    "includePlatforms": ["Editor"],
+    "optionalUnityReferences": ["TestAssemblies"],
+    "autoReferenced": false
+}

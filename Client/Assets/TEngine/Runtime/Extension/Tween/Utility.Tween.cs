@@ -788,16 +788,6 @@ namespace TEngine
                 return _tweenHelper.UIFillAmount(target, startValue, endValue, duration, ease, cycles, cycleMode, startDelay, endDelay, useUnscaledTime);
             }
 
-            public static long MoveBezierPath(UnityEngine.Transform target, UnityEngine.Vector3[] path, float duration, Ease ease = Ease.Default, int cycles = 1,
-                CycleMode cycleMode = CycleMode.Restart, float startDelay = 0, float endDelay = 0, bool useUnscaledTime = false)
-            {
-                if (_tweenHelper == null)
-                {
-                    throw new GameFrameworkException("ITweenHelper is invalid.");
-                }
-                return _tweenHelper.MoveBezierPath(target, path, duration, ease, cycles, cycleMode, startDelay, endDelay, useUnscaledTime);
-            }
-
             public static long Custom<T>(T target, UnityEngine.Vector3 startValue, UnityEngine.Vector3 endValue, float duration, Action<T, UnityEngine.Vector3> onValueChange,
                 Ease ease = Ease.Default, int cycles = 1, CycleMode cycleMode = CycleMode.Restart, float startDelay = 0, float endDelay = 0, bool useUnscaledTime = false)
                 where T : class

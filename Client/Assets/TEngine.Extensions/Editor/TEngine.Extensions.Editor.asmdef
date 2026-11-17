@@ -1,0 +1,23 @@
+{
+    "name": "TEngine.Extensions.Editor",
+    "rootNamespace": "TEngine.Extensions.Editor",
+    "references": [
+        "Unity.TextMeshPro",
+        "TEngine.Runtime",
+        "TEngine.Extensions.Runtime",
+        "TEngine.Editor",
+        "GBG.PlayableGraphMonitor.Editor",
+        "GUID:3b570a5146f9d4f0fa107ed4559471a3"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

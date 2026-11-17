@@ -40,6 +40,9 @@ namespace TEngine
         private string jsonHelperTypeName = "TEngine.DefaultJsonHelper";
 
         [SerializeField]
+        private string tweenHelperTypeName = "TEngine.LitMotionHelper";
+
+        [SerializeField]
         private int frameRate = 120;
 
         [SerializeField]
@@ -121,6 +124,7 @@ namespace TEngine
             Log.Info("Unity Version: {0}", Application.unityVersion);
 
             InitJsonHelper();
+            InitTweenHelper();
 
             Utility.Converter.ScreenDpi = Screen.dpi;
             if (Utility.Converter.ScreenDpi <= 0)
@@ -282,6 +286,31 @@ namespace TEngine
             }
 
             Utility.Json.SetJsonHelper(jsonHelper);
+        }
+
+        private void InitTweenHelper()
+        {
+            if (string.IsNullOrEmpty(tweenHelperTypeName))
+            {
+                return;
+            }
+
+            Type tweenHelperType = Utility.Assembly.GetType(tweenHelperTypeName);
+            if (tweenHelperType == null)
+            {
+                Log.Error("Can not find tween helper type '{0}'.", tweenHelperTypeName);
+                return;
+            }
+
+            Utility.Tween.ITweenHelper tweenHelper =
+                (Utility.Tween.ITweenHelper)Activator.CreateInstance(tweenHelperType);
+            if (tweenHelper == null)
+            {
+                Log.Error("Can not create tween helper instance '{0}'.", tweenHelperTypeName);
+                return;
+            }
+
+            Utility.Tween.SetTweenHelper(tweenHelper);
         }
 
         private void OnLowMemory()

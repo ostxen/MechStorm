@@ -1,0 +1,10 @@
+{
+    "name": "TEngine.Extensions.PlaybackRegression.Tests",
+    "references": [
+        "TEngine.Extensions.Runtime",
+        "UniTask"
+    ],
+    "includePlatforms": ["Editor"],
+    "optionalUnityReferences": ["TestAssemblies"],
+    "autoReferenced": false
+}

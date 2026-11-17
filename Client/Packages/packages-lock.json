@@ -1,5 +1,16 @@
 {
   "dependencies": {
+    "com.annulusgames.lit-motion": {
+      "version": "https://github.com/annulusgames/LitMotion.git?path=src/LitMotion/Assets/LitMotion#422eb124051c81a9bc3f422ebf190703c5053514",
+      "depth": 0,
+      "source": "git",
+      "dependencies": {
+        "com.unity.burst": "1.6.0",
+        "com.unity.collections": "1.5.1",
+        "com.unity.mathematics": "1.0.1"
+      },
+      "hash": "422eb124051c81a9bc3f422ebf190703c5053514"
+    },
     "com.code-philosophy.hybridclr": {
       "version": "https://gitee.com/focus-creative-games/hybridclr_unity.git",
       "depth": 0,
@@ -12,6 +23,13 @@
       "depth": 0,
       "source": "embedded",
       "dependencies": {}
+    },
+    "com.greenbamboogames.playablegraphmonitor": {
+      "version": "https://github.com/SolarianZ/UnityPlayableGraphMonitorTool.git#97526c745a448291d0f235a40422e45609b20519",
+      "depth": 0,
+      "source": "git",
+      "dependencies": {},
+      "hash": "97526c745a448291d0f235a40422e45609b20519"
     },
     "com.tuyoogame.yooasset": {
       "version": "file:YooAsset",
@@ -30,6 +48,27 @@
       "source": "registry",
       "dependencies": {
         "com.unity.modules.ai": "1.0.0"
+      },
+      "url": "https://packages.unity.com"
+    },
+    "com.unity.burst": {
+      "version": "1.8.21",
+      "depth": 1,
+      "source": "registry",
+      "dependencies": {
+        "com.unity.mathematics": "1.2.1",
+        "com.unity.modules.jsonserialize": "1.0.0"
+      },
+      "url": "https://packages.unity.com"
+    },
+    "com.unity.collections": {
+      "version": "1.5.1",
+      "depth": 1,
+      "source": "registry",
+      "dependencies": {
+        "com.unity.burst": "1.6.6",
+        "com.unity.test-framework": "1.1.31",
+        "com.unity.nuget.mono-cecil": "1.11.4"
       },
       "url": "https://packages.unity.com"
     },
@@ -61,6 +100,13 @@
     "com.unity.ide.vscode": {
       "version": "1.2.5",
       "depth": 0,
+      "source": "registry",
+      "dependencies": {},
+      "url": "https://packages.unity.com"
+    },
+    "com.unity.mathematics": {
+      "version": "1.2.6",
+      "depth": 1,
       "source": "registry",
       "dependencies": {},
       "url": "https://packages.unity.com"

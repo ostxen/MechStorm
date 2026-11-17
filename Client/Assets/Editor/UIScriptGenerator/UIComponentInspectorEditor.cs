@@ -1,13 +1,12 @@
 #if UNITY_EDITOR
-
 using System.Collections.Generic;
 using System.Linq;
-using TEngine.Editor.UI;
 using UnityEditor;
 using UnityEditorInternal;
 using UnityEngine;
+using GameLogic;
 
-namespace GameLogic
+namespace TEngine.Editor.UI
 {
     [CustomEditor(typeof(UIBindComponent))]
     public class UIComponentInspectorEditor : UnityEditor.Editor
@@ -40,59 +39,23 @@ namespace GameLogic
             // 仅在首次（为空）时初始化，避免覆盖用户在 UIComponentEditor.cs 中配置的持久化数据
             if (string.IsNullOrEmpty(m_className.stringValue))
             {
-                m_className.stringValue = GetClassName(target.name);
+                m_className.stringValue = GetClassName();
             }
             if (string.IsNullOrEmpty(m_genCodePath.stringValue))
             {
-                m_genCodePath.stringValue = ScriptGeneratorSetting.GetGenCodePath();
+                m_genCodePath.stringValue = UIScriptGeneratorSetting.GetGenCodePath();
             }
             if (string.IsNullOrEmpty(m_impCodePath.stringValue))
             {
-                m_impCodePath.stringValue = ScriptGeneratorSetting.GetImpCodePath();
+                m_impCodePath.stringValue = UIScriptGeneratorSetting.GetImpCodePath();
             }
             serializedObject.ApplyModifiedProperties();
             CreateReorderableList();
         }
 
-        string GetClassName(string targetName)
+        private string GetClassName()
         {
-            // UIWindow 直接用物体名
-            if (m_selectedIndex == 0)
-            {
-                return targetName;
-            }
-            // UIWidget用UIWindow名拼接物体名
-            var rules = ScriptGeneratorSetting.GetScriptGenerateRule()
-                .Where(r => r.isUIWidget);
-            foreach (var rule in rules)
-            {
-                if (rule.isUIWidget && targetName.StartsWith(rule.uiElementRegex))
-                {
-                    var parent = ((UIBindComponent)target).transform.parent;
-                    while (true)
-                    {
-                        var uiBindComponent = parent.GetComponent<UIBindComponent>();
-                        if (uiBindComponent)
-                        {
-                            if (uiBindComponent.uiType == ScriptGeneratorSetting.Instance.UIGenTypes[0].uiTypeName)
-                            {
-                                targetName = $"{parent.name.Replace("UI", string.Empty)}{targetName.Replace(rule.uiElementRegex, string.Empty)}Widget";
-                            }
-                            else
-                            {
-                                targetName = $"{uiBindComponent.className.Replace("Widget", string.Empty)}{targetName.Replace(rule.uiElementRegex, string.Empty)}Widget";
-                            }
-                            break;
-                        }
-                        parent = parent.parent;
-                        if (!parent)
-                        {
-                            break;
-                        }
-                    }
-                }
-            }
-            return targetName;
+            return UIBindingNaming.GetClassName((UIBindComponent)target, m_selectedIndex != 0);
         }
 
         private void CreateReorderableList()
@@ -177,7 +140,14 @@ namespace GameLogic
         public override void OnInspectorGUI()
         {
             serializedObject.Update();
-            DrawTopButtons();
+            if (UIScriptGeneration.IsAvailable)
+            {
+                DrawTopButtons();
+            }
+            else
+            {
+                EditorGUILayout.HelpBox("请提供 UI 生成适配器及 ScriptGeneratorSetting 配置。", MessageType.Info);
+            }
             EditorGUILayout.Space();
             m_reorderableList.DoLayoutList();
             serializedObject.ApplyModifiedProperties();
@@ -185,6 +155,11 @@ namespace GameLogic
 
         private void DrawTopButtons()
         {
+            m_uiGenTypes = UIScriptGeneratorSetting.Instance.UIGenTypes;
+            m_uiTypeOptions = m_uiGenTypes.Select(t => t.uiTypeName).ToArray();
+            var storedIndex = System.Array.IndexOf(m_uiTypeOptions, m_uiType.stringValue);
+            m_selectedIndex = storedIndex >= 0 ? storedIndex :
+                Mathf.Clamp(m_selectedIndex, 0, Mathf.Max(0, m_uiTypeOptions.Length - 1));
             EditorGUILayout.BeginVertical("HelpBox");
             EditorGUILayout.BeginHorizontal();
             {
@@ -192,29 +167,33 @@ namespace GameLogic
                 {
                     RebindComponents();
                 }
+                EditorGUI.BeginDisabledGroup(m_uiTypeOptions.Length == 0);
                 if (GUILayout.Button("生成脚本", GUILayout.Height(25)))
                 {
                     // RemoveNullComponents();
-                    ScriptGenerator.GenerateCSharpScript(true, false, true, m_genCodePath.stringValue,
-                        m_className.stringValue, m_uiTypeOptions[m_selectedIndex], m_isGenImpClass.boolValue, m_impCodePath.stringValue);
+                    UIBindComponentGenerator.GenerateCSharpScript(true, false, true, m_genCodePath.stringValue,
+                        m_className.stringValue, m_uiTypeOptions[m_selectedIndex], m_isGenImpClass.boolValue, m_impCodePath.stringValue,
+                        m_uiBindComponent.transform);
                 }
                 if (GUILayout.Button("生成UniTask脚本", GUILayout.Height(25)))
                 {
                     // RemoveNullComponents();
-                    ScriptGenerator.GenerateCSharpScript(true, true, true, m_genCodePath.stringValue,
-                        m_className.stringValue, m_uiTypeOptions[m_selectedIndex], m_isGenImpClass.boolValue, m_impCodePath.stringValue);
+                    UIBindComponentGenerator.GenerateCSharpScript(true, true, true, m_genCodePath.stringValue,
+                        m_className.stringValue, m_uiTypeOptions[m_selectedIndex], m_isGenImpClass.boolValue, m_impCodePath.stringValue,
+                        m_uiBindComponent.transform);
                 }
+                EditorGUI.EndDisabledGroup();
             }
             EditorGUILayout.EndHorizontal();
             EditorGUILayout.BeginHorizontal();
             {
                 if (GUILayout.Button("生成标准版绑定代码", GUILayout.Height(25)))
                 {
-                    ScriptGenerator.GenerateCSharpScript(false);
+                    UIBindComponentGenerator.GenerateCSharpScript(false, targetRoot: m_uiBindComponent.transform);
                 }
                 if (GUILayout.Button("生成UniTask代码", GUILayout.Height(25)))
                 {
-                    ScriptGenerator.GenerateCSharpScript(false, true);
+                    UIBindComponentGenerator.GenerateCSharpScript(false, true, targetRoot: m_uiBindComponent.transform);
                 }
             }
             EditorGUILayout.EndHorizontal();
@@ -228,7 +207,7 @@ namespace GameLogic
                 // 绘制序列化属性字段
                 EditorGUILayout.LabelField("代码生成设置", EditorStyles.boldLabel);
 
-                m_uiGenTypes = ScriptGeneratorSetting.Instance.UIGenTypes;
+                m_uiGenTypes = UIScriptGeneratorSetting.Instance.UIGenTypes;
                 // 获取所有的 uiTypeName
                 m_uiTypeOptions = m_uiGenTypes.Select(t => t.uiTypeName).ToArray();
                 // 确保有选项时才显示 Popup
@@ -275,7 +254,7 @@ namespace GameLogic
                 }
                 if (GUILayout.Button("默认", GUILayout.Width(60), GUILayout.Height(18)))
                 {
-                    m_className.stringValue = GetClassName(target.name);
+                    m_className.stringValue = GetClassName();
                 }
                 EditorGUILayout.EndHorizontal();
 
@@ -302,8 +281,8 @@ namespace GameLogic
         {
             if (m_uiBindComponent == null) return;
             m_uiBindComponent.Clear();
-            ScriptGenerator.GenerateUIComponentScript();
-            ScriptGenerator.GenerateCSharpScript(false);
+            UIBindComponentGenerator.GenerateUIComponentScript(m_uiBindComponent.transform);
+            UIBindComponentGenerator.GenerateCSharpScript(false, targetRoot: m_uiBindComponent.transform);
         }
 
         private void RemoveNullComponents()
@@ -384,11 +363,11 @@ namespace GameLogic
             {
                 case "m_genCodePath":
                 case "genCodePath":
-                    return ScriptGeneratorSetting.GetGenCodePath();
+                    return UIScriptGeneratorSetting.GetGenCodePath();
 
                 case "m_impCodePath":
                 case "impCodePath":
-                    return ScriptGeneratorSetting.GetImpCodePath();
+                    return UIScriptGeneratorSetting.GetImpCodePath();
 
                 default:
                     // 如果无法识别属性类型，返回空字符串或当前值
