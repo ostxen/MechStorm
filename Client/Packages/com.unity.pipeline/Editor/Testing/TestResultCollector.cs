@@ -35,7 +35,7 @@ namespace Unity.Pipeline.Editor.Testing
         public TestResultCollector(bool attachedMidRun = false)
         {
             m_AttachedMidRun = attachedMidRun;
-            m_CompletionSource = new TaskCompletionSource<ITestResultAdaptor>(TaskCreationOptions.RunContinuationsAsynchronously);
+            m_CompletionSource = new TaskCompletionSource<ITestResultAdaptor>();
         }
 
         /// <summary>
@@ -46,8 +46,6 @@ namespace Unity.Pipeline.Editor.Testing
         {
             return m_CompletionSource.Task;
         }
-
-        internal void CompleteWithoutTests() => m_CompletionSource.TrySetResult(null);
 
         /// <summary>ICallbacks hook: a run has started.</summary>
         /// <param name="testsToRun">The tests about to run.</param>
@@ -125,7 +123,16 @@ namespace Unity.Pipeline.Editor.Testing
         public void Cancel()
         {
             IsCancelled = true;
-            m_CompletionSource.TrySetCanceled();
+            if (!m_CompletionSource.Task.IsCompleted)
+            {
+                m_CompletionSource.SetCanceled();
+            }
+        }
+
+        internal void CompleteWithoutTests()
+        {
+            IsComplete = true;
+            m_CompletionSource.TrySetResult(null);
         }
 
         /// <summary>
@@ -134,7 +141,10 @@ namespace Unity.Pipeline.Editor.Testing
         /// <param name="exception">The error to complete the sync waiter's task with.</param>
         public void SetError(Exception exception)
         {
-            m_CompletionSource.TrySetException(exception);
+            if (!m_CompletionSource.Task.IsCompleted)
+            {
+                m_CompletionSource.SetException(exception);
+            }
         }
 
         /// <summary>

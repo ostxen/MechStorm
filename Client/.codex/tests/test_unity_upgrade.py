@@ -1,4 +1,4 @@
-"""Offline contracts for the Pipeline 0.10 / CLI beta.16 migration."""
+"""Offline contracts for the Pipeline 1.0 / CLI 1.0.1 migration."""
 
 import json
 from pathlib import Path
@@ -11,7 +11,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 from workflow_lib.core import Context, WorkflowError
 from workflow_lib.unity import (
     READ_ONLY, MUTATIONS, STATUS_QUERIES, Unity,
-    decode_response, parse_instances, validate_parameters, validate_test_result,
+    decode_response, parse_instances, test_listing, validate_parameters, validate_test_result,
 )
 
 
@@ -179,6 +179,64 @@ class UnityUpgradeTests(unittest.TestCase):
         with self.assertRaises(WorkflowError):
             validate_test_result({"status": "completed", "summary": dict(total=1, passed=1, failed=0, skipped=0, inconclusive=0),
                 "results": [{"FullName": "Stale", "Status": "Passed"}]}, {"Expected"})
+
+    def test_pipeline_1_records_and_empty_async_acknowledgement(self):
+        tests = [{"fullName": "Example", "mode": "EditMode", "assembly": "Example.Tests"}]
+        self.assertEqual(test_listing(tests, "editor", "Example", "testName"), {"Example"})
+        for acknowledgement in (None, [], {}):
+            self.unity.ready = Mock(return_value={"playMode": "stopped"})
+            self.unity.call = Mock(side_effect=[tests, {"status": "no_tests"}, acknowledgement])
+            self.unity.poll = Mock(return_value={"status": "completed",
+                "summary": dict(total=1, passed=1, failed=0, skipped=0, inconclusive=0),
+                "results": [{"fullName": "Example", "status": "Passed"}]})
+            self.assertEqual(self.unity.tests("editor", "Example", "testName", 5)["summary"]["passed"], 1)
+
+    def test_pipeline_1_failed_start_never_accepts_retained_status(self):
+        self.unity.ready = Mock(return_value={"playMode": "stopped"})
+        self.unity.call = Mock(side_effect=[
+            [{"fullName": "Example", "mode": "EditMode"}],
+            {"status": "completed"}, WorkflowError("CLI exited with 6"),
+        ])
+        self.unity.poll = Mock()
+        with self.assertRaises(WorkflowError):
+            self.unity.tests("editor", "Example", "testName", 5)
+        self.unity.poll.assert_not_called()
+
+    def test_pipeline_1_empty_stdout_is_only_allowed_for_async_test_start(self):
+        self.unity.capabilities = {"test run", "test list"}
+        self.unity.raw = Mock(return_value=" \r\n")
+        self.assertIsNone(self.unity.call("test run", {"async-tests": True}))
+        with self.assertRaises(WorkflowError):
+            self.unity.call("test run", {"async-tests": False})
+        self.assertEqual(self.unity.call("test list"), [])
+
+    def test_pipeline_1_real_record_stream_and_single_record(self):
+        record = {"FullName": "Example", "Mode": "EditMode", "Assembly": "Example.Tests"}
+        second = {**record, "FullName": "Other"}
+        self.unity.capabilities = {"test list"}
+        self.unity.raw = Mock(return_value=json.dumps(record) + "\n" + json.dumps(second) + "\n")
+        self.assertEqual(self.unity.call("test list"), [record, second])
+        self.unity.raw.return_value = json.dumps(record)
+        self.assertEqual(self.unity.call("test list"), [record])
+        self.unity.raw.return_value = json.dumps(record) + "\nnot-json\n"
+        with self.assertRaises(WorkflowError):
+            self.unity.call("test list")
+
+    def test_failed_retained_status_does_not_block_fresh_test_run(self):
+        self.unity.capabilities = {"test status"}
+        self.unity.run.execute = Mock(return_value=SimpleNamespace(returncode=6,
+            stdout='{"status":"completed","summary":{"failed":1}}', stderr='previous run failed'))
+        self.assertEqual(self.unity.call("test status", accept_retained_test_result=True)["status"], "completed")
+        with self.assertRaises(WorkflowError):
+            self.unity.call("test status")
+        self.unity.run.execute.return_value.returncode = 2
+        self.unity.run.execute.return_value.stdout = '{"status":"completed","summary":{"total":0}}'
+        self.assertEqual(self.unity.call("test status", accept_retained_test_result=True)["summary"]["total"], 0)
+        with self.assertRaises(WorkflowError):
+            self.unity.call("test status")
+        self.unity.run.execute.return_value.returncode = 12
+        with self.assertRaises(WorkflowError):
+            self.unity.call("test status", accept_retained_test_result=True)
 
 
 if __name__ == "__main__":

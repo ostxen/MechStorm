@@ -48,7 +48,7 @@ namespace Unity.Pipeline.Editor
         private const string SessionStartTicksKey = "Unity.Pipeline.Analytics.SessionStartTicks";
 
         /// <summary>
-        /// The tag every code-evaluation command carries (eval, eval_file, run_script). Matching the
+        /// The tag every code-evaluation command carries (script eval, script run). Matching the
         /// tag rather than a name list covers a new eval command the moment it is tagged, and the
         /// suite already enforces that shipped commands carry well-formed tags.
         /// </summary>
@@ -70,7 +70,6 @@ namespace Unity.Pipeline.Editor
 #if UNITY_2023_2_OR_NEWER
         internal static Action<IAnalytic> s_Send = analytic => EditorAnalytics.SendAnalytic(analytic);
 #else
-        // Unity 2022 has no IAnalytic transport. Retain local diagnostic recording without sending telemetry.
         internal static Action<IAnalytic> s_Send = analytic => { };
 #endif
 
@@ -87,11 +86,7 @@ namespace Unity.Pipeline.Editor
         /// Whether evals record what <c>Pipeline_CommandExecuted</c> reports about them: while the
         /// user's Editor analytics are on, or while recording.
         /// </summary>
-        internal static bool CollectsEvalDetails() =>
-#if UNITY_2023_2_OR_NEWER
-            EditorAnalytics.enabled ||
-#endif
-            IsRecording;
+        internal static bool CollectsEvalDetails() => EditorAnalytics.enabled || IsRecording;
 
         [InitializeOnLoadMethod]
         static void CollectEvalDetailsWithAnalytics() => EvalAnalyticsDetails.IsCollecting = CollectsEvalDetails;
@@ -298,9 +293,9 @@ namespace Unity.Pipeline.Editor
         /// command", not "no command could ever cover this".
         ///
         /// Answerable only where the body is reachable from the parameters: <c>eval</c> passes it
-        /// inline and <c>eval_file</c> names a file to read. <c>run_script</c> runs a project file
-        /// with a named entry point rather than a snippet, and the fingerprinter parses script-kind
-        /// bodies, so it is not fingerprinted and reports false.
+        /// inline or names a file to read. <c>run_script</c> runs a project file with a named entry
+        /// point rather than a snippet, and the fingerprinter parses script-kind bodies, so it is not
+        /// fingerprinted and reports false.
         /// </summary>
         internal static bool EvalCoversAnExistingCommand(CommandInfo command, IReadOnlyDictionary<string, object> parameters)
         {
@@ -336,9 +331,6 @@ namespace Unity.Pipeline.Editor
                 case CommandNames.ScriptEval:
                     var code = parameters.TryGetValue("code", out var value) ? value?.ToString() : null;
                     return string.IsNullOrEmpty(code) ? ReadEvalFile(parameters) : code;
-
-                case CommandNames.ScriptEvalFile:
-                    return ReadEvalFile(parameters);
 
                 default:
                     return null;

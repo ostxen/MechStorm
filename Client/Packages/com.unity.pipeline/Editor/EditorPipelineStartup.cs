@@ -1,3 +1,4 @@
+using System;
 using UnityEditor;
 using UnityEngine;
 using Unity.Pipeline.Models;
@@ -101,7 +102,7 @@ namespace Unity.Pipeline.Editor
             // wrongly restore; on an ordinary fresh Editor load it is false, so this call doubles as
             // crash recovery — an Editor that died mid-Play with the override recorded restores the
             // project's own value here instead of leaving it stuck on.
-            ReconcileRunInBackground(EditorApplication.isPlayingOrWillChangePlaymode);
+            ReconcileRunInBackgroundOnLoad(EditorApplication.isPlayingOrWillChangePlaymode);
 
             var cfg = EditorPipelineConfig.Load();
             bool autoStart;
@@ -153,6 +154,16 @@ namespace Unity.Pipeline.Editor
 
         internal static bool IsServerRunning => m_Server != null && m_Server.IsRunning;
 
+#if !UNITY_6000_3_OR_NEWER
+        internal static GUIContent CreateToolbarContent() => new GUIContent("Pipeline Server", IsServerRunning
+            ? $"Running on port {m_Server.Port}. Click to stop." : "Stopped. Click to start.");
+
+        internal static void SetToolbarServerRunning(bool running)
+        {
+            if (running) MenuStartServer(); else MenuStopServer();
+        }
+#endif
+
         [MenuItem("Window/Pipeline/Start Server", priority = MenuPriority)]
         private static void MenuStartServer()
         {
@@ -175,7 +186,16 @@ namespace Unity.Pipeline.Editor
         [MenuItem("Window/Pipeline/Stop Server", true, MenuPriority + 1)]
         private static bool MenuStopServerValidate() => IsServerRunning;
 
-        internal static GUIContent CreateToolbarContent()
+#if UNITY_6000_3_OR_NEWER
+        /// <summary>Main toolbar id of the server toggle, as users find it in the toolbar's element picker.</summary>
+        internal const string ToolbarTogglePath = "Pipeline/Server";
+
+        /// <summary>
+        /// Main toolbar toggle mirroring Start Server / Stop Server: on while the server runs. Rebuilt by
+        /// <see cref="RefreshToolbarToggle"/> whenever the server starts or stops, from any entry point.
+        /// </summary>
+        [MainToolbarElement(ToolbarTogglePath, defaultDockPosition = MainToolbarDockPosition.Right)]
+        private static MainToolbarElement CreateToolbarToggle()
         {
             var running = IsServerRunning;
             var tooltip = running
@@ -183,40 +203,27 @@ namespace Unity.Pipeline.Editor
                 : "Pipeline Server stopped. Click to start it.";
             // The green and red dots of the built-in GameObject icon picker, present in every supported Editor.
             var icon = (Texture2D)EditorGUIUtility.IconContent(running ? "sv_icon_dot3_pix16_gizmo" : "sv_icon_dot6_pix16_gizmo").image;
-            return new GUIContent("Pipeline Server", icon, tooltip);
-        }
-
-        internal static void SetToolbarServerRunning(bool running)
-        {
-            if (running)
-                MenuStartServer();
-            else
-                MenuStopServer();
-        }
-
-#if UNITY_6000_3_OR_NEWER
-        /// <summary>Main toolbar id of the server toggle, as users find it in the toolbar's element picker.</summary>
-        internal const string ToolbarTogglePath = "Pipeline/Server";
-
-        [MainToolbarElement(ToolbarTogglePath, defaultDockPosition = MainToolbarDockPosition.Right)]
-        private static MainToolbarElement CreateToolbarToggle()
-        {
-            var content = CreateToolbarContent();
-            return new MainToolbarToggle(new MainToolbarContent(content.text, (Texture2D)content.image, content.tooltip),
-                IsServerRunning, SetToolbarServerRunning);
+            return new MainToolbarToggle(new MainToolbarContent("Pipeline Server", icon, tooltip), running, on =>
+            {
+                if (on)
+                    MenuStartServer();
+                else
+                    MenuStopServer();
+            });
         }
 #endif
 
         /// <summary>
-        /// Refresh the toggle after any server state change. The native toolbar rebuild is deferred;
-        /// PipelineToolbar removes its UI before assembly reload or editor quit.
+        /// Rebuild the main toolbar toggle after the server's state changed. Deferred, so a stop during
+        /// a domain reload or editor quit never touches the toolbar UI; the toggle is rebuilt anyway
+        /// when the reload's static constructor restarts the server.
         /// </summary>
         private static void RefreshToolbarToggle()
         {
 #if UNITY_6000_3_OR_NEWER
             EditorApplication.delayCall += () => MainToolbar.Refresh(ToolbarTogglePath);
 #else
-            PipelineToolbar.Refresh();
+            EditorApplication.delayCall += PipelineToolbar.Refresh;
 #endif
         }
 
@@ -272,8 +279,6 @@ namespace Unity.Pipeline.Editor
                 server.WatchdogEnabled = cfg?.WatchdogEnabled ?? EditorPipelineConfig.DefaultWatchdogEnabled;
                 server.WatchdogIntervalSeconds = cfg?.WatchdogIntervalSeconds ?? EditorPipelineConfig.DefaultWatchdogIntervalSeconds;
                 server.LogRequestsResponses = cfg?.LogRequestsResponses ?? EditorPipelineConfig.DefaultLogRequestsResponses;
-                if (server.IsRunning)
-                    Commands.AutoTickCommand.RestoreFromSession(server.WatchdogEnabled);
             }
 
             ApplyEvalTelemetrySettings(cfg);
@@ -382,8 +387,7 @@ namespace Unity.Pipeline.Editor
 
             try
             {
-                var transport = new PipelineProtocolTransport(m_Server.Executor, SecurityTokenManager.GetOrCreateToken,
-                    obsoleteCommandNames: m_Server.ObsoleteCommandNamesForTransport);
+                var transport = new PipelineProtocolTransport(m_Server.Executor, SecurityTokenManager.GetOrCreateToken);
                 transport.Start();
                 s_ProtocolTransport = transport;
             }
@@ -421,9 +425,21 @@ namespace Unity.Pipeline.Editor
             // ExitingEditMode fires when entering Play mode (before any domain reload that causes);
             // EnteredEditMode fires when a Play session ends.
             if (state == PlayModeStateChange.ExitingEditMode)
+            {
+                // Play mode entry went ahead, so the check for a refused entry has nothing left to do. Left
+                // pending, it can run while Play mode exits and restore a value Unity then loses.
+                EditorApplication.delayCall -= EndClientPlaySessionIfPlayModeRefused;
                 ReconcileRunInBackground(playing: true);
+            }
+            else if (state == PlayModeStateChange.EnteredPlayMode)
+                ApplyClientRunInBackgroundOnPlayEntry();
             else if (state == PlayModeStateChange.EnteredEditMode)
+            {
+                // The Play session a client started is over, however it ended (AUTHAPI-114).
+                EndClientPlaySession();
+                RestoreCloneRunInBackground();
                 ReconcileRunInBackground(playing: false);
+            }
 
             // Server continues running through play mode changes
             // Status endpoint will reflect current play mode via EditorApplication.isPlaying
@@ -453,6 +469,185 @@ namespace Unity.Pipeline.Editor
         /// and the override has not been re-applied yet (see <see cref="RestoreProjectRunInBackground"/>).</summary>
         internal const string RunInBackgroundTemporarilyRestoredKey = "Unity.Pipeline.RunInBackground.TemporarilyRestored";
 
+        /// <summary>SessionState flag: a client entered Play mode (<c>editor.playmode start</c>,
+        /// <c>editor.playmode start_scenario</c>), so Run In Background is forced on until that Play
+        /// session ends (AUTHAPI-114). Survives the domain reload into Play mode; cleared on returning to
+        /// Edit mode, when the user changes Run In Background themselves, or by
+        /// <c>editor.playmode set_run_in_background</c>.</summary>
+        internal const string ClientPlaySessionRunInBackgroundKey = "Unity.Pipeline.RunInBackground.ClientPlaySession";
+
+        internal static bool IsClientPlaySessionRunInBackground => SessionState.GetBool(ClientPlaySessionRunInBackgroundKey, false);
+
+        /// <summary>SessionState flag: <c>editor.playmode start_scenario</c> started a client Play session
+        /// and its scenario is still launching players, so this Editor isn't in Play mode yet. A domain
+        /// reload in that window must keep the session; the scenario watcher clears this flag once Play
+        /// mode is on its way or the scenario stops.</summary>
+        internal const string ScenarioLaunchPendingKey = "Unity.Pipeline.RunInBackground.ScenarioLaunchPending";
+
+        internal static bool IsScenarioLaunchPending => SessionState.GetBool(ScenarioLaunchPendingKey, false);
+
+        /// <summary>
+        /// The reconcile run on every Editor load and domain reload. Outside Play mode, and with no
+        /// scenario still launching, a client's Play session flag is stale (the session ended without
+        /// the exit event reaching us, e.g. the Editor crashed): drop it before reconciling. While a
+        /// scenario launches, treat the session as playing so the reload doesn't restore the project's
+        /// value just before the scenario enters Play mode.
+        /// </summary>
+        internal static void ReconcileRunInBackgroundOnLoad(bool playingOrWillChange)
+        {
+            var playing = playingOrWillChange || (IsScenarioLaunchPending && IsClientPlaySessionRunInBackground);
+            if (!playing)
+                EndClientPlaySession();
+            ReconcileRunInBackground(playing);
+        }
+
+        /// <summary>
+        /// Force Run In Background on for the Play session a client is about to start, so the player
+        /// loop keeps running while the Editor is unfocused: Unity pauses the player of an unfocused
+        /// Editor whose Run In Background is off, and nothing else restarts it. Uses the same recorded
+        /// override as <c>editor.playmode set_run_in_background</c>, so the project's value comes back
+        /// when Play mode ends and never reaches a build or <c>ProjectSettings.asset</c>.
+        /// Call on the main thread before entering Play mode.
+        /// </summary>
+        /// <returns>Whether this turned Run In Background on; false when it was already on.</returns>
+        internal static bool BeginClientPlaySessionRunInBackground()
+        {
+            SetClientRunInBackgroundRequested(true);
+            if (Application.runInBackground)
+                return false;
+
+            SessionState.SetBool(ClientPlaySessionRunInBackgroundKey, true);
+            ReconcileRunInBackground(playing: true);
+            return Application.runInBackground;
+        }
+
+        /// <summary>
+        /// Undo <see cref="BeginClientPlaySessionRunInBackground"/> when Unity refused to enter Play
+        /// mode, so no exit event will. Does nothing once Play mode is on its way.
+        /// </summary>
+        internal static void EndClientPlaySessionIfPlayModeRefused()
+        {
+            if (EditorApplication.isPlayingOrWillChangePlaymode || !IsClientRunInBackgroundRequested)
+                return;
+
+            var heldOverride = IsClientPlaySessionRunInBackground;
+            EndClientPlaySession();
+            if (heldOverride)
+                ReconcileRunInBackground(playing: false);
+        }
+
+        /// <summary>SessionState flag: a client starting this Play session asked for Run In Background
+        /// (AUTHAPI-114), whether or not the project's value was already on. While it is set, the main
+        /// project's <see cref="ClientSessionMarkerPath"/> exists so its Multiplayer Play Mode clones
+        /// apply it too.</summary>
+        internal const string ClientRunInBackgroundRequestedKey = "Unity.Pipeline.RunInBackground.ClientRequested";
+
+        internal static bool IsClientRunInBackgroundRequested => SessionState.GetBool(ClientRunInBackgroundRequestedKey, false);
+
+        /// <summary>SessionState int in a clone: its own Run In Background value before it applied the main
+        /// Editor's client session, put back when the clone returns to Edit mode. -1 when unset.</summary>
+        internal const string CloneOriginalRunInBackgroundKey = "Unity.Pipeline.RunInBackground.CloneOriginal";
+
+        internal const string ClientSessionMarkerFileName = "client-run-in-background";
+
+        /// <summary>Whether this Editor is a Multiplayer Play Mode clone. A probe so tests can play one.</summary>
+        internal static Func<bool> s_IsVirtualProjectCloneProbe = EditorProcessInfo.IsVirtualProjectClone;
+
+        /// <summary>
+        /// The main project's marker for a client Play session that asked for Run In Background. Clones
+        /// share the main project's settings root (<see cref="EditorPipelineConfig.GetSettingsProjectRoot"/>),
+        /// so the main Editor and every clone resolve the same file.
+        /// </summary>
+        internal static string ClientSessionMarkerPath
+        {
+            get
+            {
+                var projectRoot = System.IO.Path.GetDirectoryName(Application.dataPath);
+                var settingsRoot = EditorPipelineConfig.GetSettingsProjectRoot(projectRoot, s_IsVirtualProjectCloneProbe());
+                return System.IO.Path.Combine(settingsRoot, "Library", "Pipeline", ClientSessionMarkerFileName);
+            }
+        }
+
+        static void SetClientRunInBackgroundRequested(bool requested)
+        {
+            if (requested)
+                SessionState.SetBool(ClientRunInBackgroundRequestedKey, true);
+            else
+                SessionState.EraseBool(ClientRunInBackgroundRequestedKey);
+
+            // Only the main Editor owns the marker; a clone ending its own session must not end the main's.
+            if (s_IsVirtualProjectCloneProbe())
+                return;
+
+            try
+            {
+                var path = ClientSessionMarkerPath;
+                if (requested)
+                {
+                    System.IO.Directory.CreateDirectory(System.IO.Path.GetDirectoryName(path));
+                    System.IO.File.WriteAllText(path, string.Empty);
+                }
+                else if (System.IO.File.Exists(path))
+                {
+                    System.IO.File.Delete(path);
+                }
+            }
+            catch (Exception e) when (e is System.IO.IOException || e is UnauthorizedAccessException)
+            {
+                Debug.LogWarning($"Pipeline: could not update {ClientSessionMarkerFileName} for Multiplayer Play Mode clones: {e.Message}");
+            }
+        }
+
+        /// <summary>
+        /// End a client's Play session: drop its flags and the clones' marker. Doesn't touch Run In
+        /// Background itself; the callers reconcile when they need to.
+        /// </summary>
+        internal static void EndClientPlaySession()
+        {
+            SessionState.EraseBool(ClientPlaySessionRunInBackgroundKey);
+            SessionState.EraseBool(ScenarioLaunchPendingKey);
+            SetClientRunInBackgroundRequested(false);
+        }
+
+        /// <summary>
+        /// On Play mode entry, re-apply Run In Background through its setter. Unity pauses the player when
+        /// the Editor loses focus, and only the setter un-pauses it, and only when the value changes: an
+        /// Editor that enters Play mode without ever having focus (a clone) stays paused even with the
+        /// value already on. Applies in the main Editor for its own client session, and in a clone when
+        /// the main Editor's marker says a client asked for it; a clone remembers its own value first.
+        /// </summary>
+        internal static void ApplyClientRunInBackgroundOnPlayEntry()
+        {
+            if (s_IsVirtualProjectCloneProbe())
+            {
+                if (!System.IO.File.Exists(ClientSessionMarkerPath))
+                    return;
+                if (SessionState.GetInt(CloneOriginalRunInBackgroundKey, -1) < 0)
+                    SessionState.SetInt(CloneOriginalRunInBackgroundKey, Application.runInBackground ? 1 : 0);
+            }
+            else if (!IsClientRunInBackgroundRequested || !Application.runInBackground)
+            {
+                return;
+            }
+
+            Application.runInBackground = false;
+            Application.runInBackground = true;
+        }
+
+        /// <summary>
+        /// In a clone, put back the value <see cref="ApplyClientRunInBackgroundOnPlayEntry"/> replaced.
+        /// The clone's change was in memory only: Multiplayer Play Mode blocks saves in a clone.
+        /// </summary>
+        internal static void RestoreCloneRunInBackground()
+        {
+            var original = SessionState.GetInt(CloneOriginalRunInBackgroundKey, -1);
+            if (original < 0)
+                return;
+
+            SessionState.EraseInt(CloneOriginalRunInBackgroundKey);
+            Application.runInBackground = original == 1;
+        }
+
         /// <summary>
         /// Put the project's own Run In Background value back while the override is active, WITHOUT
         /// clearing the override record, so nothing here looks like the override ending, and remember
@@ -470,6 +665,10 @@ namespace Unity.Pipeline.Editor
         /// <returns>Whether the value was restored, i.e. whether the override needs re-applying.</returns>
         internal static bool RestoreProjectRunInBackground()
         {
+            // A clone reads the main Editor's override record but doesn't own it (see ReconcileRunInBackground).
+            if (s_IsVirtualProjectCloneProbe())
+                return false;
+
             // Already restored by an earlier build or save, with the override still to re-apply.
             if (SessionState.GetBool(RunInBackgroundTemporarilyRestoredKey, false))
                 return false;
@@ -554,6 +753,15 @@ namespace Unity.Pipeline.Editor
         /// </returns>
         internal static bool ReconcileRunInBackground(EditorPipelineConfig cfg, bool playing, out string status)
         {
+            // A Multiplayer Play Mode clone uses the main project's settings file, so the override record
+            // in it is the main Editor's. The clone's own value differs from it, and reconciling here would
+            // read that as the user's change and end the main Editor's override.
+            if (s_IsVirtualProjectCloneProbe())
+            {
+                status = $"Run In Background is {(Application.runInBackground ? "on" : "off")} in this Multiplayer Play Mode clone; the main Editor owns the override";
+                return false;
+            }
+
             // While our override is active the live value is always true, so a live false is a change
             // made underneath us. Two causes: a build or a save put the project's value back (the
             // session flag says so; a build may also never get its post-process if it failed or was
@@ -581,7 +789,8 @@ namespace Unity.Pipeline.Editor
                 Application.runInBackground = true;
             }
 
-            bool desired = cfg.RunInBackgroundCommandOverride || (cfg.RunInBackgroundInPlayMode && playing);
+            bool desired = cfg.RunInBackgroundCommandOverride ||
+                (playing && (cfg.RunInBackgroundInPlayMode || IsClientPlaySessionRunInBackground));
             bool changed = false;
 
             if (desired && !cfg.RunInBackgroundOverridden)
@@ -611,6 +820,7 @@ namespace Unity.Pipeline.Editor
         {
             cfg.SetRunInBackgroundOverrideRecord(overridden: false, original: Application.runInBackground);
             cfg.SetRunInBackgroundCommandOverride(false);
+            EndClientPlaySession();
         }
 
         /// <summary>

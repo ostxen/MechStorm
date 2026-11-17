@@ -1,5 +1,6 @@
 using System;
 using System.Collections;
+using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
 using System.Threading;
@@ -21,6 +22,23 @@ using Object = UnityEngine.Object;
 
 namespace Unity.Pipeline.Tests.Editor
 {
+    sealed class CompatibilityCommandHost : ICommandHost
+    {
+        internal readonly List<object> Records = new List<object>();
+        internal readonly List<string> Messages = new List<string>();
+        internal object Result;
+        internal CommandContext Context => new CommandContext(this);
+        public IReadOnlyList<string> Arguments => Array.Empty<string>();
+        public CancellationToken CancellationToken => CancellationToken.None;
+        public void WriteResult(object result) => Result = result;
+        public void WriteRecord(object record) => Records.Add(record);
+        public void Log(CommandLogLevel level, string message) => Messages.Add(message);
+        public TextWriter Writer(CommandStream stream) => TextWriter.Null;
+        public void Write(CommandStream stream, ReadOnlySpan<byte> data) { }
+        public ValueTask<string> ReadLineAsync() => new ValueTask<string>((string)null);
+        public ValueTask<int> ReadAsync(Memory<byte> buffer) => new ValueTask<int>(0);
+    }
+
     public class PipelineVersionCompatibilityTests
     {
         [Test]
@@ -29,7 +47,7 @@ namespace Unity.Pipeline.Tests.Editor
             var group = BuildPipeline.GetBuildTargetGroup(EditorUserBuildSettings.activeBuildTarget);
             var expected = PlayerSettings.GetIl2CppCodeGeneration(UnityEditor.Build.NamedBuildTarget.FromBuildTargetGroup(group));
             var settings = (Unity.Pipeline.Editor.Commands.Build.BuildSettingsResult)
-                Unity.Pipeline.Editor.Commands.Build.BuildConfigCommands.GetSettings();
+                Unity.Pipeline.Editor.Commands.Build.BuildConfigCommands.ReadSettings();
             Assert.That(settings.Il2CppCodeGeneration, Is.EqualTo(expected.ToString()));
         }
 
@@ -41,11 +59,13 @@ namespace Unity.Pipeline.Tests.Editor
             var before = PlayerSettings.GetIl2CppCodeGeneration(target);
             var requested = before == Il2CppCodeGeneration.OptimizeSpeed
                 ? Il2CppCodeGeneration.OptimizeSize : Il2CppCodeGeneration.OptimizeSpeed;
-            var result = (Unity.Pipeline.Editor.Commands.Build.SetBuildSettingsResult)
-                Unity.Pipeline.Editor.Commands.Build.BuildConfigCommands.SetSettings(
+            var host = new CompatibilityCommandHost();
+            var code = Unity.Pipeline.Editor.Commands.Build.BuildConfigCommands.SetSettings(host.Context,
                     new Unity.Pipeline.Editor.Commands.Build.SetBuildSettingsInput { Il2CppCodeGeneration = requested.ToString() },
                     dryRun: true);
-            Assert.That(result.Success && result.DryRun, Is.True);
+            var result = (Unity.Pipeline.Editor.Commands.Build.SetBuildSettingsResult)host.Result;
+            Assert.That(code, Is.EqualTo(ExitCode.Success));
+            Assert.That(result.DryRun, Is.True);
             Assert.That(result.Applied["il2cpp-code-generation"], Is.EqualTo(requested.ToString()));
             Assert.That(PlayerSettings.GetIl2CppCodeGeneration(target), Is.EqualTo(before));
         }
@@ -55,27 +75,36 @@ namespace Unity.Pipeline.Tests.Editor
         public void UnavailableBuildProfileIsRefusedWithoutQueueing(bool dryRun)
         {
             // Never authorize a real build, even if the unavailable-feature guard regresses.
-            var status = typeof(Unity.Pipeline.Editor.Commands.Build.BuildCommand).GetMethod("Status");
-            var before = status.Invoke(null, null).ToString();
+            var before = BuildStatus();
+            var host = new CompatibilityCommandHost();
             var result = Unity.Pipeline.Editor.Commands.Build.BuildCommand.Run(
-                profileName: "Pipeline compatibility probe", confirm: false, dryRun: dryRun);
-            Assert.That(result.GetType().GetProperty("code")?.GetValue(result), Is.EqualTo("feature_unavailable"));
-            Assert.That(result.GetType().GetProperty("success")?.GetValue(result), Is.False);
-            Assert.That(result.GetType().GetProperty("valid")?.GetValue(result), Is.False);
-            Assert.That(status.Invoke(null, null).ToString(), Is.EqualTo(before));
+                host.Context, profileName: "Pipeline compatibility probe", confirm: false, dryRun: dryRun);
+            Assert.That(result, Is.EqualTo(ExitCode.InvalidUsage));
+            Assert.That(string.Join(" ", host.Messages), Does.Contain("Build Profiles require Unity 6"));
+            Assert.That(host.Result, Is.Null);
+            Assert.That(BuildStatus(), Is.EqualTo(before));
+        }
+
+        static string BuildStatus()
+        {
+            var host = new CompatibilityCommandHost();
+            Assert.That(Unity.Pipeline.Editor.Commands.Build.BuildCommand.Status(host.Context), Is.EqualTo(ExitCode.Success));
+            return host.Result.ToString();
         }
 #endif
 
         [Test]
         public void PerformanceSnapshotRetainsRenderAndMemoryData()
         {
-            var stats = Unity.Pipeline.Editor.Commands.Observability.PerformanceCommands.GetPerformance();
+            var host = new CompatibilityCommandHost();
+            Assert.That(Unity.Pipeline.Editor.Commands.Observability.PerformanceCommands.GetPerformance(host.Context), Is.EqualTo(ExitCode.Success));
+            var stats = (Unity.Pipeline.Editor.Commands.Observability.PerformanceStats)host.Result;
             Assert.That(stats.Render, Is.Not.Null);
             Assert.That(stats.Memory.TotalAllocatedBytes, Is.GreaterThan(0));
             Assert.That(stats.Memory.TotalReservedBytes, Is.GreaterThanOrEqualTo(stats.Memory.TotalAllocatedBytes));
             if (stats.FrameTiming.Available)
             {
-                Assert.That(stats.FrameTiming.CpuMainThreadFrameTimeMs.HasValue, Is.True);
+                Assert.That(stats.FrameTiming.CpuMainThreadFrameTimeMs, Is.GreaterThanOrEqualTo(0));
             }
         }
 
@@ -132,8 +161,10 @@ namespace Unity.Pipeline.Tests.Editor
             try
             {
                 material.renderQueue = queue;
-                var result = Unity.Pipeline.Editor.Commands.Materials.MaterialCommands.GetProperties(
-                    new Unity.Pipeline.Models.ObjectRef { InstanceId = material.GetInstanceID() });
+                var host = new CompatibilityCommandHost();
+                Assert.That(Unity.Pipeline.Editor.Commands.Materials.MaterialCommands.GetProperties(host.Context,
+                    new Unity.Pipeline.Models.ObjectRef { InstanceId = material.GetInstanceID() }), Is.EqualTo(ExitCode.Success));
+                var result = (Unity.Pipeline.Editor.Commands.Materials.MaterialPropertiesResult)host.Result;
                 Assert.That(result.RenderQueue, Is.EqualTo(queue));
                 Assert.That(new SerializedObject(material).FindProperty("m_CustomRenderQueue").intValue, Is.EqualTo(queue));
             }
@@ -183,7 +214,7 @@ namespace Unity.Pipeline.Tests.Editor
             AutoTickCommand.ResetForTests();
             AutoTickCommand.EraseSessionForTests();
             if (m_Explicit)
-                AutoTickCommand.SetAutoTick(m_Enabled, (int)m_Interval, persist: false);
+                AutoTickCommand.Set(m_Enabled, (int)m_Interval, false, out _);
             else
                 AutoTickCommand.RestoreFromSession(m_Enabled);
             if (m_HasPersisted)
@@ -213,7 +244,7 @@ namespace Unity.Pipeline.Tests.Editor
         [TestCase(false)]
         public void ExplicitSessionChoiceWinsOverServerLifecycle(bool enabled)
         {
-            AutoTickCommand.SetAutoTick(enabled, 73, persist: false);
+            AutoTickCommand.Set(enabled, 73, false, out _);
             AutoTickCommand.ReleaseServerRequest();
             AutoTickCommand.RestoreFromSession(!enabled);
             Assert.That(AutoTickCommand.IsEnabled, Is.EqualTo(enabled));
@@ -223,7 +254,7 @@ namespace Unity.Pipeline.Tests.Editor
         [Test]
         public void PersistedChoiceIsRestoredAfterReload()
         {
-            AutoTickCommand.SetAutoTick(true, 81);
+            AutoTickCommand.Set(true, 81, true, out _);
             AutoTickCommand.ResetForTests();
             AutoTickCommand.RestoreFromSession(false);
             AutoTickCommand.ReleaseServerRequest();
@@ -268,7 +299,7 @@ namespace Unity.Pipeline.Tests.Editor
                 probe.Resume.TrySetResult(true);
                 while (execution.State != CommandExecutionState.Ended && EditorApplication.timeSinceStartup < deadline) yield return null;
                 Assert.That(execution.State, Is.EqualTo(CommandExecutionState.Ended));
-                Assert.That(execution.Result, Is.EqualTo(ExitCode.Cancelled));
+                Assert.That(execution.Result, Is.EqualTo(ProtocolExitCode.Cancelled));
                 Assert.That(probe.Observed, Is.True, "Cancellation must flow beyond the invocation's synchronous scope.");
 
                 var following = Enqueue(queue, next);
@@ -295,7 +326,7 @@ namespace Unity.Pipeline.Tests.Editor
         [Test]
         public void TestCancelBypassesOrdinaryCommandGate()
         {
-            Assert.That(Array.Exists(typeof(TestCommands).GetMethod(nameof(TestCommands.Cancel)).GetCustomAttributes(false),
+            Assert.That(Array.Exists(typeof(TestCommands).GetMethod(nameof(TestCommands.Cancel), BindingFlags.Static | BindingFlags.NonPublic).GetCustomAttributes(false),
                 attribute => attribute.GetType().Name == "ImmediateCommandAttribute"), Is.True);
         }
 
@@ -307,6 +338,39 @@ namespace Unity.Pipeline.Tests.Editor
             collector.Cancel();
             collector.Cancel();
             Assert.That(task.IsCanceled, Is.True);
+        }
+
+        [Test]
+        public void CancellingSyncCollectorStopsRecordedRunBeforeWaiterCleanup()
+        {
+            var previousCollector = PipelineTestRunner.m_ActiveCollector;
+            var previousId = PipelineTestRunner.s_ActiveRunId;
+            var previousCancel = PipelineTestRunner.s_CancelTestRun;
+            string cancelledId = null;
+            var collector = new TestResultCollector();
+            var waiter = collector.WaitForCompletionAsync();
+            try
+            {
+                PipelineTestRunner.m_ActiveCollector = collector;
+                PipelineTestRunner.s_ActiveRunId = "compatibility-cancel-probe";
+                PipelineTestRunner.s_CancelTestRun = id =>
+                {
+                    cancelledId = id;
+                    Assert.That(waiter.IsCompleted, Is.False, "Stop the framework before sync cleanup can clear its id.");
+                    return true;
+                };
+                typeof(PipelineTestRunner).GetMethod("InvalidatePreviousRun", BindingFlags.Static | BindingFlags.NonPublic)
+                    .Invoke(null, null);
+                Assert.That(cancelledId, Is.EqualTo("compatibility-cancel-probe"));
+                Assert.That(waiter.IsCanceled, Is.True);
+                Assert.That(PipelineTestRunner.m_ActiveCollector, Is.Null);
+            }
+            finally
+            {
+                PipelineTestRunner.m_ActiveCollector = previousCollector;
+                PipelineTestRunner.s_ActiveRunId = previousId;
+                PipelineTestRunner.s_CancelTestRun = previousCancel;
+            }
         }
 
         [UnityTest]
@@ -339,12 +403,13 @@ namespace Unity.Pipeline.Tests.Editor
             int before = Resources.FindObjectsOfTypeAll<TestRunnerApi>().Length;
             for (int i = 0; i < 3; i++)
             {
-                var task = TestCommands.List("editor");
+                var host = new CompatibilityCommandHost();
+                var task = TestCommands.List(host.Context, "editor");
                 var deadline = EditorApplication.timeSinceStartup + 15;
                 while (!task.IsCompleted && EditorApplication.timeSinceStartup < deadline) yield return null;
                 Assert.That(task.IsCompleted && !task.IsFaulted, Is.True);
-                Assert.That(task.Result.Success, Is.True);
-                Assert.That(task.Result.Count, Is.GreaterThan(0));
+                Assert.That(task.Result, Is.EqualTo(ExitCode.Success));
+                Assert.That(host.Records.Count, Is.GreaterThan(0));
             }
             Assert.That(Resources.FindObjectsOfTypeAll<TestRunnerApi>().Length, Is.EqualTo(before));
         }
@@ -425,7 +490,7 @@ namespace Unity.Pipeline.Tests.Editor
             }
         }
 
-        static PanelSettings CreateTransientPanelSettings()
+        internal static PanelSettings CreateTransientPanelSettings()
         {
             // PanelSettings.Reset otherwise creates a default theme asset on disk in the Editor.
             var factory = typeof(PanelSettings).GetField("GetOrCreateDefaultTheme", BindingFlags.Static | BindingFlags.NonPublic);

@@ -29,7 +29,6 @@ namespace Unity.Pipeline.Runtime.Commands
     /// </summary>
     static class VisualElementCaptureSupport
     {
-        internal delegate byte[] PngCapture(VisualElement element, out int width, out int height);
         /// <summary>
         /// Returns a failure response when no GPU is available (batchmode/headless), where a capture
         /// would read back a blank image; otherwise returns null (capture may proceed).
@@ -88,12 +87,12 @@ namespace Unity.Pipeline.Runtime.Commands
         /// </summary>
         public static byte[] CaptureElementToPng(VisualElement element, out int width, out int height)
         {
-            if (element == null)
-                throw new ArgumentNullException(nameof(element));
-
 #if !UNITY_6000_7_OR_NEWER
             return PanelElementCapture.Capture(element, out width, out height);
 #else
+            if (element == null)
+                throw new ArgumentNullException(nameof(element));
+
             var rt = element.CaptureToRenderTexture();
             var prevActive = RenderTexture.active;
             Texture2D tex = null;
@@ -152,8 +151,10 @@ namespace Unity.Pipeline.Runtime.Commands
         /// populated success response (or a failure response if the panel cannot be captured). This
         /// is the shared tail both commands run once they have an element + a panel root.
         /// </summary>
+        internal delegate byte[] CapturePng(VisualElement element, out int width, out int height);
+
         public static CaptureElementResponse CaptureAndRespond(VisualElement element, string selector,
-            string source, string output, string relativeBaseDir, string defaultDir, string prefix, PngCapture capture = null)
+            string source, string output, string relativeBaseDir, string defaultDir, string prefix, CapturePng capture = null)
         {
             var gpuGuard = GpuUnavailableResponse();
             if (gpuGuard != null)
@@ -176,11 +177,6 @@ namespace Unity.Pipeline.Runtime.Commands
                     Encoding = "png",
                     Base64 = Convert.ToBase64String(png),
                     Bytes = png.Length,
-#if !UNITY_6000_7_OR_NEWER
-                    CaptureMode = "panel_crop",
-#else
-                    CaptureMode = "element_render",
-#endif
                     Message = $"Captured {source} to {path}"
                 };
             }
@@ -390,7 +386,6 @@ namespace Unity.Pipeline.Runtime.Commands
                 Object.DestroyImmediate(obj);
                 return;
             }
-#endif
             Object.Destroy(obj);
         }
     }
@@ -443,10 +438,6 @@ namespace Unity.Pipeline.Runtime.Commands
         [JsonProperty("bytes")]
         public int Bytes { get; set; }
 
-        /// <summary>Panel pixels cropped on older engines, isolated element rendering on 6000.7+.</summary>
-        [JsonProperty("captureMode")]
-        public string CaptureMode { get; set; }
-
         public static CaptureElementResponse Fail(string message) => new CaptureElementResponse
         {
             Success = false,
@@ -454,3 +445,4 @@ namespace Unity.Pipeline.Runtime.Commands
         };
     }
 }
+#endif

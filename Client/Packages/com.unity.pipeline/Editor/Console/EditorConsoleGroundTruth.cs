@@ -47,7 +47,7 @@ namespace Unity.Pipeline.Editor.Console
         static bool s_GapPending;
         static long s_GapSeq;
         static bool s_Seeded;
-#if !UNITY_6000_0_OR_NEWER
+#if !UNITY_2023_2_OR_NEWER
         static readonly System.Reflection.MethodInfo s_GetConsoleCounts = typeof(EditorApplication).Assembly
             .GetType("UnityEditor.LogEntries").GetMethod("GetCountsByType",
                 System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic);
@@ -61,7 +61,7 @@ namespace Unity.Pipeline.Editor.Console
             EditorApplication.update -= Sample;
             EditorApplication.update += Sample;
 
-#if UNITY_6000_0_OR_NEWER
+#if UNITY_2023_2_OR_NEWER
             ConsoleWindowUtility.consoleLogsChanged -= OnConsoleLogsChanged;
             ConsoleWindowUtility.consoleLogsChanged += OnConsoleLogsChanged;
 #endif
@@ -81,7 +81,7 @@ namespace Unity.Pipeline.Editor.Console
             if (!s_Seeded)
                 TrySeed();
 
-#if UNITY_6000_0_OR_NEWER
+#if UNITY_2023_2_OR_NEWER
             ConsoleWindowUtility.GetConsoleLogCounts(out var errors, out var warnings, out var logs);
 #else
             s_GetConsoleCounts.Invoke(null, s_ConsoleCounts);

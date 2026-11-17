@@ -5,21 +5,16 @@
         "Unity.Pipeline",
         "Unity.Pipeline.Attributes",
         "Unity.Pipeline.IlInterpreter",
-        "UnityEngine.TestRunner",
-        "UnityEditor.TestRunner"
+        "Unity.Pipeline.ScenePreview",
+        "Unity.Nuget.Newtonsoft-Json"
     ],
     "includePlatforms": [
         "Editor"
     ],
     "excludePlatforms": [],
     "allowUnsafeCode": false,
-    "overrideReferences": true,
-    "precompiledReferences": [
-        "Newtonsoft.Json.dll",
-        "nunit.framework.dll",
-        "UnityPipeline.System.Reflection.Metadata.dll",
-        "UnityPipeline.System.Collections.Immutable.dll"
-    ],
+    "overrideReferences": false,
+    "precompiledReferences": [],
     "autoReferenced": true,
     "defineConstraints": [],
     "versionDefines": [
