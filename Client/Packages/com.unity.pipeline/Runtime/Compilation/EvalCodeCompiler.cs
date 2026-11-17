@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Reflection;
+using System.Threading;
 using System.Threading.Tasks;
 #if UNITY_EDITOR || UNITY_STANDALONE
 using UnityPipeline.Microsoft.CodeAnalysis;
@@ -116,6 +117,10 @@ namespace Unity.Pipeline.Compilation
                     stopwatch.ElapsedMilliseconds,
                     compilation.Diagnostics);
             }
+
+            // Captured before the script's first await, after which CommandExecutionContext.Current is gone;
+            // waits in the script observe it through the ambient token.
+            PipelineCancellation.AmbientToken = Commands.CommandExecutionContext.Current?.CancellationToken ?? CancellationToken.None;
 
             object value;
             try

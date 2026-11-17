@@ -3,6 +3,7 @@ using System;
 using System.Collections;
 using System.IO;
 using NUnit.Framework;
+using Unity.Pipeline.Commands;
 using Unity.Pipeline.Editor.Commands;
 using Unity.Pipeline.Runtime.Commands;
 using UnityEditor;
@@ -71,8 +72,10 @@ namespace Unity.Pipeline.Tests.Editor
                 yield return null;
                 yield return null;
                 var previousTarget = RenderTexture.active;
-                var result = CaptureEditorElementCommand.EditorElement(nameof(ElementCaptureTestWindow), "#target", path);
-                Assert.That(result.Success, Is.True, result.Message);
+                var command = new CompatibilityCommandHost();
+                Assert.That(CaptureEditorElementCommand.EditorElement(command.Context, nameof(ElementCaptureTestWindow), "#target", path),
+                    Is.EqualTo(ExitCode.Success), string.Join(" ", command.Messages));
+                var result = CaptureResponse(command.Result);
                 Assert.That(result.CaptureMode, Is.EqualTo("panel_crop"));
                 Assert.That(result.Path, Is.EqualTo(path));
                 Assert.That(RenderTexture.active, Is.SameAs(previousTarget));
@@ -89,7 +92,7 @@ namespace Unity.Pipeline.Tests.Editor
         [UnityTest]
         public IEnumerator RuntimeCommandCapturesUidocumentWithoutChangingPanelSettings()
         {
-            var settings = ScriptableObject.CreateInstance<PanelSettings>();
+            var settings = PipelineCaptureTests.CreateTransientPanelSettings();
             var host = new GameObject("PipelineCaptureTestHost");
             try
             {
@@ -102,8 +105,10 @@ namespace Unity.Pipeline.Tests.Editor
                 yield return null;
                 yield return null;
                 var previousTarget = RenderTexture.active;
-                var result = CaptureRuntimeElementCommand.RuntimeElement(host.name, "#target", OutputPath("runtime-element"));
-                Assert.That(result.Success, Is.True, result.Message);
+                var command = new CompatibilityCommandHost();
+                Assert.That(CaptureRuntimeElementCommand.RuntimeElement(command.Context, host.name, "#target", OutputPath("runtime-element")),
+                    Is.EqualTo(ExitCode.Success), string.Join(" ", command.Messages));
+                var result = CaptureResponse(command.Result);
                 Assert.That(result.CaptureMode, Is.EqualTo("panel_crop"));
                 Assert.That(settings.targetTexture, Is.Null);
                 Assert.That(RenderTexture.active, Is.SameAs(previousTarget));
@@ -144,6 +149,25 @@ namespace Unity.Pipeline.Tests.Editor
                 throw failure;
         }
 
+        sealed class CapturedElement
+        {
+            internal string Path;
+            internal int Width;
+            internal int Height;
+            internal string CaptureMode;
+        }
+
+        static CapturedElement CaptureResponse(object value)
+        {
+            var type = value.GetType();
+            return new CapturedElement
+            {
+                Path = (string)type.GetProperty("path").GetValue(value),
+                Width = (int)type.GetProperty("width").GetValue(value), Height = (int)type.GetProperty("height").GetValue(value),
+                CaptureMode = (string)type.GetProperty("captureMode").GetValue(value)
+            };
+        }
+
         static VisualElement TestElement()
         {
             var element = new VisualElement { name = "target" };
@@ -170,7 +194,7 @@ namespace Unity.Pipeline.Tests.Editor
                 name + "-" + Guid.NewGuid().ToString("N") + ".png");
         }
 
-        static void AssertPng(CaptureElementResponse result, Color expected)
+        static void AssertPng(CapturedElement result, Color expected)
         {
             Assert.That(File.Exists(result.Path), Is.True);
             Assert.That(result.Width, Is.GreaterThan(0));

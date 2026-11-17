@@ -1,5 +1,9 @@
 # Unity Pipeline Package
 
+## TEV 本地移植
+
+本目录以 Pipeline 1.0.0 正式版为来源，针对 TEV 的 Unity 2022.3.62f3 本地适配。上游最低要求 Unity 6000.0；下方安装说明和版本徽章描述上游，不代表本地移植的官方支持。TEV 不执行这些安装命令，使用按用户单独授权升级的仓库内 CLI 1.0.1 stable。功能限制与验证边界见[本地兼容说明](Documentation~/local-2022-compatibility.md)。
+
 [![Unity Version](https://img.shields.io/badge/Unity-6.0%2B-blue.svg)](https://unity3d.com/unity/whats-new/2023.3.0)
 
 Transform Unity Editor into a programmable automation element for CI/CD pipelines and development workflows. The package exposes a running Unity Editor (or development Player) over a local HTTP API so external tools, scripts, or agents can execute commands remotely.

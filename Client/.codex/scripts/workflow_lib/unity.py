@@ -84,7 +84,16 @@ def decode_response(text):
     try:
         current = json.loads(text.lstrip("\ufeff"))
     except (ValueError, AttributeError) as exc:
-        raise WorkflowError("CLI did not return a JSON response; inspect command evidence.") from exc
+        # Pipeline 1.0 streams WriteRecord results as one JSON object per line, even
+        # with CLI 1.0.1's --format json. Never skip malformed lines or accept log noise.
+        try:
+            lines = [line for line in text.lstrip("\ufeff").splitlines() if line.strip()]
+            records = [json.loads(line) for line in lines]
+            if len(records) < 2 or not all(isinstance(record, dict) for record in records):
+                raise ValueError("Not a record stream")
+            return records
+        except (ValueError, AttributeError):
+            raise WorkflowError("CLI did not return a JSON response; inspect command evidence.") from exc
     # CLI envelope -> Pipeline envelope -> JSON-string status. Never search arbitrary asset data.
     for _ in range(6):
         if isinstance(current, str):
@@ -143,9 +152,7 @@ def command_names(value):
 
 
 def test_listing(value, mode, query, filter_type):
-    if not isinstance(value, dict):
-        raise WorkflowError("Invalid test listing.")
-    tests = value.get("tests", value.get("Tests"))
+    tests = value if isinstance(value, list) else value.get("tests", value.get("Tests")) if isinstance(value, dict) else None
     if not isinstance(tests, list):
         raise WorkflowError("Test listing lacks individual test identities.")
     expected_mode = {"editor": "EditMode", "playmode": "PlayMode"}[mode]
@@ -204,7 +211,7 @@ class Unity:
         self.capabilities = None
         self.pid = None
 
-    def raw(self, arguments, timeout=45, mutating=False):
+    def raw(self, arguments, timeout=45, mutating=False, allowed_exit_codes=()):
         if not self.context.cli.is_file():
             blocked(f"Unity CLI is missing: {self.context.cli}")
         env = dict(os.environ, UNITY_NO_UPDATE_CHECK="1", UNITY_NON_INTERACTIVE="1", UNITY_NO_PAGER="1")
@@ -212,7 +219,7 @@ class Unity:
             [self.context.cli, *arguments, "--format", "json", "--non-interactive", "--no-log-proxy"],
             timeout=timeout, mutating=mutating, env=env,
         )
-        if result.returncode:
+        if result.returncode and result.returncode not in allowed_exit_codes:
             # Connection errors are blockers, never a successful validation.
             if result.returncode in (7, 10, 12, 14, 17, 18) or any(
                     code in result.stdout + result.stderr for code in ("NO_INSTANCES", "UNREACHABLE", "CONNECTION", "ECONNREFUSED", "TIMEOUT",
@@ -255,7 +262,7 @@ class Unity:
         self.capabilities = names
         return sorted(name for name in self.capabilities if name)
 
-    def call(self, command, parameters=None, timeout=45, mutating=False):
+    def call(self, command, parameters=None, timeout=45, mutating=False, accept_retained_test_result=False):
         if self.capabilities is None:
             self.discover()
         validate_parameters(parameters or {})
@@ -269,7 +276,27 @@ class Unity:
             if isinstance(value, str) and value.startswith("-"):
                 blocked("Parameter values cannot inject CLI options.")
             arguments.extend(["--" + key, json.dumps(value, ensure_ascii=False) if not isinstance(value, str) else value])
-        return decode_response(self.raw(arguments, timeout=timeout + 5, mutating=mutating))
+        if accept_retained_test_result:
+            if command != "test status":
+                raise WorkflowError("Only test status may observe a retained failed result.")
+            output = self.raw(arguments, timeout=timeout + 5, mutating=False, allowed_exit_codes=(2, 6, 130))
+            try:
+                value = json.loads(output)
+            except ValueError as exc:
+                raise WorkflowError("Invalid retained test status.") from exc
+            if not isinstance(value, dict) or value.get("status") not in ("no_tests", "idle", "running", "completed", "cancelled", "error"):
+                raise WorkflowError("Unknown retained test status.")
+            return value
+        output = self.raw(arguments, timeout=timeout + 5, mutating=mutating)
+        # Async test run writes no records in 1.0; exit code already acknowledged the request.
+        if command == "test run" and (parameters or {}).get("async-tests") is True and not output.strip():
+            return None
+        if command == "test list" and not output.strip():
+            return []
+        value = decode_response(output)
+        if command == "test list" and isinstance(value, dict) and ("fullName" in value or "FullName" in value):
+            return [value]
+        return value
 
     def query(self, command, parameters):
         validate_parameters(parameters)
@@ -335,14 +362,14 @@ class Unity:
         if status.get("playMode") != "stopped":
             blocked("Do not take over a user Play Mode session for tests.")
         expected = test_listing(self.call("test list", {"mode": mode}), mode, query, filter_type)
-        before = self.call("test status")
+        before = self.call("test status", accept_retained_test_result=True)
         if isinstance(before, dict) and before.get("status") == "running":
             blocked("Another test run is active.")
-        # The package synchronously clears prior status before acknowledging the start.
-        # An unacknowledged start is ambiguous; never fall back to a retained completed result.
+        # Pipeline 1.0 acknowledges async starts by exit code and emits no result records.
+        # call raises on a nonzero exit, so no retained result can acknowledge a failed start.
         started = self.call("test run", {"mode": mode, "filter": query, "filter-type": filter_type,
                                        "async-tests": True}, mutating=True)
-        if not isinstance(started, dict) or started.get("result", started.get("Result")) != "running":
+        if started not in (None, [], {}) and not (isinstance(started, dict) and started.get("result") == "running"):
             blocked("Async test start was not acknowledged; do not accept the last retained result.")
         value = self.poll("test status", {"completed"}, timeout)
         summary = validate_test_result(value, expected)

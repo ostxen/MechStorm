@@ -11,7 +11,7 @@ description: 使用 MechStorm 项目内 Unity CLI 查询和操作当前 Unity Ed
 - 先读项目 [AGENTS.md](../../../AGENTS.md) 和当前进度。可按需执行当前任务相关的静态检查、刷新/编译、EditMode/PlayMode测试及短暂运行验证（含进出Play Mode），无需逐次确认；构建、安装更新、破坏性操作及场景/Prefab/资源/设置持久化保存仍需明确授权。
 - 先发现实例，绑定本项目的绝对 `--project-path`；需要消除多实例歧义时加动态查询得到的 `--pid`，不复用历史 PID。
 - 优先通过项目包装入口 `python .codex/scripts/workflow.py doctor` 和 `unity list` 确认连接与能力，再按需读 [操作规程](references/operations.md)。Python需3.11+，缺失时报告阻塞，不自动安装。
-- 本项目已升级至 Unity 2022.3.62f3；CLI 1.0.0-beta.16、Pipeline 0.10.0-exp.1 的2022.3 LTS本地适配。2021不再维护，上游Unity6分支不代表已验证。版本以ProjectVersion及实时状态为准，不自动安装或升级。
+- 本项目使用 Unity 2022.3.62f3；CLI 1.0.1、Pipeline 1.0.0为2026-11-17从TEngine-Variant迁入的2022.3本地适配。不是上游官方2022支持；2021不再维护，Unity6分支不代表已验证。版本以ProjectVersion及实时状态为准，不自动安装或升级。
 
 ## 操作原则
 
@@ -43,4 +43,6 @@ description: 使用 MechStorm 项目内 Unity CLI 查询和操作当前 Unity Ed
 缺连接、命令、依赖或授权时明确报告阻塞。区分未运行、失败和已通过；截图不等于视觉验收。
 任务进度仍使用本项目 `CURRENT_TASK.md` 与 `DEVELOPMENT_PROGRESS.md`。工作流在已忽略的 `.codex/runs/` 保存脱敏报告、预览和审批记录，不新增另一套任务历史。
 
-本技能及Unity专用工作流于2026-11-14再次从TEngine-Variant增量适配。支持显式 `verify --profile docs`（Python契约测试）与 `verify --profile unity --test-filter Unity.Pipeline.Tests.Editor --filter-type assembly`（编译及指定EditMode测试）；默认不运行验证。测试发现、最终数量/身份核对及失败闭锁来自源工作流，保留本项目更严格的审批与工程绑定。未迁移Luban/HTML领域工作流、其他技能或唯一技能源规则，未实现code/full profile。
+本技能及Unity专用工作流于2026-11-17再次从TEngine-Variant增量适配。支持显式 `verify --profile docs`（Python契约测试）与 `verify --profile unity --test-filter Unity.Pipeline.Tests.Editor --filter-type assembly`（编译及指定EditMode测试）；默认不运行验证。测试发现、最终数量/身份核对及失败闭锁来自源工作流，保留本项目更严格的审批与工程绑定。未迁移源Luban/HTML领域工作流、其他技能或唯一技能源规则，未实现code/full profile；已有本地HTML离线入口保留。
+
+Pipeline 1.0的`test list --format json`输出NDJSON记录流；单条/空列表也须规范化，坏行不能跳过。异步`test run`退出0且空stdout仅表示已接受，必须轮询终态并核验逐项身份/数量。启动前可以读取旧失败终态，不可据此证明新启动成功。同步零匹配退出2，异步零匹配启动可退出0、随后`test status`退出2。`script eval`成功直接输出实际值，失败看退出码6，不再依赖旧success/result包装。

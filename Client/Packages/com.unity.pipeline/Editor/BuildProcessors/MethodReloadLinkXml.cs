@@ -186,7 +186,7 @@ namespace Unity.Pipeline.Editor.BuildProcessors
             var playerAssemblyNames = new HashSet<string>(StringComparer.Ordinal);
             var userPlayerAssemblies = new List<UnityEditor.Compilation.Assembly>();
             var userAssemblyNames = new HashSet<string>(StringComparer.Ordinal);
-            foreach (var asm in UnityEditor.Compilation.CompilationPipeline.GetAssemblies(AssembliesType.Player))
+            foreach (var asm in CompilationPipeline.GetAssemblies(AssembliesType.Player))
             {
                 playerAssemblyNames.Add(asm.name);
                 if (!IsUserAssembly(asm)) continue;

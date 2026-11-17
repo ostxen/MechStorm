@@ -1,4 +1,3 @@
-using System;
 using System.IO;
 using System.Linq;
 using Unity.Pipeline.Commands;
@@ -24,59 +23,77 @@ namespace Unity.Pipeline.Editor.Commands
         [CliGroupCommand(Group,
             "Capture a UI Toolkit VisualElement (by selector) from an EditorWindow to a PNG; returns path + base64.",
             MainThreadRequired = true,
-            Tags = new[] { "capture", "ui" })]
-        public static CaptureElementResponse EditorElement(
+            Tags = new[] { "capture", "ui" },
+            Effect = CommandEffect.Destructive)]
+        internal static ExitCode EditorElement(CommandContext cmd,
             [CliArg("window", "EditorWindow type name (e.g. InspectorWindow) or window title to capture from.", Required = true)] string window = "",
             [CliArg("selector", "Element selector: '#name', '.class', a type name (e.g. Button), descendant (space) / child ('>') chains, optional pseudo-states (:checked,:hover,:focus,:active,:enabled,:disabled,:not(...)).", Required = true)] string selector = "",
             [CliArg("output-path", "Output PNG path (absolute, or relative to the project root). Defaults to a timestamped file under <project>/Temp/pipeline-screenshots/.")] string output = "")
         {
             if (string.IsNullOrWhiteSpace(window))
-                return CaptureElementResponse.Fail("A 'window' (EditorWindow type name or title) is required.");
+            {
+                cmd.Log.Error("A 'window' (EditorWindow type name or title) is required.");
+                return ExitCode.InvalidUsage;
+            }
+
             if (string.IsNullOrWhiteSpace(selector))
-                return CaptureElementResponse.Fail("A 'selector' is required.");
+            {
+                cmd.Log.Error("A 'selector' is required.");
+                return ExitCode.InvalidUsage;
+            }
 
             var target = ResolveWindow(window);
             if (target == null)
-                return CaptureElementResponse.Fail(
-                    $"No open EditorWindow matched '{window}' (by type name or title). Open the window first.");
+            {
+                cmd.Log.Error($"No open EditorWindow matched '{window}' (by type name or title). Open the window first.");
+                return ExitCode.NotFound;
+            }
 
             var root = target.rootVisualElement;
             if (root == null)
-                return CaptureElementResponse.Fail($"EditorWindow '{window}' has no rootVisualElement.");
+            {
+                cmd.Log.Error($"EditorWindow '{window}' has no rootVisualElement.");
+                return ExitCode.Failed;
+            }
 
             var element = VisualElementCaptureSupport.ResolveElement(root, selector);
             if (element == null)
-                return CaptureElementResponse.Fail(
-                    $"No element matched selector '{selector}' in window '{window}'.");
+            {
+                cmd.Log.Error($"No element matched selector '{selector}' in window '{window}'.");
+                return ExitCode.NotFound;
+            }
 
             var projectRoot = Path.GetDirectoryName(Application.dataPath);
             var defaultDir = Path.Combine(projectRoot, "Temp", "pipeline-screenshots");
-            return VisualElementCaptureSupport.CaptureAndRespond(
+            var response = VisualElementCaptureSupport.CaptureAndRespond(
                 element, selector, $"window:{window}", output,
                 relativeBaseDir: projectRoot, defaultDir: defaultDir, prefix: "element"
 #if !UNITY_6000_7_OR_NEWER
                 , capture: (VisualElement e, out int w, out int h) => CaptureWindowElement(target, e, out w, out h)
 #endif
                 );
-        }
+            if (!response.Success)
+            {
+                cmd.Log.Error(response.Message);
+                return ExitCode.Failed;
+            }
 
+            cmd.Result.Write(new
+            {
+                selector = response.Selector,
+                source = response.Source,
+                path = response.Path,
+                width = response.Width,
+                height = response.Height,
+                encoding = response.Encoding,
+                base64 = response.Base64,
+                bytes = response.Bytes
 #if !UNITY_6000_7_OR_NEWER
-        internal static byte[] CaptureWindowElement(EditorWindow window, VisualElement element, out int width, out int height)
-        {
-            var texture = Capture.CaptureCommands.ReadWindowPixels(window, Resources.FindObjectsOfTypeAll<EditorWindow>());
-            try
-            {
-                var root = window.rootVisualElement;
-                var bounds = root.worldBound;
-                var scale = new Vector2(texture.width / bounds.width, texture.height / bounds.height);
-                return PanelElementCapture.Crop(texture, element, bounds, scale, out width, out height);
-            }
-            finally
-            {
-                UnityEngine.Object.DestroyImmediate(texture);
-            }
-        }
+                , captureMode = "panel_crop"
 #endif
+            });
+            return ExitCode.Success;
+        }
 
         /// <summary>
         /// Find an open EditorWindow whose runtime type name or title matches <paramref name="window"/>.
@@ -85,6 +102,20 @@ namespace Unity.Pipeline.Editor.Commands
         /// also return stale/backup window instances whose <c>rootVisualElement</c> has no panel (and
         /// therefore cannot be captured).
         /// </summary>
+#if !UNITY_6000_7_OR_NEWER
+        internal static byte[] CaptureWindowElement(EditorWindow window, VisualElement element, out int width, out int height)
+        {
+            var texture = Capture.CaptureCommands.ReadWindowPixels(window, Resources.FindObjectsOfTypeAll<EditorWindow>());
+            try
+            {
+                var bounds = window.rootVisualElement.worldBound;
+                var scale = new Vector2(texture.width / bounds.width, texture.height / bounds.height);
+                return PanelElementCapture.Crop(texture, element, bounds, scale, out width, out height);
+            }
+            finally { UnityEngine.Object.DestroyImmediate(texture); }
+        }
+#endif
+
         static EditorWindow ResolveWindow(string window)
         {
             var windows = Resources.FindObjectsOfTypeAll<EditorWindow>();

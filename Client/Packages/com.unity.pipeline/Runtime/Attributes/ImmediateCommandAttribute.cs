@@ -4,8 +4,9 @@ namespace Unity.Pipeline.Commands
 {
     /// <summary>
     /// Marks a <see cref="CliGroupCommandAttribute"/> command that runs at once, beside whatever runs,
-    /// rather than waiting its turn behind the commands before it. Reserved for status queries and
-    /// cancellation controls that must reach a running task without waiting for that task to finish.
+    /// rather than waiting its turn behind the commands before it. Only for a command that reads and
+    /// changes nothing, such as a status, so a client can watch the Editor while another command
+    /// holds it.
     /// </summary>
     /// <remarks>
     /// An attribute of its own rather than a property of <see cref="CliGroupCommandAttribute"/>: a

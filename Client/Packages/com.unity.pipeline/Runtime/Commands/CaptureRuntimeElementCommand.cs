@@ -23,18 +23,25 @@ namespace Unity.Pipeline.Runtime.Commands
         [CliGroupCommand(Group,
             "Capture a UI Toolkit VisualElement (by selector) from a live runtime panel (UIDocument or PanelRenderer) to a PNG; returns path + base64.",
             MainThreadRequired = true,
-            Tags = new[] { "capture", "ui", "runtime" })]
-        public static CaptureElementResponse RuntimeElement(
+            Tags = new[] { "capture", "ui", "runtime" },
+            Effect = CommandEffect.Destructive)]
+        internal static ExitCode RuntimeElement(CommandContext cmd,
             [CliArg("panel", "Name of the target panel: matches the PanelSettings asset name or the host GameObject name (UIDocument or PanelRenderer). Optional when exactly one panel exists.")] string panel = "",
             [CliArg("selector", "Element selector: '#name', '.class', a type name (e.g. Button), descendant (space) / child ('>') chains, optional pseudo-states (:checked,:hover,:focus,:active,:enabled,:disabled,:not(...)).", Required = true)] string selector = "",
             [CliArg("output-path", "Output PNG path (absolute, or relative to Application.persistentDataPath). Defaults to a timestamped file under Application.persistentDataPath.")] string output = "")
         {
             if (string.IsNullOrWhiteSpace(selector))
-                return CaptureElementResponse.Fail("A 'selector' is required.");
+            {
+                cmd.Log.Error("A 'selector' is required.");
+                return ExitCode.InvalidUsage;
+            }
 
             var hosts = GatherHosts();
             if (hosts.Count == 0)
-                return CaptureElementResponse.Fail("No live runtime UI panels found (UIDocument or PanelRenderer). Show the UI first.");
+            {
+                cmd.Log.Error("No live runtime UI panels found (UIDocument or PanelRenderer). Show the UI first.");
+                return ExitCode.NotFound;
+            }
 
             List<Host> matched;
             string resolvedName;
@@ -43,8 +50,8 @@ namespace Unity.Pipeline.Runtime.Commands
                 if (hosts.Count > 1)
                 {
                     var names = string.Join(", ", hosts.Select(h => h.DisplayName).Distinct());
-                    return CaptureElementResponse.Fail(
-                        $"Multiple runtime panels exist; specify --panel as one of: {names}.");
+                    cmd.Log.Error($"Multiple runtime panels exist; specify --panel as one of: {names}.");
+                    return ExitCode.InvalidUsage;
                 }
 
                 matched = hosts;
@@ -56,8 +63,8 @@ namespace Unity.Pipeline.Runtime.Commands
                 if (matched.Count == 0)
                 {
                     var names = string.Join(", ", hosts.Select(h => h.DisplayName).Distinct());
-                    return CaptureElementResponse.Fail(
-                        $"No live runtime panel named '{panel}'. Available: {names}.");
+                    cmd.Log.Error($"No live runtime panel named '{panel}'. Available: {names}.");
+                    return ExitCode.NotFound;
                 }
 
                 resolvedName = panel;
@@ -72,18 +79,44 @@ namespace Unity.Pipeline.Runtime.Commands
                 .ToList();
 
             if (roots.Count == 0)
-                return CaptureElementResponse.Fail(
-                    $"Panel '{resolvedName}' has no initialized root VisualElement yet. Show the UI first.");
+            {
+                cmd.Log.Error($"Panel '{resolvedName}' has no initialized root VisualElement yet. Show the UI first.");
+                return ExitCode.Failed;
+            }
 
             var element = VisualElementCaptureSupport.ResolveElement(roots, selector, out _);
             if (element == null)
-                return CaptureElementResponse.Fail(
-                    $"No element matched selector '{selector}' in panel '{resolvedName}'.");
+            {
+                cmd.Log.Error($"No element matched selector '{selector}' in panel '{resolvedName}'.");
+                return ExitCode.NotFound;
+            }
 
             var dir = Application.persistentDataPath;
-            return VisualElementCaptureSupport.CaptureAndRespond(
+            var captured = VisualElementCaptureSupport.CaptureAndRespond(
                 element, selector, $"panel:{resolvedName}", output,
                 relativeBaseDir: dir, defaultDir: dir, prefix: "element");
+            if (!captured.Success)
+            {
+                cmd.Log.Error(captured.Message);
+                return ExitCode.Failed;
+            }
+
+            cmd.Log.Info(captured.Message);
+            cmd.Result.Write(new
+            {
+                selector = captured.Selector,
+                source = captured.Source,
+                path = captured.Path,
+                width = captured.Width,
+                height = captured.Height,
+                encoding = captured.Encoding,
+                base64 = captured.Base64,
+                bytes = captured.Bytes
+#if !UNITY_6000_7_OR_NEWER
+                , captureMode = "panel_crop"
+#endif
+            });
+            return ExitCode.Success;
         }
 
         /// <summary>A live runtime UI host (UIDocument or PanelRenderer) and how to reach its root.</summary>
@@ -113,8 +146,8 @@ namespace Unity.Pipeline.Runtime.Commands
                 });
             }
 
+            // PanelRenderer is a 6000.5+ UI Toolkit API; on older editors only UIDocument panels exist.
 #if UNITY_6000_5_OR_NEWER
-            // On older editors only UIDocument panels exist.
             foreach (var renderer in PipelineUtils.FindObjectsByType<PanelRenderer>())
             {
                 var r = renderer;
@@ -131,10 +164,10 @@ namespace Unity.Pipeline.Runtime.Commands
             return hosts;
         }
 
-#if UNITY_6000_5_OR_NEWER
         // PanelRenderer.rootVisualElement is internal; the public route to its root is a UI-reload
         // callback, which fires synchronously when the panel is already initialized. Register, capture
         // the root, and immediately unregister. PanelRenderer is a 6000.5+ API.
+#if UNITY_6000_5_OR_NEWER
         static VisualElement GetPanelRendererRoot(PanelRenderer renderer)
         {
             VisualElement captured = null;

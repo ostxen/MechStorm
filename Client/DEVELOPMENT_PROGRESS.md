@@ -3,9 +3,28 @@
 ## 当前阶段
 
 - 当前里程碑：P1.5 / Sprint T1已按当前交付范围验收通过（2026-11-16用户确认）；下一阶段V1尚未开始
-- 当前任务：T1/T1.11阶段验收已按用户决定通过，待明确V1模型与基础动画素材及接入任务。后续顺序为“V1→Sprint5地形寻路→V2路径移动/交战（含必做伤害飘字）→L1简单地图编辑→F1首正式技能”；尚未实施的新阶段不自动开工。
-- 当前状态：分支`upgrade/tev-framework-tools`；TEV框架/UI工具迁移已本地提交，上传因GitHub认证受阻。正式ProcedureBattle以Luban Scenario 1创建独立对局，14表73行、78份生成C#、14份bytes，SO正式链已退役。配置同步按表懒加载，首次阻塞和访问点延迟报错为已接受差异；完整部位/属性/双武器/AP/PP等仍后置。本轮392项EditMode与18项Play检查通过；用户批准按当前交付范围收口T1.11，未执行项转为非阻塞回归，不补记为实测通过。
-- 最后更新：2026-11-16
+- 当前任务：TEV Pipeline 1.0/CLI 1.0.1升级已完成迁入与本项目专项验证；用户于2026-11-17追加要求本地提交并合并main，不推送。T1/T1.11仍已按用户决定通过；待明确V1素材与接入任务，后续顺序“V1→Sprint5地形寻路→V2路径移动/交战（含必做伤害飘字）→L1简单地图编辑→F1首正式技能”不变，不自动开工。
+- 当前状态：本轮从main931149a创建`upgrade/tev-pipeline-1.0`，交付目标为本地main，保留升级分支；前轮框架/UI工具与T1验收文档已本地合入main，未推送。本轮Pipeline升级离线55项、专项35项及完整.NET构建通过。正式ProcedureBattle仍以Luban Scenario 1创建独立对局，14表73行、78份生成C#、14份bytes，SO正式链已退役；同步按表懒加载的已接受差异不变。历史392项EditMode与18项Play结果未在本轮重跑，T1未覆盖项仍为非阻塞回归，不补记实测通过。
+- 最后更新：2026-11-17
+
+### TEV Pipeline 1.0与CLI 1.0.1迁移（2026-11-17）
+
+- 用户明确批准“允许完整迁移并硬切新版”，在独立分支迁入TEV e1bd8715的Pipeline1.0.0、CLI1.0.1、调用方/测试、工作流及文档。初次迁包311项更新、24项退役删除（含配对meta与过期签名）；不留旧CLI入口。既有342份保留meta逐字节不变，包内无重复GUID；新meta使用源身份。CLI SHA256为C06C2E86941162E8D46957D39A6089162AD52A00023433881B5E9A18EA220D17。
+- Unity仍2022.3.62f3，包最低2022.3是本地兼容移植，不是上游官方2022支持；revision/fingerprint仅记来源，不是本地有效签名。未升级其他依赖，manifest/lock未改。源码新增ScenePreview程序集由Editor正常生成工程，未手改csproj。
+- 保留本项目Windows模态观察分支（源新版未包含，不能盲镜像），适配本地截图测试的CommandContext/ExitCode/结果写入，复用临时PanelSettings主题创建以免落盘资产。保留项目锁、工程/PID绑定、严格白名单及一次审批，不扩大构建/eval/任意菜单权限，不覆盖其他技能、AGENTS/CLAUDE或迁入源示例。
+- 工作流支持1.0的NDJSON测试发现、单条/空列表、异步退出0空stdout启动确认和逐项终态校验；仅启动前允许读取旧失败终态。同步零匹配实测退出2，异步零匹配启动退出0但status终态退出2；空闲cancel在无保留文件时no_tests，有保留终态时可cancelled，不据此宣称取消活跃测试。
+
+| 检查 | 本项目实测 | 证据与限制 |
+|---|---|---|
+| 离线工作流 | 最终55/55，0.255秒 | [最终报告](.codex/runs/20261117T145741Z-50d5776a/report.json)，隔离契约，不是浏览器/Unity资产验收 |
+| Unity编译与专项 | 编译completed、failed=false/errors=[]/compilationFailed=false；35/35 Passed，失败/跳过/不确定均0 | [报告](.codex/runs/20261117T143601Z-f14e45bd/report.json)，源27+本地8；包括测试内部短暂Play、PNG尺寸/像素/方向/渲染目标及Windows模态观察 |
+| 完整.NET | Client.sln，0错误54警告，53.55秒 | [构建日志](.codex/runs/pipeline-1-migration-20261117/dotnet-build.log)，--no-restore -m:1；保留引用版本等警告，不宣称零警告 |
+| 在线协议 | 186条命令；性能、Console、场景、同步零匹配拒绝和空闲cancel通过 | [报告](.codex/runs/20261117T145346Z-846113ec/report.json)，[退出码记录](.codex/runs/pipeline-1-migration-20261117/exit-contracts.json)；最终ready/stopped、main isDirty=false |
+| 改动保护 | 原6项用户文件hash及完整Git索引保持，原未跟踪集合无丢失，保留GUID不变 | [审计](.codex/runs/pipeline-1-migration-20261117/final-audit.json)，不将无关资源纳入提交 |
+
+- 中途两次专项未启动：测试适配分别误用了无引用的Newtonsoft及已退役响应的CaptureMode，均已修正后真实重编和35项测试通过。临时在线脚本最初混淆异步接受与同步零匹配退出码、假定空闲cancel唯一返回值，按源码与实测修正后通过，未为验收更改产品行为。
+- 一次只读包装查询外层60秒超时，实例发现耗时导致中断；已确认其进程不存在、无在途修改后移除本次遗留锁，后续提高超时完成。未重放未知写入或清除Console。最终Console历史缓存仍含4条已修复编译错误，groundTruth为compilationFailed=false/consoleErrors=0、7条警告，不能称历史零错误/零警告。
+- 未运行完整游戏/浏览器回归、Unity6、Player/真机、真实构建、实时Profiler采集或活跃HTTP取消；命令注册和编译不代表这些功能验收。未保存场景/Prefab/业务资源/设置，未启动或关闭Editor。迁移验证阶段未提交、推送或合main；随后用户明确要求本地提交并合并main，仍不推送，执行证据写入`.codex/runs/pipeline-1-git-20261117/`。T1已通过状态不重开，V1仍未开始。
 
 ### T1阶段验收确认（2026-11-16，用户批准）
 
